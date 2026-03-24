@@ -1,2 +1,3 @@
-https://github.com/FranckFreiburger/vue3-sfc-loader
 https://vuejs.org/
+https://github.com/FranckFreiburger/vue3-sfc-loader
+https://github.com/intlify/vue-i18n

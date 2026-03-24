@@ -11,6 +11,15 @@
   --lightGray: rgb(128, 128, 128);
 }
 
+
+/*
+Device viewport
+Check out this article about device viewport.
+https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env
+*/
+
+
+
 * {
   font-family: "Poppins", "Sans-serif";
 }
