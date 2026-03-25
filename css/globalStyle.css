@@ -25,22 +25,3 @@ https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env
 }
 
 
-/* font-awesome 
-  https://github.com/FortAwesome/Font-Awesome/ 
-  https://docs.fontawesome.com/web/setup/host-yourself/webfonts/
-  https://origin.fontawesome.com/search?o=r&m=free&s=regular&f=classic
-  https://fontawesome.com/search?ip=classic&ic=free-collection
-
-  Do we need this here with version 7?
-  According to v6, yes, but nothing is specified for v7, so maybe not?
-  https://origin.fontawesome.com/v6/docs/web/add-icons/pseudo-elements
-*/
-.fa::before {
-  display: inline-block;
-  text-rendering: auto;
-  -webkit-font-smoothing: antialiased;
-  font: var(--fa-font-regular);
-}
-.fa {
-  text-decoration: none;
-}
