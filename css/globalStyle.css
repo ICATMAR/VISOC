@@ -27,6 +27,11 @@ html body {
 
 }
 
+button {
+  user-select: all;
+  cursor: pointer;
+  pointer-events: auto;
+}
 
 
 
@@ -34,6 +39,9 @@ html body {
   font-family: "Poppins", "Sans-serif";
   user-select: none;
 }
+
+
+
 
 
 

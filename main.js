@@ -17,7 +17,9 @@ window.location.getHashValue = getHashValue;
 window.location.removeHash = removeHash;
 
 // Load scripts
+import GUIManager from './Assets/Scripts/GUIManager.js';
 
+window.GUIManager = Vue.reactive(new GUIManager());
 
 
 // Declare translations
@@ -69,4 +71,7 @@ i18n.global.mergeLocaleMessage('en', en);
 i18n.global.mergeLocaleMessage('es', es);
 i18n.global.mergeLocaleMessage('fr', fr);
 app.use(i18n);
+
+// Global properties
+app.config.globalProperties.$gui = window.GUIManager;
 app.mount(document.body);
