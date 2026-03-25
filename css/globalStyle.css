@@ -17,11 +17,40 @@ Device viewport
 Check out this article about device viewport.
 https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env
 */
+html body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  background: red;
+
+}
+
 
 
 
 * {
   font-family: "Poppins", "Sans-serif";
+  user-select: none;
+}
+
+
+
+@media screen and (max-width: 770px) {
+  .hiddenInMobile {
+    display: none
+  }
+
+  .visibleInMobile {
+    display: block;
+  }
+}
+
+@media screen and (min-width: 770px) {
+  .visibleInMobile {
+    display: none;
+  }
 }
 
 
