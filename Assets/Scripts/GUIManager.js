@@ -10,6 +10,9 @@ class GUIManager {
 
   toggleMenu(){
     this.isMenuOpen = !this.isMenuOpen;
+    if (this.isMenuOpen) {
+      this.isDataTimelineOpen = false;
+    }
   }
 }
 

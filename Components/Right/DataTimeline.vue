@@ -1,6 +1,6 @@
 <template>
   <Transition name="slide-fade">
-    <span class="bottom-pane-section" v-show="$gui.isDataTimelineOpen">
+    <span class="bottom-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
       <!-- Bottom panel with data -->
       <div class="bottom-pane-container">
         <div>Data and timeline</div>
