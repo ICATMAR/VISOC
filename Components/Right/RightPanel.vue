@@ -9,12 +9,12 @@
     </span>
 
     <!-- Providers -->
-    <div class="providers-container">
+    <div class="providers-container" v-show="!$gui.isDataTimelineOpen">
       <span>ICATMAR</span>
     </div>
 
     <!-- Bottom right -->
-    <span class="bottom-right-section">
+    <span class="bottom-right-section" v-show="!$gui.isDataTimelineOpen">
       <div class="bottom-right-container">
         <div>Bottom right</div>
         <button>Press me</button>
@@ -22,17 +22,15 @@
     </span>
 
     <!-- Bottom pane -->
-    <span class="bottom-pane-section" v-if="false">
-      <!-- Bottom panel with data -->
-      <div class="bottom-pane-container">
-        <div>Data and timeline</div>
-      </div>
-    </span>
+    <DataTimeline></DataTimeline>
   </div>
 </template>
 
+<script setup>
+import DataTimeline from './DataTimeline.vue';
+</script>
 
-<script>
+<script setup>
 export default {
   name: "RightPanel",
   created() {
@@ -66,6 +64,7 @@ export default {
   flex-direction: column;
   align-items: flex-end;
   justify-content: flex-end;
+  pointer-events: none;
   transition: right .5s ease-out, opacity .7s;
 }
 
@@ -107,22 +106,5 @@ export default {
   background:wheat;
 }
 
-.bottom-pane-section {
-  align-self: flex-start;
-  background: brown;
-}
 
-.bottom-pane-container {
-  margin: 0;
-  padding: 0;
-  left: 0;
-  right: 0;
-  width: 100vw;
-  min-height: 100px;
-  position: relative;
-  pointer-events: auto;
-  overflow: unset;
-  -webkit-transition: margin-bottom .3s ease-in-out;
-  transition: margin-bottom .3s ease-in-out;
-}
 </style>

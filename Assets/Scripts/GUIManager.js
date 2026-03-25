@@ -1,6 +1,7 @@
 class GUIManager {
 
   isMenuOpen = false;
+  isDataTimelineOpen = false;
 
   // CONSTRUCTOR
   constructor() {

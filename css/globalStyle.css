@@ -28,7 +28,6 @@ html body {
 }
 
 button {
-  user-select: all;
   cursor: pointer;
   pointer-events: auto;
 }

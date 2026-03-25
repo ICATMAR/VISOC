@@ -2,17 +2,17 @@
   <div id="app">
     <!-- MAP -->
     <section class="map-container">
-
+      <button v-on:click="()=>{$gui.isDataTimelineOpen = true; $gui.isMenuOpen = false}">Open data timeline</button>
     </section>
 
     <!-- RIGHT PANEL -->
-    <RightPanel :class="$gui.isMenuOpen ? 'move':''"></RightPanel>
+    <RightPanel :class="$gui.isMenuOpen ? 'moveWhenMenuOpens':''"></RightPanel>
 
     <!-- MENU -->
     <Menu></Menu>
 
     <!-- Timeline -->
-    <Timeline :class="$gui.isMenuOpen ? 'move':''"></Timeline>
+    <Timeline :class="$gui.isMenuOpen ? 'moveWhenMenuOpens': $gui.isDataTimelineOpen ? 'hideWhenDataTimelineOpens' : ''"></Timeline>
   </div>
 </template>
 
@@ -65,9 +65,13 @@ export default {
 }
 
 
-.move {
+.moveWhenMenuOpens {
   right: 400px !important;
 }
 
+.hideWhenDataTimelineOpens {
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
 
 </style>
