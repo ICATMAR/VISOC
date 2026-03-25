@@ -1,11 +1,25 @@
 <template>
   <Transition name="slide-fade">
     <span class="bottom-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
-      <!-- Bottom panel with data -->
+
+      
+
+      <!-- Data and timeline panel with data -->
       <div class="bottom-pane-container">
         <div>Data and timeline</div>
         <button v-on:click="() => { $gui.isDataTimelineOpen = false }">Close data timeline</button>
+        <button v-on:click="() => { $gui.isPlatformDetailOpen = true }">Open platform detail</button>
       </div>
+
+
+      <!-- Platform detail -->
+      <section class="platform-pane-container" v-show="$gui.isPlatformDetailOpen">
+        <div>Map</div>
+        <div>Platform name</div>
+        <button v-on:click="() => { $gui.isPlatformDetailOpen = false }">Close platform detail</button>
+      </section>
+
+
     </span>
   </Transition>
 </template>
@@ -14,6 +28,7 @@
 .bottom-pane-section {
   align-self: flex-start;
   background: brown;
+  position: relative;
 }
 
 .bottom-pane-container {
@@ -28,6 +43,18 @@
   overflow: unset;
   -webkit-transition: margin-bottom .3s ease-in-out;
   transition: margin-bottom .3s ease-in-out;
+}
+
+.platform-pane-container {
+  position: absolute;
+  top: initial;
+  height: initial;
+  bottom: 100%;
+  width: 750px;
+  padding: 0;
+  margin-left: 0;
+  left: calc((100vw - 750px) / 2);
+  background: orange;
 }
 
 
