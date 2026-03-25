@@ -1,11 +1,11 @@
 <template>
   <Transition name="slide-fade">
-    <span class="bottom-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
+    <span class="datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
 
       
 
       <!-- Data and timeline panel with data -->
-      <div class="bottom-pane-container">
+      <div class="datatimeline-pane-container">
         <div>Data and timeline</div>
         <button v-on:click="() => { $gui.isDataTimelineOpen = false }">Close data timeline</button>
         <button v-on:click="() => { $gui.isPlatformDetailOpen = true }">Open platform detail</button>
@@ -25,13 +25,13 @@
 </template>
 
 <style scoped>
-.bottom-pane-section {
+.datatimeline-pane-section {
   align-self: flex-start;
   background: brown;
   position: relative;
 }
 
-.bottom-pane-container {
+.datatimeline-pane-container {
   margin: 0;
   padding: 0;
   left: 0;

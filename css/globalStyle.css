@@ -17,6 +17,17 @@ Device viewport
 Check out this article about device viewport.
 https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env
 */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0);
+  --safe-area-inset-left: env(safe-area-inset-left, 0);
+  --safe-area-inset-right: env(safe-area-inset-right, 0);
+  --margin-top: var(--safe-area-inset-top, 0);
+  --margin-bottom: var(--safe-area-inset-bottom, 0);
+  --window-shift: 0px;
+  --vh: 1vh;
+}
+
 html body {
   height: 100%;
   width: 100%;
