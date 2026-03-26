@@ -2,8 +2,16 @@
   <span class="bottom-section">
     <!-- Timeline -->
     <div class="timeline-container">
-      <div>Timeline</div>
-      <button>Press me</button>
+      
+      <div class="timeline-content">
+        <!-- Play button -->
+        <button class="play-button"><span class="fa fa-play"></span></button>
+        <!-- Timeline -->
+        <div class="timeline">
+        timeline
+        </div>
+      </div>
+
     </div>
   </span>
 </template>
@@ -22,8 +30,29 @@
 }
 
 .timeline-container {
-  max-width: 700px;
-  margin: 0 auto;
+  position: relative;
+  margin: 0 30px;
   padding: 0;
+}
+
+.timeline-content {
+  max-width: 1800px;
+  position: relative;
+  width: 100%;
+  padding: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+.play-button {
+  margin-right: 15px;
+  margin-bottom: 8px;
+}
+
+.timeline {
+  width: calc(100%);
+  background: var(--lightBlue);
 }
 </style>
