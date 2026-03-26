@@ -3,8 +3,15 @@
     <!-- Menu and list of dashboards -->
     <span class="top-right-section">
       <div class="top-right-container">
-        <div> Hello world </div>
-        <button v-on:click="()=>{$gui.toggleMenu()}">{{ $gui.isMenuOpen ? 'Close' : 'Open' }}</button>
+        <!-- Menu button -->
+        <button v-on:click="()=>{$gui.toggleMenu()}">
+          <span v-if="!$gui.isMenuOpen">Menu <span class='fa fa-bars'></span></span>
+          <span v-else class='fa fa-xmark'></span>
+        </button>
+        <!-- List of dashboards -->
+        <button v-for="dashboard in dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
+          {{ $t(dashboard.name) }}
+        </button>
       </div>
     </span>
 
@@ -26,11 +33,11 @@
   </div>
 </template>
 
-<script setup>
-import DataTimeline from './DataTimeline.vue';
-</script>
 
-<script setup>
+<script>
+import DataTimeline from './DataTimeline.vue';
+
+
 export default {
   name: "RightPanel",
   created() {
@@ -40,12 +47,22 @@ export default {
   },
   data (){
     return {
+      dashboards: [
+        {name: 'All platforms', id: 'platforms'},
+        {name: 'HFR currents', id: 'hfr'},
+        {name: 'HFR radials', id: 'hfr-radials'},
+        {name: 'Buoys', id: 'buoys'},
+        {name: 'Satellites', id: 'satellites'},
+        {name: 'Drifters', id: 'drifters'},
+        {name: 'Argos', id: 'argos'},
+      ]
     }
   },
   methods: {
     //onclick: function(e){},
   },
   components: {
+    DataTimeline
   }
 }
 </script>
@@ -106,5 +123,9 @@ export default {
   background:wheat;
 }
 
+.selected {
+  font-weight: bold;
+  text-decoration: underline;
+}
 
 </style>

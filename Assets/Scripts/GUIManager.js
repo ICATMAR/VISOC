@@ -3,6 +3,7 @@ class GUIManager {
   isMenuOpen = false;
   isDataTimelineOpen = false;
   isPlatformDetailOpen = false;
+  selectedDashboard = 'platforms';
 
   // CONSTRUCTOR
   constructor() {
