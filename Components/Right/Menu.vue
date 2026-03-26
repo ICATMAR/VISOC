@@ -5,7 +5,7 @@
 
         <!-- Language selector -->
         <div class="horizontal" style="justify-content: space-around">
-          <button v-for="(language, code) in $gui.languages" :key="code" v-on:click="() => { $gui.selectedLanguage = code }" :class="$gui.selectedLanguage === code ? 'selected':''">
+          <button v-for="language in $gui.languages" :key="language.id" v-on:click="() => { $gui.selectedLanguage = language.id }" :class="$gui.selectedLanguage === language.id ? 'selected':''">
             {{ language.name }}
           </button>
         </div>
