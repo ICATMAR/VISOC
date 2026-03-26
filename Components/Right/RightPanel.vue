@@ -9,7 +9,7 @@
           <span v-else class='fa fa-xmark'></span>
         </button>
         <!-- List of dashboards -->
-        <button v-for="dashboard in dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
+        <button v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
           {{ $t(dashboard.name) }}
         </button>
       </div>
@@ -47,15 +47,7 @@ export default {
   },
   data (){
     return {
-      dashboards: [
-        {name: 'All platforms', id: 'platforms'},
-        {name: 'HFR currents', id: 'hfr'},
-        {name: 'HFR radials', id: 'hfr-radials'},
-        {name: 'Buoys', id: 'buoys'},
-        {name: 'Satellites', id: 'satellites'},
-        {name: 'Drifters', id: 'drifters'},
-        {name: 'Argos', id: 'argos'},
-      ]
+      
     }
   },
   methods: {

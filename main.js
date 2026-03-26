@@ -53,6 +53,20 @@ const options = {
     const messages = JSON.parse(block.content);
     for (let locale in messages)
       i18n.global.mergeLocaleMessage(locale, messages[locale]);
+  }, // https://github.com/FranckFreiburger/vue3-sfc-loader/discussions/88
+  handleModule: async (type, getContentData, path, options) => {
+    switch (type) {
+      case '.svg': return 'data:image/svg+xml,' + await getContentData(false);
+      case '.webp':
+      case '.png': {
+        const data = await getContentData(true); // Assuming this returns a Uint8Array or Buffer
+        // Convert binary buffer to a string that btoa can understand
+        const binaryString = Array.from(new Uint8Array(data))
+          .map(byte => String.fromCharCode(byte))
+          .join('');
+        return 'data:image/webp;base64,' + btoa(binaryString);
+      };
+    }
   }
 }
 
