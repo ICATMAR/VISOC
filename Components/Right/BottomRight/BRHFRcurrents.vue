@@ -8,7 +8,10 @@
   </div>
 
   <!-- Currents or radials -->
-  
+  <div class="horizontal wrap button-group">
+    <button class="clickable" :class="{'selectedProduct': selectedHFRProduct == 'currents'}" @click="selectedHFRProduct = 'currents'">Currents</button>
+    <button class="clickable" :class="{'selectedProduct': selectedHFRProduct == 'radials'}" @click="selectedHFRProduct = 'radials'">Radials</button>
+  </div>
 
   <!-- On/Off options -->
   <div class="horizontal wrap options-container">
@@ -56,6 +59,7 @@ export default {
 
   data() {
     return {
+      selectedHFRProduct: 'currents'
     }
   },
   methods: {
@@ -105,5 +109,23 @@ export default {
   flex-direction: row;
   justify-content: space-between;
   margin: 0px 7px;
+}
+
+
+.button-group{
+    background: var(--lightGray);
+    border-radius: 10px;
+    display: flex;
+    justify-content: flex-start;
+}
+.button-group > button {
+  border-radius: 10px;
+  padding: 0px 12px;
+  border: none;
+  background: rgb(0 0 0 / 0%);
+}
+.button-group > button.selectedProduct {
+  background: var(--red);
+  box-shadow: 0 0 4px black;
 }
 </style>
