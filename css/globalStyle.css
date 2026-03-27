@@ -43,7 +43,15 @@ button {
   pointer-events: auto;
 }
 
-
+.clickable {
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+.clickable:hover {
+  transform: scale(1.05);
+  transition: all 0.2s ease-in-out;
+}
 
 * {
   font-family: "Poppins", "Sans-serif";

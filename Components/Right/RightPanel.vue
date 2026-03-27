@@ -22,10 +22,7 @@
 
     <!-- Bottom right -->
     <span class="bottom-right-section" v-show="!$gui.isDataTimelineOpen">
-      <div class="bottom-right-container">
-        <div>Bottom right</div>
-        <button>Press me</button>
-      </div>
+        <BottomRight></BottomRight>
     </span>
 
     <!-- Bottom pane -->
@@ -36,6 +33,7 @@
 
 <script>
 import DataTimeline from './DataTimeline.vue';
+import BottomRight from './BottomRight/BottomRight.vue';
 
 
 export default {
@@ -54,7 +52,8 @@ export default {
     //onclick: function(e){},
   },
   components: {
-    DataTimeline
+    DataTimeline,
+    BottomRight
   }
 }
 </script>
