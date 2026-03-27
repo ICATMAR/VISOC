@@ -1,10 +1,8 @@
 <template>
-<div class="onoff-button-with-text-container">
-  <OnOffButton ref="onOffButton" :checked="checked" :inSize="inSize" @change="toggle($event)"></OnOffButton>
-  <span @click="toggle">{{ text }}</span>
-
-</div>
-
+  <div class="onoff-button-with-text-container">
+    <OnOffButton ref="onOffButton" :checked="checked" :inSize="inSize" @change="toggle($event)"></OnOffButton>
+    <span @click="toggle">{{ text }}</span>
+  </div>
 </template>
 
 
@@ -22,7 +20,6 @@
     created() {
     },
     mounted() {
-      this.isOn = this.checked;
     },
     
     data (){
@@ -35,7 +32,7 @@
         // OnOff Button was clicked
         if (e.target.value != undefined){
           this.isOn = e.target.checked;
-          this.$emit('change', this.isOn);
+          this.$emit('toggle', this.isOn);
         }
         // Text was clicked
         else {

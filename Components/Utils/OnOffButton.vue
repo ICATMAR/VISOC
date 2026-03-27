@@ -102,7 +102,7 @@ input:checked + .slider {
 }
 
 input:focus + .slider {
-  box-shadow: 0 0 1px var(--red);
+ box-shadow: 0px 0px 6px black;
 }
 
 input:checked + .slider:before {
@@ -118,7 +118,7 @@ input:checked + .slider:before {
 }
 
 .slider.round:hover {
-  box-shadow: 0px 0px 4px var(--lightBlue);
+  box-shadow: 0px 0px 5px black;
   transition:none;
 }
 

@@ -13,7 +13,7 @@ class GUIManager {
   ]
 
 
-  selectedDashboard = 'platforms';
+  selectedDashboard = 'hfr';
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Images/dashboardIcons/example.jpg'},
     { name: 'HFR currents', id: 'hfr', icon: './Assets/Images/dashboardIcons/example.jpg' },

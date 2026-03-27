@@ -43,9 +43,12 @@ export default {
 
 
 <style scoped>
-:deep(.options-container) {
+:deep(*){
   font-size: x-small;
-  gap: 20px;
+}
+
+:deep(.options-container) {
+  gap: 5px 20px;
   padding: 5px;
 }
 
