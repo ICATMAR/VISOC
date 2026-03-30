@@ -14,6 +14,7 @@
     </template>
     <!-- Argos -->
     <template v-else-if="$gui.selectedDashboard == 'argos'">
+      <BRArgos></BRArgos>
     </template>
       
 
@@ -28,6 +29,7 @@
 import BRHFRcurrents from './BRHFRcurrents.vue';
 import BRBuoys from './BRBuoys.vue';
 import BRDrifters from './BRDrifters.vue';
+import BRArgos from './BRArgos.vue';
 
 export default {
   name: 'bottomRight', // Caps, no -
@@ -50,6 +52,7 @@ export default {
     BRHFRcurrents,
     BRBuoys,
     BRDrifters,
+    BRArgos,
   }
 }
 
