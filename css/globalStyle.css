@@ -111,3 +111,52 @@ button {
 }
 
 
+
+
+
+
+/* 1. The entering/leaving timing (The "Middle" State) */
+.slideBottom-fade-enter-active {
+  transition: transform 0.5s ease-out, opacity 0.3s ease;
+}
+.slideBottom-fade-leave-active {
+  transition: none;
+}
+
+/* 2. The "From" state (Start of enter / End of leave) */
+.slideBottom-fade-enter-from {
+  transform: translateY(100%); /* Slide it off to the right */
+  opacity: 0;
+}
+
+/* 3. The "To" state (End of enter / Start of leave) */
+/* Optional: defaults to original CSS if not defined, 
+   but good for clarity */
+.slideBottom-fade-enter-to{
+  transform: translateY(0);
+  opacity: 1;
+}
+
+
+
+/* 1. The entering/leaving timing (The "Middle" State) */
+.scale-fade-enter-active {
+  transition: transform 0.5s ease-out, opacity 0.3s ease;
+}
+.scale-fade-leave-active {
+  transition: none;
+}
+
+/* 2. The "From" state (Start of enter / End of leave) */
+.scale-fade-enter-from {
+  transform: scale(0);
+  opacity: 0;
+}
+
+/* 3. The "To" state (End of enter / Start of leave) */
+/* Optional: defaults to original CSS if not defined, 
+   but good for clarity */
+.scale-fade-enter-to{
+  transform: scale(1);
+  opacity: 1;
+}

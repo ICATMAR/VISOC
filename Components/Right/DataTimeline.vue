@@ -1,5 +1,5 @@
 <template>
-  <Transition name="slide-fade">
+  <Transition name="slideBottom-fade">
     <span class="datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
 
       
@@ -57,27 +57,5 @@
   background: orange;
 }
 
-
-/* 1. The entering/leaving timing (The "Middle" State) */
-.slide-fade-enter-active {
-  transition: transform 0.5s ease-out, opacity 0.3s ease;
-}
-.slide-fade-leave-active {
-  transition: none;
-}
-
-/* 2. The "From" state (Start of enter / End of leave) */
-.slide-fade-enter-from {
-  transform: translateY(100%); /* Slide it off to the right */
-  opacity: 0;
-}
-
-/* 3. The "To" state (End of enter / Start of leave) */
-/* Optional: defaults to original CSS if not defined, 
-   but good for clarity */
-.slide-fade-enter-to{
-  transform: translateY(0);
-  opacity: 1;
-}
 
 </style>

@@ -8,6 +8,13 @@
     <template v-else-if="$gui.selectedDashboard == 'buoys'">
       <BRBuoys></BRBuoys>
     </template>
+    <!-- Drifters -->
+    <template v-else-if="$gui.selectedDashboard == 'drifters'">
+      <BRDrifters></BRDrifters>
+    </template>
+    <!-- Argos -->
+    <template v-else-if="$gui.selectedDashboard == 'argos'">
+    </template>
       
 
 
@@ -20,6 +27,7 @@
 <script>
 import BRHFRcurrents from './BRHFRcurrents.vue';
 import BRBuoys from './BRBuoys.vue';
+import BRDrifters from './BRDrifters.vue';
 
 export default {
   name: 'bottomRight', // Caps, no -
@@ -41,6 +49,7 @@ export default {
   components: {
     BRHFRcurrents,
     BRBuoys,
+    BRDrifters,
   }
 }
 
@@ -67,5 +76,21 @@ export default {
 
 :deep(.onoff-option) {
   gap: 5px;
+}
+
+:deep(.button-group){
+    display: flex;
+    justify-content: flex-start;
+    padding: 4px;
+}
+:deep(.button-group) > button {
+  border-radius: 10px;
+  padding: 0px 12px;
+  border: none;
+  background: rgb(0 0 0 / 0%);
+}
+:deep(.button-group) > button.selectedOption {
+  background: var(--red);
+  box-shadow: 0 0 4px black;
 }
 </style>
