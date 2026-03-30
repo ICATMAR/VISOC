@@ -16,6 +16,10 @@
     <template v-else-if="$gui.selectedDashboard == 'argos'">
       <BRArgos></BRArgos>
     </template>
+    <!-- Satellites -->
+    <template v-else-if="$gui.selectedDashboard == 'remoteSensing'">
+      <BRRemoteSensing></BRRemoteSensing>
+    </template>
       
 
 
@@ -30,6 +34,7 @@ import BRHFRcurrents from './BRHFRcurrents.vue';
 import BRBuoys from './BRBuoys.vue';
 import BRDrifters from './BRDrifters.vue';
 import BRArgos from './BRArgos.vue';
+import BRRemoteSensing from './BRRemoteSensing.vue';
 
 export default {
   name: 'bottomRight', // Caps, no -
@@ -53,6 +58,7 @@ export default {
     BRBuoys,
     BRDrifters,
     BRArgos,
+    BRRemoteSensing
   }
 }
 

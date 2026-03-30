@@ -20,7 +20,7 @@ class GUIManager {
     { name: 'Buoys', id: 'buoys', icon: './Assets/Images/dashboardIcons/example.jpg' },
     { name: 'Drifters', id: 'drifters', icon: './Assets/Images/dashboardIcons/example.jpg' },
     { name: 'Argos', id: 'argos', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Satellites', id: 'satellites', icon: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'Remote sensing', id: 'remoteSensing', icon: './Assets/Images/dashboardIcons/example.jpg' },
 
   ]
 
