@@ -5,8 +5,10 @@
       <div class="top-right-container">
         <!-- Menu button -->
         <button v-on:click="()=>{$gui.toggleMenu()}">
-          <span v-if="!$gui.isMenuOpen">Menu <span class='fa fa-bars'></span></span>
-          <span v-else class='fa fa-xmark'></span>
+          <Transition name="scale-fade" mode="out-in">
+            <span v-if="!$gui.isMenuOpen">Menu <span class='fa fa-bars'></span></span>
+            <span v-else class='fa fa-xmark'></span>
+          </Transition>
         </button>
         <!-- List of dashboards -->
         <button v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">

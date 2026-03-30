@@ -2,17 +2,19 @@
   <div id="app">
     <!-- MAP -->
     <section class="map-container">
-      <button v-on:click="()=>{$gui.isDataTimelineOpen = true; $gui.isMenuOpen = false}">Open data timeline</button>
+      <button v-on:click="()=>{$gui.isDataTimelineOpen = true; $gui.isMenuOpen = false}">On platform click</button>
     </section>
 
-    <!-- RIGHT PANEL -->
+    <!-- RIGHT PANEL AND BOTTOM PANEL-->
     <RightPanel :class="$gui.isMenuOpen ? 'moveWhenMenuOpens':''"></RightPanel>
 
     <!-- MENU -->
     <Menu></Menu>
 
     <!-- Timeline -->
-    <Timeline :class="$gui.isMenuOpen ? 'moveWhenMenuOpens': $gui.isDataTimelineOpen ? 'hideWhenDataTimelineOpens' : ''"></Timeline>
+    <Transition name="slideBottom-fade">
+      <Timeline v-show="!$gui.isMenuOpen && !$gui.isDataTimelineOpen"></Timeline>
+    </Transition>
   </div>
 </template>
 
