@@ -81,6 +81,18 @@ button {
   background: var(--lightGray);
 }
 
+.divider-small {
+  height: 1px;
+  margin: 8px;
+  background: var(--lightGray);
+}
+
+.divider-smaller {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--lightGray);
+}
+
 
 @media screen and (max-width: 770px) {
   .hiddenInMobile {

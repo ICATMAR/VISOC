@@ -7,29 +7,40 @@
       @change="toggleShowDataPoints($event)"></OnOffButtonWithText>
   </div>
 
-  <!-- Currents or radials -->
-  <div class="horizontal wrap button-group">
-    <button class="clickable" :class="{'selectedProduct': selectedHFRProduct == 'currents'}" @click="selectedHFRProduct = 'currents'">Currents</button>
-    <button class="clickable" :class="{'selectedProduct': selectedHFRProduct == 'radials'}" @click="selectedHFRProduct = 'radials'">Radials</button>
+
+<div class="gray-container">
+    <!-- Currents or radials -->
+    <div class="horizontal wrap button-group">
+      <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'currents' }"
+        @click="selectedHFRProduct = 'currents'">Currents</button>
+      <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'radials' }"
+        @click="selectedHFRProduct = 'radials'">Radials</button>
+    </div>
+
+
+    <!-- On/Off options -->
+    <div class="horizontal wrap options-container">
+      <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'10px'"
+        @toggle="toggleShowBuoys($event)"></OnOffButtonWithText>
+      <OnOffButtonWithText ref="toggleShowDrifters" :checked="false" :text="$t('drifters')" :inSize="'10px'"
+        @change="toggleShowDrifters($event)"></OnOffButtonWithText>
+    </div>
+
   </div>
 
-  <!-- On/Off options -->
-  <div class="horizontal wrap options-container">
-    <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'10px'"
-      @toggle="toggleShowBuoys($event)"></OnOffButtonWithText>
-    <OnOffButtonWithText ref="toggleShowDrifters" :checked="false" :text="$t('drifters')" :inSize="'10px'"
-      @change="toggleShowDrifters($event)"></OnOffButtonWithText>
+
+  <!-- Data source -->
+  <div class="gray-container">
+    <div class="horizontal wrap button-group">
+      <button class="clickable" :class="{ 'selectedOption': selectedSource == 'ICATMAR' }"
+        @click="selectedSource = 'ICATMAR'">{{ $t('ICATMAR') }}</button>
+      <button class="clickable" :class="{ 'selectedOption': selectedSource == 'EU HFR Node' }"
+        @click="selectedSource = 'EU HFR Node'">{{ $t('EU HFR Node') }}</button>
+      <!-- <OnOffButtonWithText ref="toggleExternalSources" :checked="false" :text="$t('EU HFR Node data')" :inSize="'10px'"
+      @change="toggleExternalSources($event)"></OnOffButtonWithText> -->
+    </div>
   </div>
 
-  
-
-  <!-- External data -->
-  <div class="horizontal wrap options-container">
-    <OnOffButtonWithText ref="toggleExternalSources" :checked="false" :text="$t('EU HFR Node data')" :inSize="'10px'"
-      @change="toggleExternalSources($event)"></OnOffButtonWithText>
-  </div>
-
-  <div class="divider-small"></div>
 
   <!-- Color bar -->
   <div class="legend-container">
@@ -59,7 +70,8 @@ export default {
 
   data() {
     return {
-      selectedHFRProduct: 'currents'
+      selectedHFRProduct: 'currents',
+      selectedSource: 'ICATMAR'
     }
   },
   methods: {
@@ -89,11 +101,6 @@ export default {
 </script>
 
 <style scoped>
-.divider-small {
-  height: 1px;
-  margin: 8px;
-  background: var(--lightGray);
-}
 
 .colorbar {
   height: 15px;
@@ -111,12 +118,16 @@ export default {
   margin: 0px 7px;
 }
 
+.gray-container {
+  background: var(--lightGray);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
 
 .button-group{
-    background: var(--lightGray);
-    border-radius: 10px;
     display: flex;
     justify-content: flex-start;
+    padding: 4px;
 }
 .button-group > button {
   border-radius: 10px;
@@ -124,7 +135,7 @@ export default {
   border: none;
   background: rgb(0 0 0 / 0%);
 }
-.button-group > button.selectedProduct {
+.button-group > button.selectedOption {
   background: var(--red);
   box-shadow: 0 0 4px black;
 }
