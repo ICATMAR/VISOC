@@ -6,6 +6,33 @@
       @change="toggleVariable($event, variable)"></OnOffButtonWithText>
   </div>
 
+  <!-- Map layers -->
+  <div class="gray-container">
+    <!-- Variable type -->
+    <div class="horizontal wrap button-group">
+      <button class="clickable" v-for="variable in modelVariables"
+        :class="{ 'selectedOption': selectedModelVariable == variable }" @click="selectedModelVariable = variable">{{ $t(variable)
+        }}</button>
+    </div>
+    <!-- Provider -->
+    <Transition name="slideBottom-fade">
+      <div class="horizontal wrap button-group" v-if="selectedModelVariable != 'x'">
+        <button class="clickable" v-for="provider in modelProviders"
+          :class="{ 'selectedOption': selectedModelProvider == provider }" @click="selectedModelProvider = provider">{{ $t(provider)
+          }}</button>
+      </div>
+    </Transition>
+    <!-- Model time scale -->
+    <Transition name="slideBottom-fade">
+      <div class="horizontal wrap button-group" v-if="selectedModelVariable != 'x' && selectedModelProvider != 'ICATMAR'">
+        <button class="clickable" v-for="modelTimeScale in modelTimeScales"
+          :class="{ 'selectedOption': selectedModelTimeScale == modelTimeScale }" @click="selectedModelTimeScale = modelTimeScale">{{ $t(modelTimeScale)
+          }}</button>
+      </div>
+    </Transition>
+  </div>
+
+
 </template>
 
 
@@ -25,7 +52,15 @@ export default {
   
   data (){
     return {
-      variables: ['wind', 'waves', 'currents', 'sea surface temperature', 'salinity', 'air temperature', 'pressure', 'relative humidity']
+      variables: ['wind', 'waves', 'currents', 'sea surface temperature', 'salinity', 'air temperature', 'pressure', 'relative humidity'],
+
+      modelVariables: ['x', 'wave height', 'currents', 'sea surface temperature'],
+      selectedModelVariable: 'x',
+
+      modelProviders: ['ICATMAR', 'CMEMS-MEDSEA', 'CMEMS-IBI'],
+      selectedModelProvider: 'ICATMAR',
+      modelTimeScales: ['hourly', 'daily', 'monthly'],
+      selectedModelTimeScale: 'hourly',
     }
   },
   methods: {
