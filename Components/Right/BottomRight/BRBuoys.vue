@@ -1,7 +1,8 @@
 <template>
 <!-- Variables to show -->
  <div class="horizontal wrap options-container gray-container">
-    <OnOffButtonWithText v-for="variable in variables" :key="variable" :checked="false" :text="$t(variable)" :inSize="'8px'"
+ <!-- Make the first X variables on by default -->
+    <OnOffButtonWithText v-for="(variable, index) in variables" :key="variable" :checked="index < 3" :text="$t(variable)" :inSize="'8px'"
       @change="toggleVariable($event, variable)"></OnOffButtonWithText>
   </div>
 
