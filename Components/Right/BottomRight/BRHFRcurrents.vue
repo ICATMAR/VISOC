@@ -1,10 +1,11 @@
 <template>
   <!-- Animation -->
-  <div class="horizontal wrap options-container">
-    <OnOffButtonWithText ref="toggleAnimation" :checked="false" :text="$t('data points')" :inSize="'8px'"
-      @change="toggleAnimation($event)"></OnOffButtonWithText>
+ <div class="horizontal wrap options-container">
     <OnOffButtonWithText ref="" :checked="false" :text="$t('particle animation')" :inSize="'8px'"
       @change="toggleShowDataPoints($event)"></OnOffButtonWithText>
+    <OnOffButtonWithText ref="toggleAnimation" :checked="false" :text="$t('data points')" :inSize="'8px'"
+      @change="toggleAnimation($event)"></OnOffButtonWithText>
+
   </div>
 
 
