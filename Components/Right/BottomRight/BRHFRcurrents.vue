@@ -8,7 +8,7 @@
   </div>
 
 
-<div class="gray-container">
+  <div class="gray-container">
     <!-- Currents or radials -->
     <div class="horizontal wrap button-group">
       <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'currents' }"
@@ -17,7 +17,18 @@
         @click="selectedHFRProduct = 'radials'">Radials</button>
     </div>
 
+    <!-- Radial antennas on/off -->
+    <Transition name="slideBottom-fade">
+      <div class="horizontal wrap options-container" v-if="selectedHFRProduct == 'radials'">
+        <OnOffButtonWithText v-for="radial in radials" :key="radial" :checked="true" :text="$t(radial)" :inSize="'8px'"
+          @change="toggleShowRadial($event, radial)"></OnOffButtonWithText>
+      </div>
+    </Transition>
 
+
+  </div>
+
+  <div class="gray-container">
     <!-- On/Off options -->
     <div class="horizontal wrap options-container">
       <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'8px'"
@@ -25,9 +36,7 @@
       <OnOffButtonWithText ref="toggleShowDrifters" :checked="false" :text="$t('drifters')" :inSize="'8px'"
         @change="toggleShowDrifters($event)"></OnOffButtonWithText>
     </div>
-
   </div>
-
 
   <!-- Data source -->
   <div class="gray-container">
@@ -71,6 +80,7 @@ export default {
   data() {
     return {
       selectedHFRProduct: 'currents',
+      radials: ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL'],
       selectedSource: 'ICATMAR'
     }
   },
@@ -91,6 +101,9 @@ export default {
     },
     toggleExternalSources(e) {
       this.$emit('toggleExternalSources');
+    },
+    toggleShowRadial(e, radial) {
+      this.$emit('toggleShowRadial', radial);
     }
   },
   components: {
