@@ -52,6 +52,7 @@
 .onoff-button-with-text-container {
   display: flex;
   flex-direction: row;
+  align-items: center;
   cursor: pointer;
   pointer-events: auto;
   user-select: none;

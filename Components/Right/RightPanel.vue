@@ -111,7 +111,7 @@ export default {
   position: relative;
   white-space: nowrap;
   pointer-events: auto;
-  background:wheat;
+  background:rgb(245, 222, 179);
 }
 
 .selected {

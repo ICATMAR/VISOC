@@ -1,9 +1,9 @@
 <template>
   <!-- Animation -->
   <div class="horizontal wrap options-container">
-    <OnOffButtonWithText ref="toggleAnimation" :checked="false" :text="$t('data points')" :inSize="'10px'"
+    <OnOffButtonWithText ref="toggleAnimation" :checked="false" :text="$t('data points')" :inSize="'8px'"
       @change="toggleAnimation($event)"></OnOffButtonWithText>
-    <OnOffButtonWithText ref="" :checked="false" :text="$t('particle animation')" :inSize="'10px'"
+    <OnOffButtonWithText ref="" :checked="false" :text="$t('particle animation')" :inSize="'8px'"
       @change="toggleShowDataPoints($event)"></OnOffButtonWithText>
   </div>
 
@@ -20,9 +20,9 @@
 
     <!-- On/Off options -->
     <div class="horizontal wrap options-container">
-      <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'10px'"
+      <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'8px'"
         @toggle="toggleShowBuoys($event)"></OnOffButtonWithText>
-      <OnOffButtonWithText ref="toggleShowDrifters" :checked="false" :text="$t('drifters')" :inSize="'10px'"
+      <OnOffButtonWithText ref="toggleShowDrifters" :checked="false" :text="$t('drifters')" :inSize="'8px'"
         @change="toggleShowDrifters($event)"></OnOffButtonWithText>
     </div>
 
@@ -36,7 +36,7 @@
         @click="selectedSource = 'ICATMAR'">{{ $t('ICATMAR') }}</button>
       <button class="clickable" :class="{ 'selectedOption': selectedSource == 'EU HFR Node' }"
         @click="selectedSource = 'EU HFR Node'">{{ $t('EU HFR Node') }}</button>
-      <!-- <OnOffButtonWithText ref="toggleExternalSources" :checked="false" :text="$t('EU HFR Node data')" :inSize="'10px'"
+      <!-- <OnOffButtonWithText ref="toggleExternalSources" :checked="false" :text="$t('EU HFR Node data')" :inSize="'8px'"
       @change="toggleExternalSources($event)"></OnOffButtonWithText> -->
     </div>
   </div>
@@ -118,11 +118,6 @@ export default {
   margin: 0px 7px;
 }
 
-.gray-container {
-  background: var(--lightGray);
-  border-radius: 10px;
-  margin-bottom: 10px;
-}
 
 .button-group{
     display: flex;

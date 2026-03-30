@@ -15,13 +15,13 @@ class GUIManager {
 
   selectedDashboard = 'hfr';
   dashboards = [
-    { name: 'All platforms', id: 'platforms', icon: './Assets/Images/dashboardIcons/example.jpg'},
+    { name: 'All platforms', id: 'platforms', icon: './Assets/Images/dashboardIcons/example.jpg' },
     { name: 'HFR currents', id: 'hfr', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'HFR radials', id: 'hfr-radials', icon: './Assets/Images/dashboardIcons/example.jpg' },
     { name: 'Buoys', id: 'buoys', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Satellites', id: 'satellites', icon: './Assets/Images/dashboardIcons/example.jpg' },
     { name: 'Drifters', id: 'drifters', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Argos', id: 'argos', icon: './Assets/Images/dashboardIcons/example.jpg'  },
+    { name: 'Argos', id: 'argos', icon: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'Satellites', id: 'satellites', icon: './Assets/Images/dashboardIcons/example.jpg' },
+
   ]
 
   // CONSTRUCTOR
