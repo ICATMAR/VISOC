@@ -108,7 +108,7 @@
           <img src="../../Assets/Images/logos/logo-EU.svg" alt="EU logo" class="funding-logo">
         </div>
 
-        <!-- About -->
+        <div class="divider-small"></div>
 
       </div>
     </Transition>
@@ -205,6 +205,7 @@ export default {
   height: 100%;
   border-radius: 10px;
   filter: brightness(0.8);
+  object-fit: cover;
 }
 
 .dashboard-icon {
