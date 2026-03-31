@@ -4,14 +4,14 @@
     <span class="top-right-section">
       <div class="top-right-container">
         <!-- Menu button -->
-        <button v-on:click="()=>{$gui.toggleMenu()}">
+        <button class="menu-vertical-button clickable menu-button" v-on:click="()=>{$gui.toggleMenu()}">
           <Transition name="scale-fade" mode="out-in">
             <span v-if="!$gui.isMenuOpen">Menu <span class='fa fa-bars'></span></span>
             <span v-else class='fa fa-xmark'></span>
           </Transition>
         </button>
         <!-- List of dashboards -->
-        <button v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
+        <button class="menu-vertical-button clickable"v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
           {{ $t(dashboard.name) }}
         </button>
       </div>
@@ -116,9 +116,27 @@ export default {
   background:rgb(245, 222, 179);
 }
 
+
+
+
+.menu-button.menu-vertical-button {
+  font-size: large;
+  margin: 8px 0px;
+  border-radius: 15px;
+}
+
+
+.menu-vertical-button {
+  background: #ffffff29;
+  border: none;
+  box-shadow: 0 0 4px black;
+  margin: 2px 0;
+  border-radius: 10px;
+}
+
 .selected {
   font-weight: bold;
-  text-decoration: underline;
+  background:var(--red);
 }
 
 </style>
