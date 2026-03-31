@@ -58,6 +58,10 @@ button {
   user-select: none;
 }
 
+span {
+  color: white;
+  text-shadow: 0 0 4px black;
+}
 
 .vertical {
   display: flex;

@@ -1,32 +1,29 @@
 <template>
-  <div class="gray-container">
+  <div class="filled-container">
     <!-- Variable selection -->
     <div class="horizontal wrap button-group">
       <button class="clickable" v-for="variable in variables"
-        :class="{ 'selectedOption': selectedVariable == variable }" @click="selectedVariable = variable">{{ $t(variable) }}</button>
+        :class="{ 'selectedOption': selectedVariable == variable }" @click="selectedVariable = variable"><span>{{ $t(variable) }}</span></button>
     </div>
 
     <!-- Time scale -->
     <div class="horizontal wrap button-group">
       <button class="clickable" v-for="timeScale in timeScales"
-        :class="{ 'selectedOption': selectedTimeScale == timeScale }" @click="selectedTimeScale = timeScale">{{ $t(timeScale)
-        }}</button>
+        :class="{ 'selectedOption': selectedTimeScale == timeScale }" @click="selectedTimeScale = timeScale"><span>{{ $t(timeScale)}}</span></button>
     </div>
   </div>
 
   <!-- Map layers -->
-  <div class="gray-container">
+  <div class="filled-container">
     <div class="horizontal wrap button-group">
       <button class="clickable" v-for="provider in providers"
-        :class="{ 'selectedOption': selectedProvider == provider }" @click="selectedProvider = provider">{{ $t(provider)
-        }}</button>
+        :class="{ 'selectedOption': selectedProvider == provider }" @click="selectedProvider = provider"><span>{{ $t(provider)}}</span></button>
     </div>
     <!-- Model time scale -->
     <Transition name="slideBottom-fade">
       <div class="horizontal wrap button-group" v-if="selectedProvider != 'x' && selectedProvider != 'ICATMAR'">
         <button class="clickable" v-for="modelTimeScale in modelTimeScales"
-          :class="{ 'selectedOption': selectedModelTimeScale == modelTimeScale }" @click="selectedModelTimeScale = modelTimeScale">{{ $t(modelTimeScale)
-          }}</button>
+          :class="{ 'selectedOption': selectedModelTimeScale == modelTimeScale }" @click="selectedModelTimeScale = modelTimeScale"><span>{{ $t(modelTimeScale)  }}</span></button>
       </div>
     </Transition>
   </div>

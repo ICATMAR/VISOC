@@ -1,33 +1,30 @@
 <template>
 <!-- Variables to show -->
- <div class="horizontal wrap options-container gray-container">
+ <div class="horizontal wrap options-container filled-container">
  <!-- Make the first X variables on by default -->
     <OnOffButtonWithText v-for="(variable, index) in variables" :key="variable" :checked="index < 3" :text="$t(variable)" :inSize="'8px'"
       @change="toggleVariable($event, variable)"></OnOffButtonWithText>
   </div>
 
   <!-- Map layers -->
-  <div class="gray-container">
+  <div class="filled-container">
     <!-- Variable type -->
     <div class="horizontal wrap button-group">
       <button class="clickable" v-for="variable in modelVariables"
-        :class="{ 'selectedOption': selectedModelVariable == variable }" @click="selectedModelVariable = variable">{{ $t(variable)
-        }}</button>
+        :class="{ 'selectedOption': selectedModelVariable == variable }" @click="selectedModelVariable = variable"><span>{{ $t(variable)}}</span></button>
     </div>
     <!-- Provider -->
     <Transition name="slideBottom-fade">
       <div class="horizontal wrap button-group" v-if="selectedModelVariable != 'x'">
         <button class="clickable" v-for="provider in modelProviders"
-          :class="{ 'selectedOption': selectedModelProvider == provider }" @click="selectedModelProvider = provider">{{ $t(provider)
-          }}</button>
+          :class="{ 'selectedOption': selectedModelProvider == provider }" @click="selectedModelProvider = provider"><span>{{ $t(provider)  }}</span></button>
       </div>
     </Transition>
     <!-- Model time scale -->
     <Transition name="slideBottom-fade">
       <div class="horizontal wrap button-group" v-if="selectedModelVariable != 'x' && selectedModelProvider != 'ICATMAR'">
         <button class="clickable" v-for="modelTimeScale in modelTimeScales"
-          :class="{ 'selectedOption': selectedModelTimeScale == modelTimeScale }" @click="selectedModelTimeScale = modelTimeScale">{{ $t(modelTimeScale)
-          }}</button>
+          :class="{ 'selectedOption': selectedModelTimeScale == modelTimeScale }" @click="selectedModelTimeScale = modelTimeScale"><span>{{ $t(modelTimeScale)}}</span></button>
       </div>
     </Transition>
   </div>

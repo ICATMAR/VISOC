@@ -9,13 +9,13 @@
   </div>
 
 
-  <div class="gray-container">
+  <div class="filled-container">
     <!-- Currents or radials -->
     <div class="horizontal wrap button-group">
       <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'currents' }"
-        @click="selectedHFRProduct = 'currents'">Currents</button>
+        @click="selectedHFRProduct = 'currents'"><span>{{ $t('Currents') }}</span></button>
       <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'radials' }"
-        @click="selectedHFRProduct = 'radials'">Radials</button>
+        @click="selectedHFRProduct = 'radials'"><span>{{ $t('Radials') }}</span></button>
     </div>
 
     <!-- Radial antennas on/off -->
@@ -29,7 +29,7 @@
 
   </div>
 
-  <div class="gray-container">
+  <div class="filled-container">
     <!-- On/Off options -->
     <div class="horizontal wrap options-container">
       <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'8px'"
@@ -40,12 +40,12 @@
   </div>
 
   <!-- Data source -->
-  <div class="gray-container">
+  <div class="filled-container">
     <div class="horizontal wrap button-group">
       <button class="clickable" :class="{ 'selectedOption': selectedSource == 'ICATMAR' }"
-        @click="selectedSource = 'ICATMAR'">{{ $t('ICATMAR') }}</button>
+        @click="selectedSource = 'ICATMAR'"><span>{{ $t('ICATMAR') }}</span></button>
       <button class="clickable" :class="{ 'selectedOption': selectedSource == 'EU HFR Node' }"
-        @click="selectedSource = 'EU HFR Node'">{{ $t('EU HFR Node') }}</button>
+        @click="selectedSource = 'EU HFR Node'"><span>{{ $t('EU HFR Node') }}</span></button>
       <!-- <OnOffButtonWithText ref="toggleExternalSources" :checked="false" :text="$t('EU HFR Node data')" :inSize="'8px'"
       @change="toggleExternalSources($event)"></OnOffButtonWithText> -->
     </div>

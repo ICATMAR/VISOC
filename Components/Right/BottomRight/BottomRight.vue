@@ -77,8 +77,8 @@ export default {
   padding: 5px;
 }
 
-:deep(.gray-container) {
-  background: var(--lightGray);
+:deep(.filled-container) {
+  background: var(--blue);
   border-radius: 10px;
   margin-bottom: 10px;
 }
