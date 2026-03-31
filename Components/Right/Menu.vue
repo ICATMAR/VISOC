@@ -14,7 +14,9 @@
         <div class="horizontal wrap info-links" style="justify-content: flex-end">
           <button class="clickable"><span>{{ $t('About') }}</span></button>
           <button class="clickable"><span>{{ $t('Cookie consent') }}</span></button>
-          <button class="clickable"><span>{{$t('Source code')}}</span></button>
+          <a href="https://github.com/ICATMAR/VISOC" target="_blank" rel="noopener noreferrer">
+            <button class="clickable"><span>{{$t('Source code')}}</span></button>
+          </a>
         </div>
 
         <!-- Divider -->
@@ -48,26 +50,6 @@
 
 
 
-        <!-- Dashboards by model -->
-       <div class="dashboard-section-text">
-          {{ $t('By model') }}
-        </div>
-        <!-- List of models -->
-        <div class="horizontal wrap dashboards-container">
-          <div class="dashboard-container clickable"v-for="dashboard in modelDashboards" :key="dashboard.id"
-            v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-            :class="dashboardClasses[dashboard.id]">
-            <div class="dashboard-img-container">
-              <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
-              <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
-            </div>
-            
-            <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
-          </div>
-        </div>
-
-
-        
         <!-- Dashboards by variable -->
         <div class="dashboard-section-text">
           {{ $t('By variable') }}
@@ -88,10 +70,40 @@
 
 
 
+
+
+        <!-- Dashboards by model -->
+       <div class="dashboard-section-text">
+          {{ $t('By model') }}
+        </div>
+        <!-- List of models -->
+        <div class="horizontal wrap dashboards-container">
+          <div class="dashboard-container clickable"v-for="dashboard in modelDashboards" :key="dashboard.id"
+            v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
+            :class="dashboardClasses[dashboard.id]">
+            <div class="dashboard-img-container">
+              <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
+              <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
+            </div>
+            
+            <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
+          </div>
+        </div>
+
+
+        
+        
+
+
+
         <div class="divider-small"></div>
 
-        <button class="data-access-button"><span>{{ $t('Data access and download') }}</span></button>
-
+        <a href="https://erddap.icatmar.cat/" target="_blank" rel="noopener noreferrer">
+          <button class="data-access-button">
+            <span>{{ $t('Data access and download') }}</span>
+            <span class="fa fa-download"></span>
+          </button>
+        </a>
         <!-- Divider -->
         <div class="divider-small"></div>
 
