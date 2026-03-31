@@ -23,7 +23,7 @@
         <!-- All platforms -->
         <div class="dashboard-container clickable" v-on:click="() => { $gui.selectedDashboard = allPlatformsDashboard.id }" :class="$gui.selectedDashboard === allPlatformsDashboard.id ? 'dashboard-box-selected' : ''">
           <div class="dashboard-img-container">
-            <img class="dashboard-img" :src="allPlatformsDashboard.icon" alt="All platforms icon" >
+            <img class="dashboard-img" :src="allPlatformsDashboard.image" alt="All platforms image" >
           </div>
           <span class="dashboard-bottom-text">{{ $t(allPlatformsDashboard.name) }}</span>
         </div>
@@ -33,7 +33,7 @@
           {{ $t('By platform') }}
         </div>
         <!-- List of platforms -->
-        <div class="horizontal wrap">
+        <div class="horizontal wrap dashboards-container">
           <div class="dashboard-container clickable"v-for="dashboard in platformDashboards" :key="dashboard.id"
             v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
             :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
@@ -48,10 +48,45 @@
 
 
 
+        <!-- Dashboards by model -->
+       <div class="dashboard-section-text">
+          {{ $t('By model') }}
+        </div>
+        <!-- List of models -->
+        <div class="horizontal wrap dashboards-container">
+          <div class="dashboard-container clickable"v-for="dashboard in modelDashboards" :key="dashboard.id"
+            v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
+            :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
+            <div class="dashboard-img-container">
+              <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
+              <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
+            </div>
+            
+            <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
+          </div>
+        </div>
+
 
         
-
         <!-- Dashboards by variable -->
+        <div class="dashboard-section-text">
+          {{ $t('By variable') }}
+        </div>
+        <!-- List of variables -->
+        <div class="horizontal wrap dashboards-container">
+          <div class="dashboard-container clickable"v-for="dashboard in variableDashboards" :key="dashboard.id"
+            v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
+            :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
+            <div class="dashboard-img-container">
+              <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
+              <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
+            </div>
+            
+            <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
+          </div>
+        </div>
+
+
 
         <div class="divider-small"></div>
 
@@ -102,6 +137,12 @@ export default {
     },
     allPlatformsDashboard() {
       return this.$gui.dashboards.find(d => d.id === 'platforms');
+    },
+    modelDashboards() {
+      return this.$gui.dashboards.filter(d => d.type === 'model');
+    },
+    variableDashboards() {
+      return this.$gui.dashboards.filter(d => d.type === 'variable');
     }
   },
   components: {
@@ -120,6 +161,7 @@ export default {
   padding: 0;
   z-index: 1;
   background:var(--darkBlue);
+  overflow: auto;
 }
 
 
@@ -138,8 +180,12 @@ export default {
 }
 
 
+.dashboards-container {
+  align-items: flex-start;
+}
+
 .dashboard-container {
-  width: 70px;
+  width: 65px;
   display: flex;
   flex-direction: column;
   margin: 4px 15px;
@@ -178,6 +224,9 @@ export default {
   font-size: x-small;
   text-align: center;
   padding-top: 2px;
+
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .dashboard-box-selected > div > .dashboard-img {

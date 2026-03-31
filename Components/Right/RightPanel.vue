@@ -19,7 +19,8 @@
         <!-- List of dashboards -->
         <div class="menu-button-container menu-element clickable" v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
           <span class="menu-text">{{ $t(dashboard.name) }}</span>
-          <img class="menu-icon-small" :src="dashboard.icon" alt="Dashboard Icon">
+          <img v-if="dashboard.icon" class="menu-icon-small" :src="dashboard.icon" alt="Dashboard Icon">
+          <img v-else-if="dashboard.image" class="menu-icon-small" :src="dashboard.image" alt="Dashboard Image">
         </div>
       </div>
     </span>
