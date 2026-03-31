@@ -195,7 +195,7 @@ export default {
   box-shadow: 0 0 4px black;
 }
 
-.info-links > button{
+.info-links > button, .info-links > a > button {
   background: none;
   border: none;
   text-decoration: underline;

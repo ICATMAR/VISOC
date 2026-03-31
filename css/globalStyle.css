@@ -58,6 +58,12 @@ button {
   user-select: none;
 }
 
+a {
+  text-decoration: none; /* Removes underline */
+  color: inherit;       /* Keeps button text color */
+  display: inherit; /* Prevents layout shifts */
+}
+
 span {
   color: white;
   text-shadow: 0 0 4px black;
