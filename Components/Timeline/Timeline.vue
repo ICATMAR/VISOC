@@ -9,7 +9,7 @@
           <!-- Swith to full timeline -->
           <Transition name="scale-fade" mode="out-in">
             <button class="full-timeline-switch" key="fulltime" v-if="!isFullTimeline" @click="isFullTimeline = !isFullTimeline">2018 - now</button>
-            <button class="full-timeline-switch" key="lastweek" v-else @click="isFullTimeline = !isFullTimeline">Last week</button>
+            <button class="full-timeline-switch" key="lastweek" v-else @click="isFullTimeline = !isFullTimeline">Lastest week</button>
           </Transition>
           <!-- Play button -->
           <button class="play-button"><span class="fa fa-play"></span></button>
