@@ -21,7 +21,7 @@
         <div class="divider-small"></div>
 
         <!-- All platforms -->
-        <div class="dashboard-container clickable" v-on:click="() => { $gui.selectedDashboard = allPlatformsDashboard.id }" :class="$gui.selectedDashboard === allPlatformsDashboard.id ? 'dashboard-box-selected' : ''">
+        <div class="dashboard-container clickable" v-on:click="() => { $gui.selectedDashboard = allPlatformsDashboard.id }" :class="dashboardClasses[allPlatformsDashboard.id]">
           <div class="dashboard-img-container">
             <img class="dashboard-img" :src="allPlatformsDashboard.image" alt="All platforms image" >
           </div>
@@ -36,7 +36,7 @@
         <div class="horizontal wrap dashboards-container">
           <div class="dashboard-container clickable"v-for="dashboard in platformDashboards" :key="dashboard.id"
             v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-            :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
+            :class="dashboardClasses[dashboard.id]">
             <div class="dashboard-img-container">
               <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
               <img class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -56,7 +56,7 @@
         <div class="horizontal wrap dashboards-container">
           <div class="dashboard-container clickable"v-for="dashboard in modelDashboards" :key="dashboard.id"
             v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-            :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
+            :class="dashboardClasses[dashboard.id]">
             <div class="dashboard-img-container">
               <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
               <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -76,7 +76,7 @@
         <div class="horizontal wrap dashboards-container">
           <div class="dashboard-container clickable"v-for="dashboard in variableDashboards" :key="dashboard.id"
             v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-            :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
+            :class="dashboardClasses[dashboard.id]">
             <div class="dashboard-img-container">
               <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
               <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -90,7 +90,7 @@
 
         <div class="divider-small"></div>
 
-        <button>{{ $t('Download data') }}</button>
+        <button class="data-access-button"><span>{{ $t('Data access and download') }}</span></button>
 
         <!-- Divider -->
         <div class="divider-small"></div>
@@ -143,6 +143,18 @@ export default {
     },
     variableDashboards() {
       return this.$gui.dashboards.filter(d => d.type === 'variable');
+    },
+    // Computes if the class of the dashboard-container is unavailable, selected or nothing
+    dashboardClasses() {
+      const classMap = {};
+      this.$gui.dashboards.forEach(db => {
+        let className = '';
+        if (!db.isAvailable) className = 'is-unavailable';
+        else if (this.$gui.selectedDashboard === db.id) className = 'dashboard-box-selected';
+
+        classMap[db.id] = className;
+      });
+      return classMap;
     }
   },
   components: {
@@ -179,6 +191,11 @@ export default {
   font-size: x-small;
 }
 
+.is-unavailable {
+  pointer-events: none;
+  filter: grayscale(1) contrast(0.7) brightness(0.7);
+  border-radius: 10px;
+}
 
 .dashboards-container {
   align-items: flex-start;
@@ -204,7 +221,6 @@ export default {
   width: 100%;
   height: 100%;
   border-radius: 10px;
-  filter: brightness(0.8);
   object-fit: cover;
 }
 
@@ -233,7 +249,7 @@ export default {
 .dashboard-box-selected > div > .dashboard-img {
   border: 2px solid var(--red);
   box-shadow: 0 0 4px var(--red);
-  filter: brightness(1.2);
+  filter: brightness(1.4);
 }
 
 .dashboard-box-selected > .dashboard-bottom-text {
@@ -243,6 +259,17 @@ export default {
   padding-left: 3px;
   padding-right: 3px;
   padding-bottom: 3px;
+}
+
+
+
+
+.data-access-button {
+  background: var(--blue);
+  border: none;
+  border-radius: 10px;
+  padding: 5px 10px 5px 10px;
+  margin-left: 25%;
 }
 
 
