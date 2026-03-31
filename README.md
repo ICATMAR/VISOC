@@ -5,24 +5,17 @@ Visor del servei d'oceanografia de Catalunya. Aquest visor està basat en aquest
 This project is built with vue. The files are complied on the client with[ vue3-sfc-loader](https://github.com/FranckFreiburger/vue3-sfc-loader). Instead of using professional solution like Vite, we chose vue3-sfc-loader for its longevity: the website will still work and be editable in 10 years. On the down side, compiling on the client adds a small loading overhead. For a reference, [VISAP](https://icatmar.github.io/VISAP/) takes 2 seconds to compile on a 2014 windows computer.
 
 ### TODOS
-- Fill the bottom-right menu.
-  - HFR:
-    - Add color bar legend
-    - Add show points, show buoys, show drifters
-    - Select base color map (SST, SSH, SSS)
-    - (only radials) On/Off antennas
-  - Buoys
-    - Add variables options for buoys (wind, waves, currents, airt, SST...)
-  - Drifters
-    - Show trajectories
-    - Trajectories time range (7 days, 1 month, 2 months, 6 months)
-    - NOAA data
-    - Drifter types
-    - Consider merging drifters and argos in the same interface.
+- Recent timeline
+  - Mockup for last week of available data (should feed from ERDDAP's time_coverage_end)
+  - Sliding set time to
+  - Consider different timelines for different dashboards, e.g. satellite as in radar in windy
 
 
 - Menu
-  - Show list of elements per platform and latest data and latest update time
+  - Show latest data and latest update time per dashboard?
+
+- Dashboards
+  - Consider merging drifters and argos in the same interface.
   
    
 
