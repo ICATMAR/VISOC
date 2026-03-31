@@ -141,6 +141,7 @@ export default {
 .menu-menu-button {
   margin-bottom: 20px;
   height: 50px;
+  border-radius: 30px 0 0 30px;
 }
 
 .menu-element {

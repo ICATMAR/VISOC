@@ -4,19 +4,24 @@
       <div class="menu-container" v-show="$gui.isMenuOpen">
 
         <!-- Language selector -->
-        <div class="horizontal" style="justify-content: space-around">
+        <div class="horizontal button-group" style="justify-content: flex-end">
           <button v-for="language in $gui.languages" :key="language.id" v-on:click="() => { $gui.selectedLanguage = language.id }" :class="$gui.selectedLanguage === language.id ? 'selected':''">
-            {{ language.name }}
+            <span>{{ language.name }}</span>
           </button>
         </div>
 
+        <!-- Panels -->
+        <div class="horizontal wrap info-links" style="justify-content: flex-end">
+          <button><span>{{ $t('About') }}</span></button>
+          <button><span>{{ $t('Cookie consent') }}</span></button>
+          <button><span>{{$t('Source code')}}</span></button>
+        </div>
+
         <!-- Divider -->
-        <div class="divider"></div>
+        <div class="divider-small"></div>
 
         <!-- Dashboards by platform -->
         <div class="vertical">
-          <!-- Title -->
-          <span>{{ $t('Platforms and devices') }}</span>
           <!-- List of platforms -->
           <div class="horizontal wrap">
             <button v-for="dashboard in $gui.dashboards" :key="dashboard.id"
@@ -37,20 +42,12 @@
 
         <!-- Dashboards by variable -->
 
+        <div class="divider-small"></div>
+
+        <button>{{ $t('Download data') }}</button>
 
         <!-- Divider -->
-        <div class="divider"></div>
-
-        <!-- Panels -->
-        <div class="horizontal wrap">
-          <button>{{ $t('About') }}</button>
-          <button>{{ $t('Cookie consent') }}</button>
-          <button>{{$t('Source code')}}</button>
-          <button>{{ $t('Download data') }}</button>
-        </div>
-
-        <!-- Divider -->
-        <div class="divider"></div>
+        <div class="divider-small"></div>
 
         <!-- Providers and funding -->
         <div class="vertical" style="align-items: center;">
@@ -108,9 +105,17 @@ export default {
 
 
 .selected {
-  background: lightblue;
+  background: var(--red);
   font-weight: bold;
+  box-shadow: 0 0 4px black;
+}
+
+.info-links > button{
+  background: none;
+  border: none;
   text-decoration: underline;
+  color: white;
+  font-size: x-small;
 }
 
 .dashboard-icon {

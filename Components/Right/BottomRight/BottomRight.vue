@@ -87,19 +87,5 @@ export default {
   gap: 5px;
 }
 
-:deep(.button-group){
-    display: flex;
-    justify-content: flex-start;
-    padding: 4px;
-}
-:deep(.button-group) > button {
-  border-radius: 10px;
-  padding: 0px 12px;
-  border: none;
-  background: rgb(0 0 0 / 0%);
-}
-:deep(.button-group) > button.selectedOption {
-  background: var(--red);
-  box-shadow: 0 0 4px black;
-}
+
 </style>
