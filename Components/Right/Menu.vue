@@ -40,7 +40,6 @@
             <div class="dashboard-img-container">
               <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
               <img class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
-              
             </div>
             
             <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
@@ -178,12 +177,22 @@ export default {
 .dashboard-bottom-text {
   font-size: x-small;
   text-align: center;
+  padding-top: 2px;
 }
 
 .dashboard-box-selected > div > .dashboard-img {
   border: 2px solid var(--red);
   box-shadow: 0 0 4px var(--red);
   filter: brightness(1.2);
+}
+
+.dashboard-box-selected > .dashboard-bottom-text {
+  background: var(--red);
+  border-radius: 2px 2px 10px 10px;
+  font-weight: bold;
+  padding-left: 3px;
+  padding-right: 3px;
+  padding-bottom: 3px;
 }
 
 
