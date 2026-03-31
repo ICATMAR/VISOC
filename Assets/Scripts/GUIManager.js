@@ -16,11 +16,11 @@ class GUIManager {
   selectedDashboard = 'hfr';
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'HFR currents', id: 'hfr', icon: './Assets/Icons/radar.svg' },
-    { name: 'Buoys', id: 'buoys', icon: './Assets/Icons/buoy.svg' },
-    { name: 'Drifters', id: 'drifters', icon: './Assets/Icons/drifter.svg' },
-    { name: 'Argos', id: 'argos', icon: './Assets/Icons/argo.svg' },
-    { name: 'Remote sensing', id: 'remoteSensing', icon: './Assets/Icons/smos.svg' },
+    { name: 'HFR currents', type: 'platform', id: 'hfr', icon: './Assets/Icons/radar.svg', image: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'Buoys', type: 'platform', id: 'buoys', icon: './Assets/Icons/buoy.svg', image: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'Drifters', type: 'platform', id: 'drifters', icon: './Assets/Icons/drifter.svg', image: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'Argos', type: 'platform', id: 'argos', icon: './Assets/Icons/argo.svg', image: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'Remote sensing', type: 'platform', id: 'remoteSensing', icon: './Assets/Icons/smos.svg', image: './Assets/Images/dashboardIcons/example.jpg' },
 
   ]
 

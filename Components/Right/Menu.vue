@@ -1,42 +1,54 @@
 <template>
-  <span>
+  <div>
     <Transition name="slide-fade">
       <div class="menu-container" v-show="$gui.isMenuOpen">
 
         <!-- Language selector -->
         <div class="horizontal button-group" style="justify-content: flex-end">
-          <button v-for="language in $gui.languages" :key="language.id" v-on:click="() => { $gui.selectedLanguage = language.id }" :class="$gui.selectedLanguage === language.id ? 'selected':''">
+          <button class="clickable" v-for="language in $gui.languages" :key="language.id" v-on:click="() => { $gui.selectedLanguage = language.id }" :class="$gui.selectedLanguage === language.id ? 'selected':''">
             <span>{{ language.name }}</span>
           </button>
         </div>
 
         <!-- Panels -->
         <div class="horizontal wrap info-links" style="justify-content: flex-end">
-          <button><span>{{ $t('About') }}</span></button>
-          <button><span>{{ $t('Cookie consent') }}</span></button>
-          <button><span>{{$t('Source code')}}</span></button>
+          <button class="clickable"><span>{{ $t('About') }}</span></button>
+          <button class="clickable"><span>{{ $t('Cookie consent') }}</span></button>
+          <button class="clickable"><span>{{$t('Source code')}}</span></button>
         </div>
 
         <!-- Divider -->
         <div class="divider-small"></div>
 
-        <!-- Dashboards by platform -->
-        <div class="vertical">
-          <!-- List of platforms -->
-          <div class="horizontal wrap">
-            <button v-for="dashboard in $gui.dashboards" :key="dashboard.id"
-              v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-              :class="$gui.selectedDashboard === dashboard.id ? 'selected' : ''">
-              <div class="vertical">
-                <img :src="dashboard.icon" alt="Dashboard icon" class="dashboard-icon">
-                <span>{{ $t(dashboard.name) }}</span>
-              </div>
-              
-            </button>
+        <!-- All platforms -->
+        <div class="dashboard-container clickable" v-on:click="() => { $gui.selectedDashboard = allPlatformsDashboard.id }" :class="$gui.selectedDashboard === allPlatformsDashboard.id ? 'dashboard-box-selected' : ''">
+          <div class="dashboard-img-container">
+            <img class="dashboard-img" :src="allPlatformsDashboard.icon" alt="All platforms icon" >
           </div>
-
-
+          <span class="dashboard-bottom-text">{{ $t(allPlatformsDashboard.name) }}</span>
         </div>
+
+        <!-- Dashboards by platform -->
+        <div class="dashboard-section-text">
+          {{ $t('By platform') }}
+        </div>
+        <!-- List of platforms -->
+        <div class="horizontal wrap">
+          <div class="dashboard-container clickable"v-for="dashboard in platformDashboards" :key="dashboard.id"
+            v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
+            :class="$gui.selectedDashboard === dashboard.id ? 'dashboard-box-selected' : ''">
+            <div class="dashboard-img-container">
+              <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
+              <img class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
+              
+            </div>
+            
+            <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
+          </div>
+        </div>
+
+
+
 
         
 
@@ -66,7 +78,7 @@
 
       </div>
     </Transition>
-  </span>
+  </div>
 </template>
 
 <script>
@@ -84,6 +96,14 @@ export default {
   },
   methods: {
     //onclick: function(e){},
+  },
+  computed: {
+    platformDashboards() {
+      return this.$gui.dashboards.filter(d => d.type === 'platform');
+    },
+    allPlatformsDashboard() {
+      return this.$gui.dashboards.find(d => d.id === 'platforms');
+    }
   },
   components: {
   }
@@ -118,11 +138,52 @@ export default {
   font-size: x-small;
 }
 
+
+.dashboard-container {
+  width: 70px;
+  display: flex;
+  flex-direction: column;
+  margin: 4px 15px;
+}
+
+.dashboard-img-container {
+  position: relative;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  filter: brightness(0.8);
+}
+
 .dashboard-icon {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-  border-radius: 8px;
+  width: 40%;
+  z-index: 2;
+  background: rgb(171 219 237 / 71%);
+  border-radius: 50%;
+}
+
+.dashboard-section-text {
+  font-size: x-small;
+  margin: 30px 0px 5px 10px;
+  color: var(--lightBlue);
+}
+
+.dashboard-bottom-text {
+  font-size: x-small;
+  text-align: center;
+}
+
+.dashboard-box-selected > div > .dashboard-img {
+  border: 2px solid var(--red);
+  box-shadow: 0 0 4px var(--red);
+  filter: brightness(1.2);
 }
 
 
@@ -139,6 +200,10 @@ export default {
   margin: 5px;
   object-fit: contain;
 }
+
+
+
+
 
 
 /* 1. The entering/leaving timing (The "Middle" State) */
