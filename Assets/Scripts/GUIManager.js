@@ -16,11 +16,11 @@ class GUIManager {
   selectedDashboard = 'hfr';
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'HFR currents', id: 'hfr', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Buoys', id: 'buoys', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Drifters', id: 'drifters', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Argos', id: 'argos', icon: './Assets/Images/dashboardIcons/example.jpg' },
-    { name: 'Remote sensing', id: 'remoteSensing', icon: './Assets/Images/dashboardIcons/example.jpg' },
+    { name: 'HFR currents', id: 'hfr', icon: './Assets/Icons/radar.svg' },
+    { name: 'Buoys', id: 'buoys', icon: './Assets/Icons/buoy.svg' },
+    { name: 'Drifters', id: 'drifters', icon: './Assets/Icons/drifter.svg' },
+    { name: 'Argos', id: 'argos', icon: './Assets/Icons/argo.svg' },
+    { name: 'Remote sensing', id: 'remoteSensing', icon: './Assets/Icons/smos.svg' },
 
   ]
 

@@ -4,16 +4,23 @@
     <span class="top-right-section">
       <div class="top-right-container">
         <!-- Menu button -->
-        <button class="menu-vertical-button clickable menu-button" v-on:click="()=>{$gui.toggleMenu()}">
+        <div class="menu-button-container menu-menu-button clickable" v-on:click="()=>{$gui.toggleMenu()}">
           <Transition name="scale-fade" mode="out-in">
-            <span v-if="!$gui.isMenuOpen">Menu <span class='fa fa-bars'></span></span>
-            <span v-else class='fa fa-xmark'></span>
+            <div class="horizontal" v-if="!$gui.isMenuOpen">
+              <span class="menu-text">{{ $t('Menu') }}</span>
+              <i class="menu-icon-big fa fa-bars"></i>
+            </div>
+            <template v-else>
+              <i class="menu-icon-big menu-icon-xmark fa fa-xmark"></i>
+            </template>
           </Transition>
-        </button>
+        </div>
+
         <!-- List of dashboards -->
-        <button class="menu-vertical-button clickable"v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
-          {{ $t(dashboard.name) }}
-        </button>
+        <div class="menu-button-container menu-element clickable" v-for="dashboard in $gui.dashboards" :key="dashboard.id" v-on:click="()=>{$gui.selectedDashboard = dashboard.id}" :class="$gui.selectedDashboard === dashboard.id ? 'selected':''">
+          <span class="menu-text">{{ $t(dashboard.name) }}</span>
+          <img class="menu-icon-small" :src="dashboard.icon" alt="Dashboard Icon">
+        </div>
       </div>
     </span>
 
@@ -90,7 +97,7 @@ export default {
   pointer-events: none;
   margin-top: 10px;
   margin-bottom: 20px;
-  margin-right: 10px;
+  margin-right: 0px;
   height: calc(100% - 30px);
   background-color: purple;
 
@@ -119,11 +126,78 @@ export default {
 
 
 
-.menu-button.menu-vertical-button {
-  font-size: large;
-  margin: 8px 0px;
-  border-radius: 15px;
+
+
+.menu-button-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  padding: 4px;
+  background: #00000040;
+  border-radius: 20px 0px 0px 20px;
 }
+
+.menu-menu-button {
+  margin-bottom: 20px;
+  height: 50px;
+}
+
+.menu-element {
+  margin-bottom: 5px;
+  font-size: small;
+}
+
+.menu-text {
+  display: inline-block;
+  padding: 0px 20px;
+  text-align: center;
+  color: white;
+  text-shadow: 0px 0px 4px black;
+}
+
+.menu-icon-big {
+  width: 40px;
+  height: 40px;
+  color: white;
+  text-shadow: 0px 0px 4px black;
+  font-weight: bold;
+  background: var(--lightBlue);
+  border-radius: 50%;
+  box-shadow: 0px 0px 5px black;
+  margin-left: 3px;
+  margin-right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+
+.menu-icon-xmark {
+  background: var(--red);
+}
+
+.menu-icon-small {
+  width: 25px;
+  height: 25px;
+  color: white;
+  text-shadow: 0px 0px 4px black;
+  font-weight: bold;
+  background: var(--lightBlue);
+  border-radius: 50%;
+  box-shadow: 0px 0px 5px black;
+  margin-left: 3px;
+  margin-right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+
 
 
 .menu-vertical-button {
@@ -137,6 +211,7 @@ export default {
 .selected {
   font-weight: bold;
   background:var(--red);
+  box-shadow: 0 0 4px black;
 }
 
 </style>
