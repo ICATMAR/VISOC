@@ -20,9 +20,22 @@
         <!-- Timeline -->
         <div class="timeline">
 
+          <!-- Slider -->
+          <input type="range" min="0" max="100" v-model="percentageInTimeline" class="timeline-slider">
+
+          <!-- Handel -->
+          <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
+            <!-- Icon -->
+            <div class="timeline-handle-triangle">▾</div>
+            <!-- Handel box -->
+            <div class="timeline-handle-timecode">
+              Hello
+            </div>
+          </div>
+
           <!-- Progress line -->
           <div class="timeline-progress">
-            <div class="timeline-progress-completion" :style="{ width: (100 - percentageOfTimeline - percentageNotAvailable) + '%' }"></div>
+            <div class="timeline-progress-completion" :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div>
             <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div>
           </div>
 
@@ -52,7 +65,7 @@ export default {
   data (){
     return {
       isFullTimeline: false,
-      percentageOfTimeline: 50,
+      percentageInTimeline: 50,
       percentageNotAvailable: 12,
     }
   },
@@ -147,7 +160,21 @@ export default {
   background: var(--lightBlue);
   display: flex;
   flex-direction: column;
+  position: relative;
+  box-shadow: 0 0 4px black;
 }
+
+
+
+.timeline-slider {
+  position: absolute;
+  width: 100%;
+  height: 40px;
+  opacity: 0.1; /* Make it invisible */
+  cursor: pointer;
+  z-index: 5;
+}
+
 
 .timeline-days-container {
   display: flex;
@@ -182,5 +209,28 @@ export default {
 .timeline-progress-not-available {
   height: 100%;
   background: var(--gray);
+}
+
+
+.timeline-handle {
+  position: relative;
+}
+
+.timeline-handle-triangle {
+  position: absolute;
+  left: -10px;
+  top: -24px;
+  font-size: x-large;
+  color: var(--lightBlue);
+}
+
+.timeline-handle-timecode {
+  position: absolute;
+  top: -38px;
+  left: -20px;
+  background: var(--lightBlue);
+  border-radius: 5px;
+  padding: 2px 10px 2px 10px;
+  box-shadow: 0 0 4px black;
 }
 </style>
