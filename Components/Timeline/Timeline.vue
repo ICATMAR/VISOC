@@ -97,7 +97,7 @@ export default {
         timelineDays.push({
           date: new Date(startDate.getTime()),
           day: startDate.getDate(),
-          width: i == 0 ? startDate.getHours() / 24 * 100 : i == rangeOfDays - 1 ? startDate.getHours() / 24 * 100 : 100,
+          width: i == 0 ? (24 - startDate.getHours()) / 24 * 100 : i == rangeOfDays - 1 ? startDate.getHours()/ 24 * 100 : 100,
           textXShort: startDate.toLocaleString(this.$i18n.locale, {day: 'numeric' }),
           textShort: startDate.toLocaleString(this.$i18n.locale, { weekday: 'short', day: 'numeric' }),
           textLong: startDate.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric'}),
