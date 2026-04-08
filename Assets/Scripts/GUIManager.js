@@ -29,7 +29,9 @@ class GUIManager {
 
     { name: 'Sea surface model', type: 'model', id: 'seaSurface', image: './Assets/Images/dashboardIcons/example.jpg', isAvailable: false },
 
-  ]
+  ];
+
+  shortTimelineDays = 4;
 
   // CONSTRUCTOR
   constructor() {
