@@ -21,7 +21,7 @@
         <div class="timeline">
 
           <!-- Slider -->
-          <input type="range" min="0" max="100" v-model="percentageInTimeline" class="timeline-slider">
+          <input type="range" min="0" :max="this.$gui.shortTimelineDays * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
 
           <!-- Handel -->
           <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
@@ -29,7 +29,7 @@
             <div class="timeline-handle-triangle">▾</div>
             <!-- Handel box -->
             <div class="timeline-handle-timecode">
-              Hello
+              {{ selectedTime }}
             </div>
           </div>
 
@@ -65,7 +65,7 @@ export default {
   data (){
     return {
       isFullTimeline: false,
-      percentageInTimeline: 50,
+      hoursInSlider: 50,
       percentageNotAvailable: 12,
     }
   },
@@ -73,6 +73,9 @@ export default {
     //onclick: function(e){},
   },
   computed: {
+    percentageInTimeline() {
+      return this.hoursInSlider / (24 * this.$gui.shortTimelineDays) * 100;
+    },
     timelineDays() {
       let date = new Date();
       // Set latest date hour to next hour and zero minutes and seconds
@@ -95,6 +98,15 @@ export default {
       }
       return timelineDays;
     },
+    selectedTime() {
+      const date = new Date();
+      date.setHours(date.getHours() + 1);
+      date.setMinutes(0);
+      date.setSeconds(0);
+      const startDate = new Date(date.getTime() - (this.$gui.shortTimelineDays * 24 * 3600 * 1000));
+      startDate.setHours(startDate.getHours() + this.hoursInSlider);
+      return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute:'numeric'});
+    }
   },
 }
 </script>
@@ -226,11 +238,12 @@ export default {
 
 .timeline-handle-timecode {
   position: absolute;
-  top: -38px;
+  top: -34px;
   left: -20px;
   background: var(--lightBlue);
   border-radius: 5px;
   padding: 2px 10px 2px 10px;
   box-shadow: 0 0 4px black;
+  font-size: small;
 }
 </style>
