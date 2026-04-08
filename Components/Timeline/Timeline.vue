@@ -21,7 +21,7 @@
         <div class="timeline">
 
           <!-- Slider -->
-          <input type="range" min="0" :max="(this.$gui.shortTimelineDays - 1) * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
+          <input type="range" min="0" :max="(rangeOfDays - 1) * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
 
           <!-- Handel -->
           <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
@@ -42,7 +42,13 @@
           <!-- Days -->
           <div class="timeline-days-container">
             <div v-for="day in timelineDays" :key="day.day" class="timeline-day" :title="day.textLong" :style="{ width: day.width + '%' }">
-              {{ day.textShort }}             
+              <span v-if="rangeOfDays < 7">
+                {{ day.textShort }}
+              </span>
+              <span v-else>
+                {{ day.textXShort }}
+              </span>
+                       
             </div>
           </div>
         </div>
@@ -75,7 +81,7 @@ export default {
   computed: {
     startDate() {
       const date = new Date(this.endDate.getTime());
-      date.setHours(date.getHours() - (this.$gui.shortTimelineDays - 1) * 24);
+      date.setHours(date.getHours() - (this.rangeOfDays - 1) * 24);
       return date;
     },
     endDate() {
@@ -85,12 +91,16 @@ export default {
       date.setSeconds(0);
       return date;
     },
+    rangeOfDays() {
+      const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
+      return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
+    },
     percentageInTimeline() {
-      return this.hoursInSlider / (24 * (this.$gui.shortTimelineDays - 1)) * 100;
+      return this.hoursInSlider / (24 * (this.rangeOfDays - 1)) * 100;
     },
     timelineDays() {
       // Get the date of X days ago
-      let rangeOfDays = this.$gui.shortTimelineDays
+      let rangeOfDays = this.rangeOfDays;
       const timelineDays = [];
       let startDate = new Date(this.startDate.getTime());
       for (let i = 0; i < rangeOfDays; i++) {
