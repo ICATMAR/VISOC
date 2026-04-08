@@ -21,7 +21,7 @@
         <div class="timeline">
 
           <!-- Slider -->
-          <input type="range" min="0" :max="this.$gui.shortTimelineDays * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
+          <input type="range" min="0" :max="(this.$gui.shortTimelineDays - 1) * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
 
           <!-- Handel -->
           <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
@@ -73,18 +73,26 @@ export default {
     //onclick: function(e){},
   },
   computed: {
+    startDate() {
+      const date = new Date(this.endDate.getTime());
+      date.setHours(date.getHours() - (this.$gui.shortTimelineDays - 1) * 24);
+      return date;
+    },
+    endDate() {
+      const date = new Date();
+      date.setHours(date.getHours() + 1);
+      date.setMinutes(0);
+      date.setSeconds(0);
+      return date;
+    },
     percentageInTimeline() {
-      return this.hoursInSlider / (24 * this.$gui.shortTimelineDays) * 100;
+      return this.hoursInSlider / (24 * (this.$gui.shortTimelineDays - 1)) * 100;
     },
     timelineDays() {
-      let date = new Date();
-      // Set latest date hour to next hour and zero minutes and seconds
-      date.setHours(date.getHours() + 1);
-      date.setMinutes(0); date.setSeconds(0);
       // Get the date of X days ago
       let rangeOfDays = this.$gui.shortTimelineDays
       const timelineDays = [];
-      let startDate = new Date(date.getTime() - rangeOfDays * 24 * 3600 * 1000);
+      let startDate = new Date(this.startDate.getTime());
       for (let i = 0; i < rangeOfDays; i++) {
         timelineDays.push({
           date: new Date(startDate.getTime()),
@@ -99,13 +107,8 @@ export default {
       return timelineDays;
     },
     selectedTime() {
-      const date = new Date();
-      date.setHours(date.getHours() + 1);
-      date.setMinutes(0);
-      date.setSeconds(0);
-      const startDate = new Date(date.getTime() - (this.$gui.shortTimelineDays * 24 * 3600 * 1000));
-      startDate.setHours(startDate.getHours() + this.hoursInSlider);
-      return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute:'numeric'});
+      const startDate = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
+      return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute:'numeric', day: 'numeric', month: 'short' });
     }
   },
 }
