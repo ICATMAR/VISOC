@@ -23,8 +23,8 @@
     </div>
 
     <!-- Days -->
-    <div class="timeline-days-container">
-      <div v-for="day in timelineDays" :key="day.day" class="timeline-day" :title="day.textLong"
+    <div class="timeline-elements-container">
+      <div v-for="day in timelineDays" :key="day.day" class="timeline-element" :title="day.textLong"
         :style="{ width: day.width + '%' }">
         <span v-if="rangeOfDays < 7">
           {{ day.textShort }}

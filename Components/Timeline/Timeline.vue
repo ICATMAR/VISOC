@@ -137,12 +137,12 @@ export default {
 }
 
 
-:deep(.timeline-days-container) {
+:deep(.timeline-elements-container) {
   display: flex;
   width: 100%;
 }
 
-:deep(.timeline-day) {
+:deep(.timeline-element) {
   display: flex;
   justify-content: center;
   border-right: solid 1px var(--blue);

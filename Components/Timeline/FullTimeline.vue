@@ -4,19 +4,19 @@
   <div class="timeline">
 
     <!-- Years -->
-    <div class="timeline-days-container">
-      <div v-for="year in timelineYears" :key="year.year" class="timeline-day"
+    <div class="timeline-elements-container">
+      <div v-for="year in timelineYears" :key="year.year" class="timeline-element"
         :style="{ width: year.width + '%'}">
         <span>{{ year.text }}</span>
       </div>
     </div>
 
     <!-- Months -->
-    <div class="timeline-days-container" v-if="zoomLevel < 4">
-      <div v-for="month in timelineMonths" :key="month.month" class="timeline-day"
+    <div class="timeline-elements-container" v-if="zoomLevel < 4">
+      <div v-for="month in timelineMonths" :key="month.month" class="timeline-element"
         :style="{ width: month.width + '%'}">
         <!-- Close zoom - Month and year -->
-        <span v-if="zoomLevel === 0">{{ month.text }}</span>
+        <span v-if="zoomLevel <= 0">{{ month.text }}</span>
         <!-- 6 months zoom - Month -->
         <span v-else-if="zoomLevel === 1">{{ month.text }}</span>
         <!-- Middle zoom - Month abbr -->
@@ -27,8 +27,8 @@
     </div>
 
     <!-- Days -->
-    <div class="timeline-days-container" v-if="zoomLevel === 0">
-      <div v-for="day in timelineDays" :key="day.day" class="timeline-day"
+    <div class="timeline-elements-container" v-if="zoomLevel === -10">
+      <div v-for="day in timelineDays" :key="day.day" class="timeline-element"
         :style="{ width: day.width + '%'}">
         <span>{{ day.text }}</span>
       </div>
@@ -71,10 +71,10 @@ export default {
   },
   computed: {
     limitStartDate() {
-      return new Date(2023, 0, 1);
+      return new Date(2023, 1, 1);
     },
     limitEndDate() {
-      return new Date(2023, 2, 1);
+      return new Date(2023, 2, 15);
       const date = new Date();
       date.setHours(date.getHours() + 1);
       date.setMinutes(0);
@@ -106,7 +106,9 @@ export default {
     },
     zoomLevel() {
       const hours = this.hoursInTimeline;
-      if (hours < 24 * 31 * 3) { // 3 months
+      if (hours < 24 * 31 * 1.5) { // 1.5 months
+        return -1;
+      } else if (hours < 24 * 31 * 3) { // 3 months
         return 0;
       } else if (hours < 24 * 31 * 6) { // 6 months
         return 1;
@@ -123,12 +125,23 @@ export default {
       const endYear = this.endYear;
       const timelineYears = [];
       for (let year = startYear; year <= endYear; year++) {
+        let width = 100;
+        // First year of the timeline
+        if (year == startYear) {
+          width = (1 - (this.hoursFromStartOfYear(this.startDate) / this.hoursInYear(year))) * 100;
+        }
+        // Last year of the timeline
+        else if (year == endYear) {
+          width = (this.hoursFromStartOfYear(this.endDate) / this.hoursInYear(year)) * 100;
+        }
+        // Only one year in the timeline
+        if (startYear == endYear) {
+          width = 100;
+        }
         timelineYears.push({
           year: year,
           text: year.toString(),
-          width: year == startYear ? (1 - (this.hoursFromStartOfYear(this.startDate) / this.hoursInYear(year))) * 100 :
-           year == endYear ? this.hoursFromStartOfYear(this.endDate) / this.hoursInYear(year) * 100 :
-            100
+          width: width
         });
       }
       return timelineYears;
@@ -143,9 +156,14 @@ export default {
         const endMonth = year == endYear ? this.endMonth : 11;
         for (let month = startMonth; month <= endMonth; month++) {
           const daysInAMonth = new Date(year, month + 1, 0).getDate();
-          const hoursInMonth = year == startYear && month == startMonth ? (daysInAMonth * 24 - this.hoursFromStartOfMonth(this.startDate)) :
+          let hoursInMonth = year == startYear && month == startMonth ? (daysInAMonth * 24 - this.hoursFromStartOfMonth(this.startDate)) :
            year == endYear && month == endMonth ? this.hoursFromStartOfMonth(this.endDate) :
             daysInAMonth * 24;
+          
+          // Only one month in the timeline
+          if (startYear == endYear && startMonth == endMonth) {
+            hoursInMonth = 31 * 24;
+          }
           
           timelineMonths.push({
             month: `${year}-${month}`,
@@ -200,9 +218,18 @@ export default {
 
 <style scoped>
 
-
-.timeline-years-container {
+.timeline-elements-container {
   display: flex;
   width: 100%;
+}
+
+
+.timeline-element {
+  border: 1px solid #02488e33;
+  cursor: pointer;
+}
+
+.timeline-element:hover {
+  background-color: #02488e33;
 }
 </style>
