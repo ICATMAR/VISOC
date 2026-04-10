@@ -50,11 +50,26 @@ export default {
   },
   data() {
     return {
-      
+      startDate: new Date(2023, 1, 1),
+      endDate: new Date(2023, 2, 15),
     }
   },
   methods: {
-    //onclick: function(e){},
+    // Date interactions
+    zoomToYear(year) {
+      // Show days before and after the selected year
+      let newStartDate = new Date(year, 0, 1); // Start of clicked year
+      let newEndDate = new Date(year + 1, 0, 1); // End of clicked year
+  
+      // Add a little "padding" if you want to see the edges
+      newStartDate.setDate(newStartDate.getDate() - 40);
+      newEndDate.setDate(newEndDate.getDate() + 40);
+
+      this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
+      this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+    },
+
+    // Date calculations
     hoursInYear(year) {
       const startDate = new Date(year, 0, 1);
       const endDate = new Date(year + 1, 0, 1);
@@ -70,7 +85,7 @@ export default {
     },
     // EVENTS
     yearClicked(year) {
-      console.log("Year clicked:", year);
+      this.zoomToYear(year);
     },
     monthClicked(month, year) {
       console.log("Month clicked:", month, year);
@@ -84,7 +99,6 @@ export default {
       return new Date(2023, 1, 1);
     },
     limitEndDate() {
-      return new Date(2023, 2, 15);
       const date = new Date();
       date.setHours(date.getHours() + 1);
       date.setMinutes(0);
@@ -93,12 +107,6 @@ export default {
       return date;
     },
     // Visible timeline range
-    startDate() {
-      return this.limitStartDate;
-    },
-    endDate() {
-      return this.limitEndDate;
-    },
     startYear() {
       return this.startDate.getFullYear();
     },
@@ -144,9 +152,18 @@ export default {
         else if (year == endYear) {
           width = (this.hoursFromStartOfYear(this.endDate) / this.hoursInYear(year)) * 100;
         }
+        // Exceptions
         // Only one year in the timeline
         if (startYear == endYear) {
           width = 100;
+        }
+        // First and last year only
+        else if (endYear - startYear == 1) {
+          if (year == startYear) {
+            width = (this.hoursInYear(year) - this.hoursFromStartOfYear(this.startDate)) / this.hoursInTimeline * 100;
+          } else {
+            width = this.hoursFromStartOfYear(this.endDate) / this.hoursInTimeline * 100;
+          }
         }
         timelineYears.push({
           year: year,
@@ -236,15 +253,19 @@ export default {
 .timeline-elements-container {
   display: flex;
   width: 100%;
+  /* Fix sub-pixel rendering gaps */
+  justify-content: flex-start;
 }
 
 
 .timeline-element {
   border: 1px solid #02488e33;
   cursor: pointer;
+  transition: width 0.3s ease;
 }
 
 .timeline-element:hover {
   background-color: #02488e33;
 }
+
 </style>
