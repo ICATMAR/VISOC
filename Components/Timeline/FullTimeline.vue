@@ -27,7 +27,7 @@
     </div>
 
     <!-- Days -->
-    <div class="timeline-elements-container" v-if="zoomLevel === -10">
+    <div class="timeline-elements-container" v-if="zoomLevel == -1">
       <div v-for="day in timelineDays" :key="day.dayId" class="timeline-element"
         :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
         <span>{{ day.text }}</span>
@@ -68,6 +68,24 @@ export default {
       this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
       this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
     },
+    zoomToMonth(month, year) {
+      let newStartDate = new Date(year, month, 1); // Start of clicked month
+      let newEndDate = new Date(year, month + 1, 0); // End of clicked month
+
+      // Add a little "padding" if you want to see the edges
+      newStartDate.setDate(newStartDate.getDate() - 10);
+      newEndDate.setDate(newEndDate.getDate() + 10);
+
+      this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
+      this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+    },
+    zoomToDay(day, month, year) {
+      let newStartDate = new Date(year, month, day - 1); // Start of clicked month
+      let newEndDate = new Date(year, month, day + 2); // End of clicked month
+
+      this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
+      this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+    },
 
     // Date calculations
     hoursInYear(year) {
@@ -88,10 +106,10 @@ export default {
       this.zoomToYear(year);
     },
     monthClicked(month, year) {
-      console.log("Month clicked:", month, year);
+      this.zoomToMonth(month, year);
     },
     dayClicked(day, month, year) {
-      console.log("Day clicked:", day, month, year);
+      this.zoomToDay(day, month, year);
     },
   },
   computed: {
@@ -124,7 +142,7 @@ export default {
     },
     zoomLevel() {
       const hours = this.hoursInTimeline;
-      if (hours < 24 * 31 * 1.5) { // 1.5 months
+      if (hours < 24 * 31 * 2) { // 2 months
         return -1;
       } else if (hours < 24 * 31 * 3) { // 3 months
         return 0;
@@ -259,13 +277,13 @@ export default {
 
 
 .timeline-element {
-  border: 1px solid #02488e33;
+  border: 1px solid #0f306270;
   cursor: pointer;
   transition: width 0.3s ease;
 }
 
 .timeline-element:hover {
-  background-color: #02488e33;
+  background-color: #52b5d999;
 }
 
 </style>

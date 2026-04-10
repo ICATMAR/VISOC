@@ -119,7 +119,7 @@ export default {
 
 .timeline {
   width: calc(100%);
-  background: var(--lightBlue);
+  background: var(--blue);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -145,8 +145,8 @@ export default {
 :deep(.timeline-element) {
   display: flex;
   justify-content: center;
-  border-right: solid 1px var(--blue);
-  border-left: solid 1px var(--blue);
+  border-right: solid 1px var(--darkBlue);
+  border-left: solid 1px var(--darkBlue);
   font-size: small;
 
   overflow: hidden;
