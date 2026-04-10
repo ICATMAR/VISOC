@@ -1,0 +1,154 @@
+<template>
+  <!-- Timeline -->
+  <div class="timeline">
+
+    <!-- Slider -->
+    <input type="range" min="0" :max="(rangeOfDays - 1) * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
+
+    <!-- Handel -->
+    <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
+      <!-- Icon -->
+      <div class="timeline-handle-triangle">▾</div>
+      <!-- Handel box -->
+      <div class="timeline-handle-timecode">
+        {{ selectedTime }}
+      </div>
+    </div>
+
+    <!-- Progress line -->
+    <div class="timeline-progress">
+      <div class="timeline-progress-completion"
+        :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div>
+      <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div>
+    </div>
+
+    <!-- Days -->
+    <div class="timeline-days-container">
+      <div v-for="day in timelineDays" :key="day.day" class="timeline-day" :title="day.textLong"
+        :style="{ width: day.width + '%' }">
+        <span v-if="rangeOfDays < 7">
+          {{ day.textShort }}
+        </span>
+        <span v-else>
+          {{ day.textXShort }}
+        </span>
+
+      </div>
+    </div>
+  </div>
+</template>
+
+
+
+
+<script>
+
+export default {
+  name: "Timeline",
+  created() {
+
+  },
+  mounted() {
+  },
+  data() {
+    return {
+      isFullTimeline: false,
+      hoursInSlider: 50,
+      percentageNotAvailable: 12,
+    }
+  },
+  methods: {
+    //onclick: function(e){},
+  },
+  computed: {
+    startDate() {
+      const date = new Date(this.endDate.getTime());
+      date.setHours(date.getHours() - (this.rangeOfDays - 1) * 24);
+      return date;
+    },
+    endDate() {
+      const date = new Date();
+      date.setHours(date.getHours() + 1);
+      date.setMinutes(0);
+      date.setSeconds(0);
+      return date;
+    },
+    rangeOfDays() {
+      const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
+      return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
+    },
+    percentageInTimeline() {
+      return this.hoursInSlider / (24 * (this.rangeOfDays - 1)) * 100;
+    },
+    timelineDays() {
+      // Get the date of X days ago
+      let rangeOfDays = this.rangeOfDays;
+      const timelineDays = [];
+      let startDate = new Date(this.startDate.getTime());
+      for (let i = 0; i < rangeOfDays; i++) {
+        timelineDays.push({
+          date: new Date(startDate.getTime()),
+          day: startDate.getDate(),
+          width: i == 0 ? (24 - startDate.getHours()) / 24 * 100 : i == rangeOfDays - 1 ? startDate.getHours() / 24 * 100 : 100,
+          textXShort: startDate.toLocaleString(this.$i18n.locale, { day: 'numeric' }),
+          textShort: startDate.toLocaleString(this.$i18n.locale, { weekday: 'short', day: 'numeric' }),
+          textLong: startDate.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric' }),
+        });
+        startDate.setHours(startDate.getHours() + 24);
+      }
+      return timelineDays;
+    },
+    selectedTime() {
+      const startDate = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
+      return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
+    }
+  },
+}
+</script>
+
+<style scoped>
+
+
+
+
+.timeline-progress {
+  width: 100%;
+  height: 4px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.timeline-progress-completion {
+  height: 100%;
+  background: var(--red);
+}
+
+.timeline-progress-not-available {
+  height: 100%;
+  background: var(--gray);
+}
+
+
+.timeline-handle {
+  position: relative;
+}
+
+.timeline-handle-triangle {
+  position: absolute;
+  left: -10px;
+  top: -24px;
+  font-size: x-large;
+  color: var(--lightBlue);
+}
+
+.timeline-handle-timecode {
+  position: absolute;
+  top: -34px;
+  left: -20px;
+  background: var(--lightBlue);
+  border-radius: 5px;
+  padding: 2px 10px 2px 10px;
+  box-shadow: 0 0 4px black;
+  font-size: small;
+}
+</style>

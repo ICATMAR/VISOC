@@ -17,41 +17,8 @@
 
         
 
-        <!-- Timeline -->
-        <div class="timeline">
-
-          <!-- Slider -->
-          <input type="range" min="0" :max="(rangeOfDays - 1) * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
-
-          <!-- Handel -->
-          <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
-            <!-- Icon -->
-            <div class="timeline-handle-triangle">▾</div>
-            <!-- Handel box -->
-            <div class="timeline-handle-timecode">
-              {{ selectedTime }}
-            </div>
-          </div>
-
-          <!-- Progress line -->
-          <div class="timeline-progress">
-            <div class="timeline-progress-completion" :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div>
-            <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div>
-          </div>
-
-          <!-- Days -->
-          <div class="timeline-days-container">
-            <div v-for="day in timelineDays" :key="day.day" class="timeline-day" :title="day.textLong" :style="{ width: day.width + '%' }">
-              <span v-if="rangeOfDays < 7">
-                {{ day.textShort }}
-              </span>
-              <span v-else>
-                {{ day.textXShort }}
-              </span>
-                       
-            </div>
-          </div>
-        </div>
+        <!-- Short timeline -->
+        <ShortTimeline v-if="!isFullTimeline"></ShortTimeline>
       </div>
 
     </div>
@@ -60,6 +27,8 @@
 
 
 <script>
+import ShortTimeline from './ShortTimeline.vue';
+
 
 export default {
   name: "Timeline",
@@ -122,6 +91,9 @@ export default {
       return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute:'numeric', day: 'numeric', month: 'short' });
     }
   },
+  components: {
+    ShortTimeline
+  }
 }
 </script>
 
@@ -181,6 +153,7 @@ export default {
   justify-content: center;
 }
 
+
 .timeline {
   width: calc(100%);
   background: var(--lightBlue);
@@ -191,8 +164,7 @@ export default {
 }
 
 
-
-.timeline-slider {
+:deep(.timeline-slider) {
   position: absolute;
   width: 100%;
   height: 40px;
@@ -202,12 +174,12 @@ export default {
 }
 
 
-.timeline-days-container {
+:deep(.timeline-days-container) {
   display: flex;
   width: 100%;
 }
 
-.timeline-day {
+:deep(.timeline-day) {
   display: flex;
   justify-content: center;
   border-right: solid 1px var(--blue);
@@ -219,45 +191,4 @@ export default {
   white-space: nowrap;
 }
 
-
-.timeline-progress {
-  width: 100%;
-  height: 4px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.timeline-progress-completion {
-  height: 100%;
-  background: var(--red);
-}
-
-.timeline-progress-not-available {
-  height: 100%;
-  background: var(--gray);
-}
-
-
-.timeline-handle {
-  position: relative;
-}
-
-.timeline-handle-triangle {
-  position: absolute;
-  left: -10px;
-  top: -24px;
-  font-size: x-large;
-  color: var(--lightBlue);
-}
-
-.timeline-handle-timecode {
-  position: absolute;
-  top: -34px;
-  left: -20px;
-  background: var(--lightBlue);
-  border-radius: 5px;
-  padding: 2px 10px 2px 10px;
-  box-shadow: 0 0 4px black;
-  font-size: small;
-}
 </style>
