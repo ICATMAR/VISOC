@@ -19,6 +19,10 @@
 
         <!-- Short timeline -->
         <ShortTimeline v-if="!isFullTimeline"></ShortTimeline>
+
+        <!-- Full timeline -->
+        <FullTimeline v-else></FullTimeline>
+
       </div>
 
     </div>
@@ -28,6 +32,7 @@
 
 <script>
 import ShortTimeline from './ShortTimeline.vue';
+import FullTimeline from './FullTimeline.vue';
 
 
 export default {
@@ -40,59 +45,17 @@ export default {
   data (){
     return {
       isFullTimeline: false,
-      hoursInSlider: 50,
-      percentageNotAvailable: 12,
     }
   },
   methods: {
     //onclick: function(e){},
   },
   computed: {
-    startDate() {
-      const date = new Date(this.endDate.getTime());
-      date.setHours(date.getHours() - (this.rangeOfDays - 1) * 24);
-      date.setHours(0);
-      return date;
-    },
-    endDate() {
-      const date = new Date();
-      date.setHours(date.getHours() + 1);
-      date.setMinutes(0);
-      date.setSeconds(0);
-      return date;
-    },
-    rangeOfDays() {
-      const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
-      return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
-    },
-    percentageInTimeline() {
-      return this.hoursInSlider / (24 * (this.rangeOfDays - 1)) * 100;
-    },
-    timelineDays() {
-      // Get the date of X days ago
-      let rangeOfDays = this.rangeOfDays;
-      const timelineDays = [];
-      let startDate = new Date(this.startDate.getTime());
-      for (let i = 0; i < rangeOfDays; i++) {
-        timelineDays.push({
-          date: new Date(startDate.getTime()),
-          day: startDate.getDate(),
-          width: i == 0 ? (24 - startDate.getHours()) / 24 * 100 : i == rangeOfDays - 1 ? startDate.getHours()/ 24 * 100 : 100,
-          textXShort: startDate.toLocaleString(this.$i18n.locale, {day: 'numeric' }),
-          textShort: startDate.toLocaleString(this.$i18n.locale, { weekday: 'short', day: 'numeric' }),
-          textLong: startDate.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric'}),
-        });
-        startDate.setHours(startDate.getHours() + 24);
-      }
-      return timelineDays;
-    },
-    selectedTime() {
-      const startDate = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
-      return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute:'numeric', day: 'numeric', month: 'short' });
-    }
+    
   },
   components: {
-    ShortTimeline
+    ShortTimeline,
+    FullTimeline
   }
 }
 </script>
