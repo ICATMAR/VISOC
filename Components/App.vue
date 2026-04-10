@@ -13,7 +13,7 @@
 
     <!-- Timeline -->
     <Transition name="slideBottom-fade">
-      <Timeline v-show="!$gui.isMenuOpen && !$gui.isDataTimelineOpen"></Timeline>
+      <Timeline v-show="!$gui.isMenuOpen && !$gui.isDataTimelineOpen && $gui.selectedDashboard != 'platforms'"></Timeline>
     </Transition>
   </div>
 </template>
