@@ -44,7 +44,7 @@ export default {
   },
   data (){
     return {
-      isFullTimeline: false,
+      isFullTimeline: true,
     }
   },
   methods: {
