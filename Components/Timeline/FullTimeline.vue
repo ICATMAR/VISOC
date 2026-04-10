@@ -6,15 +6,15 @@
     <!-- Years -->
     <div class="timeline-elements-container">
       <div v-for="year in timelineYears" :key="year.year" class="timeline-element"
-        :style="{ width: year.width + '%'}">
+        :style="{ width: year.width + '%'}" @click="yearClicked(year.year)">
         <span>{{ year.text }}</span>
       </div>
     </div>
 
     <!-- Months -->
     <div class="timeline-elements-container" v-if="zoomLevel < 4">
-      <div v-for="month in timelineMonths" :key="month.month" class="timeline-element"
-        :style="{ width: month.width + '%'}">
+      <div v-for="month in timelineMonths" :key="month.monthId" class="timeline-element"
+        :style="{ width: month.width + '%'}" @click="monthClicked(month.month, month.year)">
         <!-- Close zoom - Month and year -->
         <span v-if="zoomLevel <= 0">{{ month.text }}</span>
         <!-- 6 months zoom - Month -->
@@ -28,8 +28,8 @@
 
     <!-- Days -->
     <div class="timeline-elements-container" v-if="zoomLevel === -10">
-      <div v-for="day in timelineDays" :key="day.day" class="timeline-element"
-        :style="{ width: day.width + '%'}">
+      <div v-for="day in timelineDays" :key="day.dayId" class="timeline-element"
+        :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
         <span>{{ day.text }}</span>
       </div>
     </div>
@@ -67,6 +67,16 @@ export default {
     hoursFromStartOfMonth(date) {
       const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
       return (date - startOfMonth) / (1000 * 60 * 60);
+    },
+    // EVENTS
+    yearClicked(year) {
+      console.log("Year clicked:", year);
+    },
+    monthClicked(month, year) {
+      console.log("Month clicked:", month, year);
+    },
+    dayClicked(day, month, year) {
+      console.log("Day clicked:", day, month, year);
     },
   },
   computed: {
@@ -166,7 +176,9 @@ export default {
           }
           
           timelineMonths.push({
-            month: `${year}-${month}`,
+            monthId: `${year}-${month}`,
+            month: month,
+            year: year,
             textLong: new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' }),
             text: new Date(year, month).toLocaleString('default', { month: 'long' }),
             textShort: new Date(year, month).toLocaleString('default', { month: 'short' }),
@@ -199,7 +211,10 @@ export default {
               width = this.endDate.getHours() / 24 * 100;
             }
             timelineDays.push({
-              day: `${year}-${month}-${day}`,
+              dayId: `${year}-${month}-${day}`,
+              day: day,
+              month: month,
+              year: year,
               text: day.toString(),
               width: width
             });
