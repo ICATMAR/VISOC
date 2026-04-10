@@ -1,7 +1,7 @@
 <template>
 
   <!-- Timeline -->
-  <div class="timeline">
+  <div class="timeline" ref="timeline">
 
     <!-- Years -->
     <div class="timeline-elements-container">
@@ -12,17 +12,15 @@
     </div>
 
     <!-- Months -->
-    <div class="timeline-elements-container" v-if="zoomLevel < 4">
+    <div class="timeline-elements-container" v-if="pixelsPerMonth > 12">
       <div v-for="month in timelineMonths" :key="month.monthId" class="timeline-element"
         :style="{ width: month.width + '%'}" @click="monthClicked(month.month, month.year)">
-        <!-- Close zoom - Month and year -->
-        <span v-if="zoomLevel <= 0">{{ month.text }}</span>
-        <!-- 6 months zoom - Month -->
-        <span v-else-if="zoomLevel === 1">{{ month.text }}</span>
-        <!-- Middle zoom - Month abbr -->
-        <span v-else-if="zoomLevel === 2">{{ month.textShort }}</span>
-        <!-- Far zoom - Short month -->
-        <span v-else-if="zoomLevel === 3">{{ month.textXShort }}</span>
+        <!-- One letter -->
+        <span v-if="pixelsPerMonth < 25">{{ month.textXShort }}</span>
+        <!-- Abbr -->
+        <span v-else-if="pixelsPerMonth < 80">{{ month.textShort }}</span>
+        <!-- full month -->
+        <span v-else >{{ month.text }}</span>
       </div>
     </div>
     <!-- Month empty bar -->
@@ -31,7 +29,7 @@
     </div>
 
     <!-- Days -->
-    <div class="timeline-elements-container" v-if="zoomLevel == -1">
+    <div class="timeline-elements-container" v-if="pixelsPerDay > 15">
       <div v-for="day in timelineDays" :key="day.dayId" class="timeline-element"
         :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
         <span>{{ day.text }}</span>
@@ -55,15 +53,25 @@ export default {
 
   },
   mounted() {
+    this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
+    // EVENTS
+    window.addEventListener('resize', this.windowIsResizing);
   },
+  unmounted() {
+      window.removeEventListener('resize', this.windowIsResizing);
+    },
   data() {
     return {
-      startDate: new Date(2023, 1, 1),
-      endDate: new Date(2023, 2, 15),
+      startDate: new Date(2023, 0, 1),
+      endDate: new Date(),
       ghostX: -1000,
+      timelinePixelWidth: 2000,
     }
   },
   methods: {
+    windowIsResizing() {
+      this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
+    },
     moveGhost(event) {
       const rect = event.target.getBoundingClientRect();
       // Calculate mouse X relative to the container
@@ -204,22 +212,6 @@ export default {
     hoursInTimeline() {
       return (this.endDate - this.startDate) / (1000 * 60 * 60);
     },
-    zoomLevel() {
-      const hours = this.hoursInTimeline;
-      if (hours < 24 * 31 * 2) { // 2 months
-        return -1;
-      } else if (hours < 24 * 31 * 3) { // 3 months
-        return 0;
-      } else if (hours < 24 * 31 * 6) { // 6 months
-        return 1;
-      } else if (hours < 24 * 31 * 15) { // 15 months
-        return 2;
-      } else if (hours < 24 * 31 * 12 * 3 ) { // 2 years
-        return 3;
-      } else {
-        return 4;
-      }
-    },
     timelineYears() {
       const startYear = this.startYear;
       const endYear = this.endYear;
@@ -327,6 +319,12 @@ export default {
       }
       return timelineDays;
     },
+    pixelsPerDay() {
+      return this.timelinePixelWidth / this.timelineDays.length;
+    },
+    pixelsPerMonth() {
+      return this.timelinePixelWidth / this.timelineMonths.length;
+    }
   },
   components: {
     
