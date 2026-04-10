@@ -369,6 +369,8 @@ export default {
   border: 1px solid #0f306270;
   position: absolute;
   left: 0;
+  border-radius: 10px;
+  box-shadow: 0 0 4px black;
   pointer-events: none;
 }
 
