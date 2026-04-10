@@ -65,8 +65,17 @@ export default {
       newStartDate.setDate(newStartDate.getDate() - 40);
       newEndDate.setDate(newEndDate.getDate() + 40);
 
-      this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
-      this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+      newStartDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
+      newEndDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+
+      // When clicked twice (same timeline range), zoom out
+      if (this.startDate.getTime() - newStartDate.getTime() == 0 && this.endDate.getTime() - newEndDate.getTime() == 0){
+        this.startDate = this.limitStartDate;
+        this.endDate = this.limitEndDate;
+      } else {
+        this.startDate = newStartDate;
+        this.endDate = newEndDate;
+      }
     },
     zoomToMonth(month, year) {
       let newStartDate = new Date(year, month, 1); // Start of clicked month
@@ -76,15 +85,31 @@ export default {
       newStartDate.setDate(newStartDate.getDate() - 10);
       newEndDate.setDate(newEndDate.getDate() + 10);
 
-      this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
-      this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+      newStartDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
+      newEndDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+
+      // When clicked twice (same timeline range), zoom out
+      if (this.startDate.getTime() - newStartDate.getTime() == 0 && this.endDate.getTime() - newEndDate.getTime() == 0){
+        this.zoomToYear(year);
+      } else {
+        this.startDate = newStartDate;
+        this.endDate = newEndDate;
+      }
     },
     zoomToDay(day, month, year) {
       let newStartDate = new Date(year, month, day - 1); // Start of clicked month
       let newEndDate = new Date(year, month, day + 2); // End of clicked month
 
-      this.startDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
-      this.endDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+      newStartDate = newStartDate < this.limitStartDate ? this.limitStartDate : newStartDate;
+      newEndDate = newEndDate > this.limitEndDate ? this.limitEndDate : newEndDate;
+
+      // When clicked twice (same timeline range), zoom out
+      if (this.startDate.getTime() - newStartDate.getTime() == 0 && this.endDate.getTime() - newEndDate.getTime() == 0){
+        this.zoomToMonth(month, year);
+      } else {
+        this.startDate = newStartDate;
+        this.endDate = newEndDate;
+      }
     },
 
     // Date calculations
