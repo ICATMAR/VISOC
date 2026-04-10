@@ -82,6 +82,7 @@ export default {
     startDate() {
       const date = new Date(this.endDate.getTime());
       date.setHours(date.getHours() - (this.rangeOfDays - 1) * 24);
+      date.setHours(0);
       return date;
     },
     endDate() {
