@@ -257,33 +257,38 @@ export default {
     },
     // Timeline months
     timelineMonths() {
-      const startYear = this.startYear;
-      const endYear = this.endYear;
       const timelineMonths = [];
-      for (let year = startYear; year <= endYear; year++) {
-        const startMonth = year == startYear ? this.startMonth : 0;
-        const endMonth = year == endYear ? this.endMonth : 11;
-        for (let month = startMonth; month <= endMonth; month++) {
-          const daysInAMonth = new Date(year, month + 1, 0).getDate();
-          let hoursInMonth = year == startYear && month == startMonth ? (daysInAMonth * 24 - this.hoursFromStartOfMonth(this.startDate)) :
-           year == endYear && month == endMonth ? this.hoursFromStartOfMonth(this.endDate) :
-            daysInAMonth * 24;
-          
-          // Only one month in the timeline
-          if (startYear == endYear && startMonth == endMonth) {
-            hoursInMonth = 31 * 24;
+
+      // We loop through the years and months within our visible range
+      for (let year = this.startYear; year <= this.endYear; year++) {
+        const startM = (year === this.startYear) ? this.startMonth : 0;
+        const endM = (year === this.endYear) ? this.endMonth : 11;
+
+        for (let month = startM; month <= endM; month++) {
+          // Define the actual boundaries of this specific month
+          const monthStart = new Date(year, month, 1);
+          const monthEnd = new Date(year, month + 1, 1);
+          // Find the intersection: What part of this month is inside our [startDate, endDate]?
+          const visibleStart = Math.max(this.startDate, monthStart);
+          const visibleEnd = Math.min(this.endDate, monthEnd);
+          // Calculate hours in this segment
+          const hoursInSegment = (visibleEnd - visibleStart) / (1000 * 60 * 60);
+          // 4. Calculate width relative to the whole visible timeline
+          const width = (hoursInSegment / this.hoursInTimeline) * 100;
+
+          // Skip pushing if the month has no visible hours (handles edge cases)
+          if (width > 0) {
+            timelineMonths.push({
+              monthId: `${year}-${month}`,
+              month: month,
+              year: year,
+              textLong: new Date(year, month).toLocaleString(this.$i18n.locale, { month: 'long', year: 'numeric' }),
+              text: new Date(year, month).toLocaleString(this.$i18n.locale, { month: 'long' }),
+              textShort: new Date(year, month).toLocaleString(this.$i18n.locale, { month: 'short' }),
+              textXShort: new Date(year, month).toLocaleString(this.$i18n.locale, { month: 'narrow' }),
+              width: width
+            });
           }
-          
-          timelineMonths.push({
-            monthId: `${year}-${month}`,
-            month: month,
-            year: year,
-            textLong: new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' }),
-            text: new Date(year, month).toLocaleString('default', { month: 'long' }),
-            textShort: new Date(year, month).toLocaleString('default', { month: 'short' }),
-            textXShort: new Date(year, month).toLocaleString('default', { month: 'narrow' }),
-            width: hoursInMonth / (31 * 24) * 100 // Use 31 days as a reference for width
-          });
         }
       }
       return timelineMonths;
