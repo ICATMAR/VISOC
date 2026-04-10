@@ -3,7 +3,7 @@
   <div class="timeline">
 
     <!-- Slider -->
-    <input type="range" min="0" :max="(rangeOfDays - 1) * 24" step="1" v-model="hoursInSlider" class="timeline-slider">
+    <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider">
 
     <!-- Handel -->
     <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
@@ -64,6 +64,7 @@ export default {
     startDate() {
       const date = new Date(this.endDate.getTime());
       date.setHours(date.getHours() - (this.rangeOfDays - 1) * 24);
+      date.setHours(0);
       return date;
     },
     endDate() {
@@ -71,14 +72,18 @@ export default {
       date.setHours(date.getHours() + 1);
       date.setMinutes(0);
       date.setSeconds(0);
+      date.setMilliseconds(0);
       return date;
     },
     rangeOfDays() {
       const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
       return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
     },
+    totalHours() {
+      return Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
+    },
     percentageInTimeline() {
-      return this.hoursInSlider / (24 * (this.rangeOfDays - 1)) * 100;
+      return this.hoursInSlider / this.totalHours * 100;
     },
     timelineDays() {
       // Get the date of X days ago
@@ -89,7 +94,7 @@ export default {
         timelineDays.push({
           date: new Date(startDate.getTime()),
           day: startDate.getDate(),
-          width: i == 0 ? (24 - startDate.getHours()) / 24 * 100 : i == rangeOfDays - 1 ? startDate.getHours() / 24 * 100 : 100,
+          width: i == 0 ? (24 - startDate.getHours()) / 24 * 100 : i == rangeOfDays - 1 ? this.endDate.getHours() / 24 * 100 : 100,
           textXShort: startDate.toLocaleString(this.$i18n.locale, { day: 'numeric' }),
           textShort: startDate.toLocaleString(this.$i18n.locale, { weekday: 'short', day: 'numeric' }),
           textLong: startDate.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric' }),
