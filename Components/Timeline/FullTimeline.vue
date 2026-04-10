@@ -126,7 +126,9 @@ export default {
         timelineYears.push({
           year: year,
           text: year.toString(),
-          width: year == startYear ? (1 - (this.hoursFromStartOfYear(this.startDate) / this.hoursInYear(year))) * 100 : year == endYear ? this.hoursFromStartOfYear(this.endDate) / this.hoursInYear(year) * 100 : 100
+          width: year == startYear ? (1 - (this.hoursFromStartOfYear(this.startDate) / this.hoursInYear(year))) * 100 :
+           year == endYear ? this.hoursFromStartOfYear(this.endDate) / this.hoursInYear(year) * 100 :
+            100
         });
       }
       return timelineYears;
@@ -151,7 +153,7 @@ export default {
             text: new Date(year, month).toLocaleString('default', { month: 'long' }),
             textShort: new Date(year, month).toLocaleString('default', { month: 'short' }),
             textXShort: new Date(year, month).toLocaleString('default', { month: 'narrow' }),
-            width: hoursInMonth / (daysInAMonth * 24) * 100
+            width: hoursInMonth / (31 * 24) * 100 // Use 31 days as a reference for width
           });
         }
       }
@@ -159,7 +161,34 @@ export default {
     },
     // Timeline days
     timelineDays() {
-      
+      const startYear = this.startYear;
+      const endYear = this.endYear;
+      const timelineDays = [];
+      for (let year = startYear; year <= endYear; year++) {
+        const startMonth = year == startYear ? this.startMonth : 0;
+        const endMonth = year == endYear ? this.endMonth : 11;
+        for (let month = startMonth; month <= endMonth; month++) {
+          let startDay = year == startYear && month == this.startMonth ? this.startDate.getDate() : 1;
+          let endDay = year == endYear && month == this.endMonth ? this.endDate.getDate() : new Date(year, month + 1, 0).getDate();
+          for (let day = startDay; day <= endDay; day++) {
+            let width = 100;
+            // First day of the timeline
+            if (year == startYear && month == startMonth && day == this.startDate.getDate()) {
+              width = (24 - this.startDate.getHours()) / 24 * 100;
+            }
+            // Last day of the timeline
+            else if (year == endYear && month == endMonth && day == this.endDate.getDate()) {
+              width = this.endDate.getHours() / 24 * 100;
+            }
+            timelineDays.push({
+              day: `${year}-${month}-${day}`,
+              text: day.toString(),
+              width: width
+            });
+          }
+        }
+      }
+      return timelineDays;
     },
   },
   components: {
