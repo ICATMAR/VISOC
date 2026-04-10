@@ -25,6 +25,10 @@
         <span v-else-if="zoomLevel === 3">{{ month.textXShort }}</span>
       </div>
     </div>
+    <!-- Month empty bar -->
+    <div v-else class="timeline-ghost-bar" @mousemove="moveGhost" @mouseleave="ghostX = -1000" @click="ghostClicked">
+      <div class="timeline-ghost-slide" :style="{ transform: `translateX(${ghostX}px)` }"></div>
+    </div>
 
     <!-- Days -->
     <div class="timeline-elements-container" v-if="zoomLevel == -1">
@@ -32,6 +36,10 @@
         :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
         <span>{{ day.text }}</span>
       </div>
+    </div>
+    <!-- Day empty bar -->
+    <div v-else class="timeline-ghost-bar" @mousemove="moveGhost" @mouseleave="ghostX = -1000" @click="ghostClicked">
+      <div class="timeline-ghost-slide" :style="{ transform: `translateX(${ghostX}px)` }"></div>
     </div>
 
   </div>
@@ -52,9 +60,40 @@ export default {
     return {
       startDate: new Date(2023, 1, 1),
       endDate: new Date(2023, 2, 15),
+      ghostX: -1000,
     }
   },
   methods: {
+    moveGhost(event) {
+      const rect = event.target.getBoundingClientRect();
+      // Calculate mouse X relative to the container
+      let x = event.clientX - rect.left;
+      // Center the follower on the mouse 
+      // Subtract half of the follower's width (e.g., ghost is 10% wide)
+      const ghostWidth = rect.width * 0.1; 
+      x = x - (ghostWidth / 2);
+      // 4. Constrain the movement so it stays inside the container
+      const maxX = rect.width - ghostWidth;
+      this.ghostX = Math.max(0, Math.min(x, maxX));
+    },
+    ghostClicked(event) {
+      const rect = event.target.getBoundingClientRect();
+      let x = event.clientX - rect.left;
+      const ghostWidth = rect.width * 0.1; 
+      x = x - (ghostWidth / 2);
+      const leftPercent = (Math.max(0, Math.min(x, rect.width - ghostWidth)) / rect.width) * 100;
+      const rightPercent = leftPercent + 10;
+      // Zoom to dates
+      let newStartDate = new Date(this.startDate)
+      newStartDate.setHours(this.startDate.getHours() + this.hoursInTimeline * leftPercent / 100);
+      let newEndDate = new Date(this.startDate)
+      newEndDate.setHours(this.startDate.getHours() + this.hoursInTimeline * rightPercent / 100);
+      if (newStartDate < this.startDate) {debugger};
+      if (newEndDate > this.endDate) {debugger };
+      // Assign to start and end date
+      this.startDate = newStartDate;
+      this.endDate = newEndDate;
+    },
     // Date interactions
     zoomToYear(year) {
       // Show days before and after the selected year
@@ -309,6 +348,28 @@ export default {
 
 .timeline-element:hover {
   background-color: #52b5d999;
+}
+
+
+
+
+.timeline-ghost-bar {
+  width: 100%;
+  height: 20px; /* Give it some height so you can hover it */
+  background: var(--blue);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.timeline-ghost-slide {
+  width: 10%; /* Define a width */
+  height: 20px;
+  background: #52b5d999;
+  border: 1px solid #0f306270;
+  position: absolute;
+  left: 0;
+  pointer-events: none;
 }
 
 </style>
