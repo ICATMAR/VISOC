@@ -196,7 +196,7 @@ export default {
   position: absolute;
   width: 100%;
   height: 40px;
-  opacity: 0.1; /* Make it invisible */
+  opacity: 0; /* Make it invisible */
   cursor: pointer;
   z-index: 5;
 }
