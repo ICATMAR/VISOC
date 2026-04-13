@@ -2,6 +2,7 @@
   <div id="app">
     <!-- MAP -->
     <section class="map-container">
+      <Map></Map>
       <button v-on:click="()=>{$gui.isDataTimelineOpen = true; $gui.isMenuOpen = false}">On platform click</button>
     </section>
 
@@ -20,6 +21,7 @@
 
 
 <script setup>
+import Map from './Map/Map.vue';
 import Menu from './Right/Menu.vue';
 import RightPanel from './Right/RightPanel.vue';
 import Timeline from './Timeline/Timeline.vue';
@@ -61,9 +63,6 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: green;
 }
 
 

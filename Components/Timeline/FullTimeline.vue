@@ -30,7 +30,7 @@
         <div v-for="month in timelineMonths" :key="month.monthId" class="timeline-element"
           :style="{ width: month.width + '%'}" @click="monthClicked($event, month.month, month.year)">
           <!-- One letter -->
-          <span v-if="pixelsPerMonth < 25">{{ month.textXShort }}</span>
+          <span v-if="pixelsPerMonth < 30">{{ month.textXShort }}</span>
           <!-- Abbr -->
           <span v-else-if="pixelsPerMonth < 80">{{ month.textShort }}</span>
           <!-- full month -->

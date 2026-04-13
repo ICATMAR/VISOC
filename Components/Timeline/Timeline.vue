@@ -70,7 +70,6 @@ export default {
   left: 0px;
   right: 0px;
   margin-right: 330px;
-  background-color: yellow;
 }
 
 .timeline-container {

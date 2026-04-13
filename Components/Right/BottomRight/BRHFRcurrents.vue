@@ -118,7 +118,7 @@ export default {
 
 .colorbar {
   height: 15px;
-  margin: 5px 10px;
+  margin: 5px 20px;
   background: linear-gradient(to right, blue, cyan, green, yellow, red);
   border-radius: 10px;
   box-shadow: 0 0 2px black;
@@ -129,7 +129,7 @@ export default {
   flex-wrap: nowrap;
   flex-direction: row;
   justify-content: space-between;
-  margin: 0px 7px;
+  margin: 0px 20px;
 }
 
 </style>

@@ -105,8 +105,6 @@ export default {
   margin-bottom: 20px;
   margin-right: 0px;
   height: calc(100% - 30px);
-  background-color: purple;
-
 }
 
 .providers-container {
@@ -126,7 +124,6 @@ export default {
   position: relative;
   white-space: nowrap;
   pointer-events: auto;
-  background:rgb(245, 222, 179);
 }
 
 
