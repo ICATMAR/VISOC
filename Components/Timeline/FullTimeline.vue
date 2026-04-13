@@ -3,7 +3,7 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
-    <TimelineHandle :startDate="startDate" :endDate="endDate" @stepInTimeHours="stepInTimeHours"></TimelineHandle>
+    <TimelineHandle :startDate="startDate" :endDate="endDate" @stepInTime="stepInTime"></TimelineHandle>
 
     <!-- timeline container -->
     <div class="timeline-inner-container">
@@ -214,8 +214,11 @@ export default {
       this.endDate = newEndDate;
     },
     // EMITS
-    stepInTimeHours(hours) {
-      const newSelectedTime = new Date(this.$gui.selectedTime.getTime() + hours * 60 * 60 * 1000);
+    stepInTime(steps) {
+      // TODO: OTHER SYSTEMS MIGHT HAVE 15 min or 30 min time steps
+      const timeStep = steps * 60 * 60 * 1000;
+
+      const newSelectedTime = new Date(this.$gui.selectedTime.getTime() + timeStep);
       // Clamp to limits
       if (newSelectedTime < this.limitStartDate) {
         this.$gui.selectedTime = new Date(this.limitStartDate.getTime());

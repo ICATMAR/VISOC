@@ -11,9 +11,9 @@
 
         <div class="horizontal">
           <!-- -24h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(-24)"><span>≪</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(-24)"><span>≪</span></div>
           <!-- -1h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(-1)"><span>&lt;</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(-1)"><span>&lt;</span></div>
 
           <div class="timecode-string-container">
             <span>{{ timecodeString }}</span>
@@ -21,9 +21,9 @@
           </div>
 
           <!-- +1h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(1)"><span>&gt;</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(1)"><span>&gt;</span></div>
           <!-- +24h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(24)"><span>≫</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(24)"><span>≫</span></div>
           
 
         </div>
@@ -61,8 +61,8 @@ export default {
     }
   },
   methods: {
-    stepInTimeHours(hours) {
-      this.$emit('stepInTimeHours', hours);
+    stepInTime(steps) {
+      this.$emit('stepInTime', steps);
     },
     keydownHandler(event) {
       if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
@@ -70,15 +70,15 @@ export default {
       }
       // Left - right
       if (event.key === 'ArrowLeft') {
-        this.stepInTimeHours(-1);
+        this.stepInTime(-1);
       } else if (event.key === 'ArrowRight') {
-        this.stepInTimeHours(1);
+        this.stepInTime(1);
       }
       // Ctrl + left - right
       if (event.ctrlKey && event.key === 'ArrowLeft') {
-        this.stepInTimeHours(-24);
+        this.stepInTime(-24);
       } else if (event.ctrlKey && event.key === 'ArrowRight') {
-        this.stepInTimeHours(24);
+        this.stepInTime(24);
       }
     },
   },

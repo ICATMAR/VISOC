@@ -16,6 +16,8 @@
         </div>
       </div>
 
+      <TimeHandle :startDate="startDate" :endDate="endDate" @stepInTime="stepInTime"></TimeHandle>
+
       <!-- Progress line -->
       <div class="timeline-progress">
         <div class="timeline-progress-completion"
