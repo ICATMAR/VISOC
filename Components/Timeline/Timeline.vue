@@ -8,11 +8,11 @@
         <div class="vertical">
           <!-- Swith to full timeline -->
           <Transition name="scale-fade" mode="out-in">
-            <button class="full-timeline-switch" key="fulltime" v-if="!isFullTimeline" @click="isFullTimeline = !isFullTimeline">2018 - now</button>
-            <button class="full-timeline-switch" key="lastweek" v-else @click="isFullTimeline = !isFullTimeline">Lastest week</button>
+            <button class="full-timeline-switch clickable" key="fulltime" v-if="!isFullTimeline" @click="isFullTimeline = !isFullTimeline"><span>2018 - {{$t('now')}}</span></button>
+            <button class="full-timeline-switch clickable" key="lastweek" v-else @click="isFullTimeline = !isFullTimeline"><span>{{ $t('Lastest week') }}</span></button>
           </Transition>
           <!-- Play button -->
-          <button class="play-button"><span class="fa fa-play"></span></button>
+          <button class="play-button clickable"><span class="fa fa-play"></span></button>
         </div>
 
         
@@ -91,6 +91,10 @@ export default {
 }
 
 .full-timeline-switch {
+  background: var(--blue);
+  box-shadow: 0 0 4px black;
+  border: none;
+
   margin-left: -16px;
   margin-bottom: 8px;
 
@@ -104,6 +108,10 @@ export default {
   justify-content: center;
 }
 .play-button {
+  background: var(--blue);
+  box-shadow: 0 0 4px black;
+  border: none;
+
   margin-right: 8px;
   margin-bottom: 8px;
 
