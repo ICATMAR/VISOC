@@ -20,7 +20,7 @@
       <!-- Years -->
       <div class="timeline-elements-container">
         <div v-for="year in timelineYears" :key="year.year" class="timeline-element"
-          :style="{ width: year.width + '%'}" @click="yearClicked(year.year)">
+          :style="{ width: year.width + '%'}" @click="yearClicked($event, year.year)">
           <span>{{ year.text }}</span>
         </div>
       </div>
@@ -28,7 +28,7 @@
       <!-- Months -->
       <div class="timeline-elements-container" v-if="pixelsPerMonth > 12">
         <div v-for="month in timelineMonths" :key="month.monthId" class="timeline-element"
-          :style="{ width: month.width + '%'}" @click="monthClicked(month.month, month.year)">
+          :style="{ width: month.width + '%'}" @click="monthClicked($event, month.month, month.year)">
           <!-- One letter -->
           <span v-if="pixelsPerMonth < 25">{{ month.textXShort }}</span>
           <!-- Abbr -->
@@ -45,7 +45,7 @@
       <!-- Days -->
       <div class="timeline-elements-container" v-if="pixelsPerDay > 15">
         <div v-for="day in timelineDays" :key="day.dayId" class="timeline-element"
-          :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
+          :style="{ width: day.width + '%'}" @click="dayClicked($event, day.day, day.month, day.year)">
           <span>{{ day.text }}</span>
         </div>
       </div>
@@ -89,36 +89,6 @@ export default {
   methods: {
     windowIsResizing() {
       this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
-    },
-    moveGhost(event) {
-      const rect = event.target.getBoundingClientRect();
-      // Calculate mouse X relative to the container
-      let x = event.clientX - rect.left;
-      // Center the follower on the mouse 
-      // Subtract half of the follower's width (e.g., ghost is 10% wide)
-      const ghostWidth = rect.width * 0.1; 
-      x = x - (ghostWidth / 2);
-      // 4. Constrain the movement so it stays inside the container
-      const maxX = rect.width - ghostWidth;
-      this.ghostX = Math.max(0, Math.min(x, maxX));
-    },
-    ghostClicked(event) {
-      const rect = event.target.getBoundingClientRect();
-      let x = event.clientX - rect.left;
-      const ghostWidth = rect.width * 0.1; 
-      x = x - (ghostWidth / 2);
-      const leftPercent = (Math.max(0, Math.min(x, rect.width - ghostWidth)) / rect.width) * 100;
-      const rightPercent = leftPercent + 10;
-      // Zoom to dates
-      let newStartDate = new Date(this.startDate)
-      newStartDate.setHours(this.startDate.getHours() + this.hoursInTimeline * leftPercent / 100);
-      let newEndDate = new Date(this.startDate)
-      newEndDate.setHours(this.startDate.getHours() + this.hoursInTimeline * rightPercent / 100);
-      if (newStartDate < this.startDate) {debugger};
-      if (newEndDate > this.endDate) {debugger };
-      // Assign to start and end date
-      this.startDate = newStartDate;
-      this.endDate = newEndDate;
     },
     // Date interactions
     zoomToYear(year) {
@@ -191,15 +161,57 @@ export default {
       const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
       return (date - startOfMonth) / (1000 * 60 * 60);
     },
+    // Timeline clicked, center on date
+    timelineClicked(e) {
+      const rect = this.$refs.timeline.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickPercent = clickX / rect.width;
+      const hoursFromStart = Math.round(this.hoursInTimeline * clickPercent);
+      this.$gui.selectedTime = new Date(this.startDate.getTime() + hoursFromStart * 60 * 60 * 1000);
+    },
     // EVENTS
-    yearClicked(year) {
+    yearClicked(e, year) {
+      this.timelineClicked(e);
       this.zoomToYear(year);
     },
-    monthClicked(month, year) {
+    monthClicked(e, month, year) {
+      this.timelineClicked(e);
       this.zoomToMonth(month, year);
     },
-    dayClicked(day, month, year) {
+    dayClicked(e, day, month, year) {
+      this.timelineClicked(e);
       this.zoomToDay(day, month, year);
+    },
+    moveGhost(event) {
+      const rect = event.target.getBoundingClientRect();
+      // Calculate mouse X relative to the container
+      let x = event.clientX - rect.left;
+      // Center the follower on the mouse 
+      // Subtract half of the follower's width (e.g., ghost is 10% wide)
+      const ghostWidth = rect.width * 0.1; 
+      x = x - (ghostWidth / 2);
+      // Constrain the movement so it stays inside the container
+      const maxX = rect.width - ghostWidth;
+      this.ghostX = Math.max(0, Math.min(x, maxX));
+    },
+    ghostClicked(event) {
+      this.timelineClicked(event);
+      const rect = event.target.getBoundingClientRect();
+      let x = event.clientX - rect.left;
+      const ghostWidth = rect.width * 0.1; 
+      x = x - (ghostWidth / 2);
+      const leftPercent = (Math.max(0, Math.min(x, rect.width - ghostWidth)) / rect.width) * 100;
+      const rightPercent = leftPercent + 10;
+      // Zoom to dates
+      let newStartDate = new Date(this.startDate)
+      newStartDate.setHours(this.startDate.getHours() + this.hoursInTimeline * leftPercent / 100);
+      let newEndDate = new Date(this.startDate)
+      newEndDate.setHours(this.startDate.getHours() + this.hoursInTimeline * rightPercent / 100);
+      if (newStartDate < this.startDate) {debugger};
+      if (newEndDate > this.endDate) {debugger };
+      // Assign to start and end date
+      this.startDate = newStartDate;
+      this.endDate = newEndDate;
     },
   },
   computed: {

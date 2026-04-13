@@ -31,8 +31,6 @@
 
       </div>
 
-      <!-- +1h -->
-      <!-- +24h -->
     </div>
 
   </div>
@@ -70,7 +68,6 @@ export default {
     },
     timelineDays() {
       const totalTime = this.endDate.getTime() - this.startDate.getTime();
-      console.log(totalTime / (1000 * 60 * 60 * 24))
       return totalTime / (1000 * 60 * 60 * 24);
     },
     timecodeString() {
