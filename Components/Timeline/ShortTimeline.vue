@@ -5,14 +5,14 @@
     <!-- Timeline handle -->
     <TimelineHandle :startDate="startDate" :endDate="endDate" @stepInTime="stepInTime"></TimelineHandle>
 
-    <div class="timeline-inner-container">
+    <div class="timeline-inner-container" @mousedown="onMouseDown">
       <!-- Slider -->
-      <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider">
+      <!-- <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider"> -->
 
       <!-- Handel box -->
-      <div style="display: none">
+      <!-- <div style="display: none">
         {{ selectedTime }}
-      </div>
+      </div> -->
       
 
 
@@ -67,7 +67,6 @@ export default {
   data() {
     return {
       isFullTimeline: false,
-      hoursInSlider: 50,
       percentageNotAvailable: 12,
       timelinePixelWidth: 2000,
     }
@@ -77,6 +76,26 @@ export default {
     windowIsResizing() {
       this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
     },
+    // USER EVENTS
+    // Dragging the timeline
+    onMouseDown(e) {
+      window.addEventListener('mousemove', this.onMouseMove);
+      window.addEventListener('mouseup', this.onMouseDragEnd);
+      this.onMouseMove(e);
+    },
+    onMouseMove(e) {
+      const timelineRect = this.$refs.timeline.getBoundingClientRect();
+      const clickX = e.clientX - timelineRect.left;
+      const percentage = Math.max(0, Math.min(1, clickX / timelineRect.width));
+      const hoursInSlide = Math.round(percentage * this.totalHours);
+      this.$gui.selectedTime = new Date(this.startDate.getTime() + (hoursInSlide * 3600 * 1000));
+    },
+    onMouseDragEnd() {
+      window.removeEventListener('mousemove', this.onMouseMove);
+      window.removeEventListener('mouseup', this.onMouseDragEnd);
+    },
+
+    // COMPONENT EVENTS
     stepInTime(steps) {
       const timeStep = steps * 60 * 60 * 1000;
 
@@ -114,7 +133,8 @@ export default {
       return Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
     },
     percentageInTimeline() {
-      return this.hoursInSlider / this.totalHours * 100;
+      const hoursInSlider = (this.$gui.selectedTime.getTime() - this.startDate.getTime()) / (1000 * 3600);
+      return hoursInSlider / this.totalHours * 100;
     },
     timelineDays() {
       // Get the date of X days ago
@@ -134,11 +154,11 @@ export default {
       }
       return timelineDays;
     },
-    selectedTime() {
-      const selTime = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
-      this.$gui.selectedTime = selTime;
-      return selTime.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
-    },
+    // selectedTime() {
+    //   const selTime = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
+    //   this.$gui.selectedTime = selTime;
+    //   return selTime.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
+    // },
     pixelsPerDay() {
       return this.timelinePixelWidth / this.timelineDays.length;
     },
@@ -151,7 +171,9 @@ export default {
 
 <style scoped>
 
-
+.timeline-inner-container {
+  cursor: grab;
+}
 
 
 .timeline-progress {
