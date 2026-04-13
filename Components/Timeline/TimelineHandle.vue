@@ -48,8 +48,12 @@ export default {
   created() {
   },
   mounted() {
+    // EVENTS
+    // keyboard press (left, right)
+    window.addEventListener('keydown', this.keydownHandler);
   },
   unmounted() {
+    window.removeEventListener('keydown', this.keydownHandler);
   },
   data() {
     return {
@@ -59,6 +63,23 @@ export default {
   methods: {
     stepInTimeHours(hours) {
       this.$emit('stepInTimeHours', hours);
+    },
+    keydownHandler(event) {
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+        return; // Ignore key presses when focused on input or textarea
+      }
+      // Left - right
+      if (event.key === 'ArrowLeft') {
+        this.stepInTimeHours(-1);
+      } else if (event.key === 'ArrowRight') {
+        this.stepInTimeHours(1);
+      }
+      // Ctrl + left - right
+      if (event.ctrlKey && event.key === 'ArrowLeft') {
+        this.stepInTimeHours(-24);
+      } else if (event.ctrlKey && event.key === 'ArrowRight') {
+        this.stepInTimeHours(24);
+      }
     },
   },
   computed: {

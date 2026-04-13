@@ -227,7 +227,6 @@ export default {
       // If outside or close to the edge of the timeline, move the timeline as well
       const hoursDiffFromStart = (this.$gui.selectedTime.getTime() - this.startDate.getTime()) / (1000 * 60 * 60);
       const leftPercent = (hoursDiffFromStart / this.hoursInTimeline) * 100;
-      console.log(leftPercent);
       const percentThreshold = 20;
       const movementFactor = 0.3; // How much to move the timeline when the edge is hit (0.5 means half of the visible range)
       if (leftPercent < percentThreshold) {
