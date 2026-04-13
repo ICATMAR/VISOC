@@ -3,6 +3,15 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
+    <!-- Progress line -->
+    <div class="timeline-progress">
+      <!-- <div class="timeline-progress-completion"
+        :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div> -->
+      <!-- <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div> -->
+      <!-- <div class="timeline-progress-not-available" :style="{ width: 100 + '%' }"></div> -->
+    </div>
+
+
     <!-- Years -->
     <div class="timeline-elements-container">
       <div v-for="year in timelineYears" :key="year.year" class="timeline-element"
@@ -334,6 +343,14 @@ export default {
 
 
 <style scoped>
+.timeline-progress {
+  width: 100%;
+  height: 4px;
+  display: flex;
+  justify-content: flex-end;
+  background: linear-gradient(to right, #52b5d9 0%, #52b5d9 15%, rgba(0,0,0,0) 15%, rgba(0,0,0,0) 25%, #52b5d9 25%, #52b5d9 50%, rgba(0,0,0,0) 50%, rgba(0,0,0,0) 60%, #52b5d9 60%, #52b5d9 90%, rgba(0,0,0,0) 90%);
+}
+
 
 .timeline-elements-container {
   display: flex;
