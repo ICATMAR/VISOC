@@ -2,41 +2,44 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
-    <!-- Slider -->
-    <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider">
+    <div class="timeline-inner-container">
+      <!-- Slider -->
+      <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider">
 
-    <!-- Handel -->
-    <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
-      <!-- Icon -->
-      <div class="timeline-handle-triangle">▾</div>
-      <!-- Handel box -->
-      <div class="timeline-handle-timecode">
-        {{ selectedTime }}
+      <!-- Handel -->
+      <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
+        <!-- Icon -->
+        <div class="timeline-handle-triangle">▾</div>
+        <!-- Handel box -->
+        <div class="timeline-handle-timecode">
+          {{ selectedTime }}
+        </div>
       </div>
-    </div>
 
-    <!-- Progress line -->
-    <div class="timeline-progress">
-      <div class="timeline-progress-completion"
-        :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div>
-      <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div>
-    </div>
-
-    <!-- Days -->
-    <div class="timeline-elements-container">
-      <div v-for="day in timelineDays" :key="day.day" class="timeline-element" :title="day.textLong"
-        :style="{ width: day.width + '%' }">
-        <span v-if="pixelsPerDay > 150">
-          {{ day.textLong }}
-        </span>
-        <span v-else-if="pixelsPerDay > 90">
-          {{ day.textShort }}
-        </span>
-        <span v-else>
-          {{ day.textXShort }}
-        </span>
-
+      <!-- Progress line -->
+      <div class="timeline-progress">
+        <div class="timeline-progress-completion"
+          :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div>
+        <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div>
       </div>
+
+      <!-- Days -->
+      <div class="timeline-elements-container">
+        <div v-for="day in timelineDays" :key="day.day" class="timeline-element" :title="day.textLong"
+          :style="{ width: day.width + '%' }">
+          <span v-if="pixelsPerDay > 150">
+            {{ day.textLong }}
+          </span>
+          <span v-else-if="pixelsPerDay > 90">
+            {{ day.textShort }}
+          </span>
+          <span v-else>
+            {{ day.textXShort }}
+          </span>
+
+        </div>
+      </div>
+
     </div>
   </div>
 </template>

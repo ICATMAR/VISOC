@@ -3,50 +3,57 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
-    <!-- Progress line -->
-    <div class="timeline-progress">
-      <!-- <div class="timeline-progress-completion"
-        :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div> -->
-      <!-- <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div> -->
-      <!-- <div class="timeline-progress-not-available" :style="{ width: 100 + '%' }"></div> -->
-    </div>
+    <TimeString @changeSelectedDate="stepInTimeInHours"></TimeString>
 
+    <!-- timeline container -->
+    <div class="timeline-inner-container">
 
-    <!-- Years -->
-    <div class="timeline-elements-container">
-      <div v-for="year in timelineYears" :key="year.year" class="timeline-element"
-        :style="{ width: year.width + '%'}" @click="yearClicked(year.year)">
-        <span>{{ year.text }}</span>
+      <!-- Progress line -->
+      <div class="timeline-progress">
+        <!-- <div class="timeline-progress-completion"
+          :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div> -->
+        <!-- <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div> -->
+        <!-- <div class="timeline-progress-not-available" :style="{ width: 100 + '%' }"></div> -->
       </div>
-    </div>
 
-    <!-- Months -->
-    <div class="timeline-elements-container" v-if="pixelsPerMonth > 12">
-      <div v-for="month in timelineMonths" :key="month.monthId" class="timeline-element"
-        :style="{ width: month.width + '%'}" @click="monthClicked(month.month, month.year)">
-        <!-- One letter -->
-        <span v-if="pixelsPerMonth < 25">{{ month.textXShort }}</span>
-        <!-- Abbr -->
-        <span v-else-if="pixelsPerMonth < 80">{{ month.textShort }}</span>
-        <!-- full month -->
-        <span v-else >{{ month.text }}</span>
-      </div>
-    </div>
-    <!-- Month empty bar -->
-    <div v-else class="timeline-ghost-bar" @mousemove="moveGhost" @mouseleave="ghostX = -1000" @click="ghostClicked">
-      <div class="timeline-ghost-slide" :style="{ transform: `translateX(${ghostX}px)` }"></div>
-    </div>
 
-    <!-- Days -->
-    <div class="timeline-elements-container" v-if="pixelsPerDay > 15">
-      <div v-for="day in timelineDays" :key="day.dayId" class="timeline-element"
-        :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
-        <span>{{ day.text }}</span>
+      <!-- Years -->
+      <div class="timeline-elements-container">
+        <div v-for="year in timelineYears" :key="year.year" class="timeline-element"
+          :style="{ width: year.width + '%'}" @click="yearClicked(year.year)">
+          <span>{{ year.text }}</span>
+        </div>
       </div>
-    </div>
-    <!-- Day empty bar -->
-    <div v-else class="timeline-ghost-bar" @mousemove="moveGhost" @mouseleave="ghostX = -1000" @click="ghostClicked">
-      <div class="timeline-ghost-slide" :style="{ transform: `translateX(${ghostX}px)` }"></div>
+
+      <!-- Months -->
+      <div class="timeline-elements-container" v-if="pixelsPerMonth > 12">
+        <div v-for="month in timelineMonths" :key="month.monthId" class="timeline-element"
+          :style="{ width: month.width + '%'}" @click="monthClicked(month.month, month.year)">
+          <!-- One letter -->
+          <span v-if="pixelsPerMonth < 25">{{ month.textXShort }}</span>
+          <!-- Abbr -->
+          <span v-else-if="pixelsPerMonth < 80">{{ month.textShort }}</span>
+          <!-- full month -->
+          <span v-else >{{ month.text }}</span>
+        </div>
+      </div>
+      <!-- Month empty bar -->
+      <div v-else class="timeline-ghost-bar" @mousemove="moveGhost" @mouseleave="ghostX = -1000" @click="ghostClicked">
+        <div class="timeline-ghost-slide" :style="{ transform: `translateX(${ghostX}px)` }"></div>
+      </div>
+
+      <!-- Days -->
+      <div class="timeline-elements-container" v-if="pixelsPerDay > 15">
+        <div v-for="day in timelineDays" :key="day.dayId" class="timeline-element"
+          :style="{ width: day.width + '%'}" @click="dayClicked(day.day, day.month, day.year)">
+          <span>{{ day.text }}</span>
+        </div>
+      </div>
+      <!-- Day empty bar -->
+      <div v-else class="timeline-ghost-bar" @mousemove="moveGhost" @mouseleave="ghostX = -1000" @click="ghostClicked">
+        <div class="timeline-ghost-slide" :style="{ transform: `translateX(${ghostX}px)` }"></div>
+      </div>
+
     </div>
 
   </div>
@@ -55,6 +62,8 @@
 
 
 <script>
+import TimeString from './TimeString.vue';
+
 
 export default {
   name: "FullTimeline",
@@ -336,7 +345,7 @@ export default {
     }
   },
   components: {
-    
+    TimeString,
   }
 }
 </script>

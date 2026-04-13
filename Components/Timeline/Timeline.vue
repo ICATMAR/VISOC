@@ -127,10 +127,13 @@ export default {
 
 .timeline {
   width: calc(100%);
-  background: var(--blue);
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+:deep(.timeline-inner-container) {
+  background: var(--blue);
   box-shadow: 0 0 4px black;
 }
 

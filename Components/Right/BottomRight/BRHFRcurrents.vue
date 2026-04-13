@@ -53,7 +53,7 @@
 
 
   <!-- Color bar -->
-  <div class="legend-container">
+  <div class="filled-container legend-container">
     <div class="colorbar"></div>
     <div class="legend-numbers">
       <span>0</span>
