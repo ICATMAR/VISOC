@@ -3,7 +3,7 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
-    <TimelineHandle :startDate="limitStartDate" :endDate="limitEndDate"></TimelineHandle>
+    <TimelineHandle :startDate="startDate" :endDate="endDate"></TimelineHandle>
 
     <!-- timeline container -->
     <div class="timeline-inner-container">

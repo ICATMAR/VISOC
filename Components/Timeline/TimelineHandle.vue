@@ -11,9 +11,9 @@
 
         <div class="horizontal">
           <!-- -24h -->
-          <div class="clickable time-control"><span>≪</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>≪</span></div>
           <!-- -1h -->
-          <div class="clickable time-control"><span>&lt;</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>&lt;</span></div>
 
           <div class="timecode-string-container">
             <span>{{ timecodeString }}</span>
@@ -21,9 +21,9 @@
           </div>
 
           <!-- +1h -->
-          <div class="clickable time-control"><span>&gt;</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>&gt;</span></div>
           <!-- +24h -->
-          <div class="clickable time-control"><span>≫</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>≫</span></div>
           
 
         </div>
@@ -55,7 +55,7 @@ export default {
   },
   data() {
     return {
-      
+      daysThresholdForTimeControls: Infinity,
     }
   },
   methods: {
@@ -67,6 +67,11 @@ export default {
       const totalTime = this.endDate.getTime() - this.startDate.getTime();
       const timeFromStart = this.$gui.selectedTime.getTime() - this.startDate.getTime();
       return Math.max(0, Math.min(100, (timeFromStart / totalTime) * 100));
+    },
+    timelineDays() {
+      const totalTime = this.endDate.getTime() - this.startDate.getTime();
+      console.log(totalTime / (1000 * 60 * 60 * 24))
+      return totalTime / (1000 * 60 * 60 * 24);
     },
     timecodeString() {
       return this.$gui.selectedTime.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
@@ -123,6 +128,8 @@ export default {
   background: rgb(82 181 217 / 68%);
   font-size: x-small;
   margin: 5px;
+  margin-bottom: -10px;
+  margin-top: -10px;
   box-shadow: 0 0 4px black;
 }
 
@@ -139,7 +146,7 @@ export default {
 }
 
 .timeline-handle-triangle {
-  margin-top: -18px;
+  margin-top: -14px;
   margin-bottom: -14px;
   font-size: x-large;
   color: var(--lightBlue);
