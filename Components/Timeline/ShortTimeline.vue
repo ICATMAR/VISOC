@@ -3,11 +3,11 @@
   <div class="timeline" ref="timeline">
 
     <!-- Timeline handle -->
-    <TimelineHandle :startDate="startDate" :endDate="endDate" @stepInTime="stepInTime"></TimelineHandle>
+    <TimelineHandle :startDate="startDate" :endDate="endDate" :timelineEl="$refs.timeline" @stepInTime="stepInTime"></TimelineHandle>
 
     <div class="timeline-inner-container" @mousedown="onMouseDown">
       <!-- Slider -->
-      <!-- <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider"> -->
+      <!-- <input type="range" min="0" :max="hoursInTimeline" step="1" v-model="hoursInSlider" class="timeline-slider"> -->
 
       <!-- Handel box -->
       <!-- <div style="display: none">
@@ -87,8 +87,8 @@ export default {
       const timelineRect = this.$refs.timeline.getBoundingClientRect();
       const clickX = e.clientX - timelineRect.left;
       const percentage = Math.max(0, Math.min(1, clickX / timelineRect.width));
-      const hoursInSlide = Math.round(percentage * this.totalHours);
-      this.$gui.selectedTime = new Date(this.startDate.getTime() + (hoursInSlide * 3600 * 1000));
+      const hoursFromStartDate = Math.round(percentage * this.hoursInTimeline);
+      this.$gui.selectedTime = new Date(this.startDate.getTime() + (hoursFromStartDate * 3600 * 1000));
     },
     onMouseDragEnd() {
       window.removeEventListener('mousemove', this.onMouseMove);
@@ -129,12 +129,12 @@ export default {
       const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
       return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
     },
-    totalHours() {
+    hoursInTimeline() {
       return Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
     },
     percentageInTimeline() {
-      const hoursInSlider = (this.$gui.selectedTime.getTime() - this.startDate.getTime()) / (1000 * 3600);
-      return hoursInSlider / this.totalHours * 100;
+      const hoursFromStartDate = (this.$gui.selectedTime.getTime() - this.startDate.getTime()) / (1000 * 3600);
+      return hoursFromStartDate / this.hoursInTimeline * 100;
     },
     timelineDays() {
       // Get the date of X days ago

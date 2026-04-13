@@ -15,7 +15,7 @@
           <!-- -1h -->
           <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(-1)"><span>&lt;</span></div>
 
-          <div class="timecode-string-container">
+          <div class="timecode-string-container" @mousedown="onMouseDown">
             <span>{{ timecodeString }}</span>
             <!-- <span class="time-ago">-{{ timeAgo }}</span> -->
           </div>
@@ -44,6 +44,7 @@ export default {
   props: {
     startDate: Date,
     endDate: Date,
+    timelineEl: HTMLElement,
   },
   created() {
   },
@@ -63,6 +64,25 @@ export default {
   methods: {
     stepInTime(steps) {
       this.$emit('stepInTime', steps);
+    },
+    // USER EVENTS
+    // Dragging the timeline handle
+    onMouseDown(e) {
+      window.addEventListener('mousemove', this.onMouseMove);
+      window.addEventListener('mouseup', this.onMouseDragEnd);
+      this.onMouseMove(e);
+    },
+    onMouseMove(e) {
+      const timelineRect = this.timelineEl.getBoundingClientRect();
+      const clickX = e.clientX - timelineRect.left;
+      const percentage = Math.max(0, Math.min(1, clickX / timelineRect.width));
+      // Could emit or compute here
+      const hoursInSlide = Math.round(percentage * this.hoursInTimeline);
+      this.$gui.selectedTime = new Date(this.startDate.getTime() + (hoursInSlide * 3600 * 1000));
+    },
+    onMouseDragEnd(e) {
+      window.removeEventListener('mousemove', this.onMouseMove);
+      window.removeEventListener('mouseup', this.onMouseDragEnd);
     },
     keydownHandler(event) {
       if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
@@ -89,6 +109,9 @@ export default {
       const totalTime = this.endDate.getTime() - this.startDate.getTime();
       const timeFromStart = this.$gui.selectedTime.getTime() - this.startDate.getTime();
       return Math.max(0, Math.min(100, (timeFromStart / totalTime) * 100));
+    },
+    hoursInTimeline() {
+      return Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
     },
     timelineDays() {
       const totalTime = this.endDate.getTime() - this.startDate.getTime();
