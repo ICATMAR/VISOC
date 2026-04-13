@@ -58,8 +58,8 @@ export default {
     window.addEventListener('resize', this.windowIsResizing);
   },
   unmounted() {
-      window.removeEventListener('resize', this.windowIsResizing);
-    },
+    window.removeEventListener('resize', this.windowIsResizing);
+  },
   data() {
     return {
       startDate: new Date(2023, 0, 1),

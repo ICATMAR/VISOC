@@ -1,6 +1,6 @@
 <template>
   <!-- Timeline -->
-  <div class="timeline">
+  <div class="timeline" ref="timeline">
 
     <!-- Slider -->
     <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider">
@@ -26,7 +26,10 @@
     <div class="timeline-elements-container">
       <div v-for="day in timelineDays" :key="day.day" class="timeline-element" :title="day.textLong"
         :style="{ width: day.width + '%' }">
-        <span v-if="rangeOfDays < 7">
+        <span v-if="pixelsPerDay > 150">
+          {{ day.textLong }}
+        </span>
+        <span v-else-if="pixelsPerDay > 90">
           {{ day.textShort }}
         </span>
         <span v-else>
@@ -49,16 +52,26 @@ export default {
 
   },
   mounted() {
+    this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
+    // EVENTS
+    window.addEventListener('resize', this.windowIsResizing);
+  },
+  unmounted() {
+    window.removeEventListener('resize', this.windowIsResizing);
   },
   data() {
     return {
       isFullTimeline: false,
       hoursInSlider: 50,
       percentageNotAvailable: 12,
+      timelinePixelWidth: 2000,
     }
   },
   methods: {
     //onclick: function(e){},
+    windowIsResizing() {
+      this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
+    },
   },
   computed: {
     startDate() {
@@ -106,7 +119,10 @@ export default {
     selectedTime() {
       const startDate = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
       return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
-    }
+    },
+    pixelsPerDay() {
+      return this.timelinePixelWidth / this.timelineDays.length;
+    },
   },
 }
 </script>
