@@ -2,21 +2,19 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
+    <!-- Timeline handle -->
+    <TimelineHandle :startDate="startDate" :endDate="endDate" @stepInTime="stepInTime"></TimelineHandle>
+
     <div class="timeline-inner-container">
       <!-- Slider -->
       <input type="range" min="0" :max="totalHours" step="1" v-model="hoursInSlider" class="timeline-slider">
 
-      <!-- Handel -->
-      <div class="timeline-handle" :style="{ left: (percentageInTimeline) + '%' }">
-        <!-- Icon -->
-        <div class="timeline-handle-triangle">▾</div>
-        <!-- Handel box -->
-        <div class="timeline-handle-timecode">
-          {{ selectedTime }}
-        </div>
+      <!-- Handel box -->
+      <div style="display: none">
+        {{ selectedTime }}
       </div>
+      
 
-      <TimeHandle :startDate="startDate" :endDate="endDate" @stepInTime="stepInTime"></TimeHandle>
 
       <!-- Progress line -->
       <div class="timeline-progress">
@@ -51,6 +49,8 @@
 
 <script>
 
+import TimelineHandle from './TimelineHandle.vue';
+
 export default {
   name: "ShortTimeline",
   created() {
@@ -76,6 +76,19 @@ export default {
     //onclick: function(e){},
     windowIsResizing() {
       this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
+    },
+    stepInTime(steps) {
+      const timeStep = steps * 60 * 60 * 1000;
+
+      const newSelectedTime = new Date(this.$gui.selectedTime.getTime() + timeStep);
+      // Clamp to limits
+      if (newSelectedTime < this.startDate) {
+        this.$gui.selectedTime = new Date(this.startDate.getTime());
+      } else if (newSelectedTime > this.endDate) {
+        this.$gui.selectedTime = new Date(this.endDate.getTime());
+      } else {
+        this.$gui.selectedTime = newSelectedTime;
+      }
     },
   },
   computed: {
@@ -122,13 +135,17 @@ export default {
       return timelineDays;
     },
     selectedTime() {
-      const startDate = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
-      return startDate.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
+      const selTime = new Date(this.startDate.getTime() + (this.hoursInSlider * 3600 * 1000));
+      this.$gui.selectedTime = selTime;
+      return selTime.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
     },
     pixelsPerDay() {
       return this.timelinePixelWidth / this.timelineDays.length;
     },
   },
+  components: {
+    TimelineHandle
+  }
 }
 </script>
 
