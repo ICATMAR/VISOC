@@ -3,15 +3,29 @@
 
     <!-- Horizontal container -->
     <div class="horizontal">
-      <!-- -24h -->
-      <!-- -1h -->
+      
 
     <!-- Time string -->
       <div class="vertical timecode-container">
-        
-        <div class="timecode-string-container">
-          <span>{{ timecodeString }}</span>
-          <!-- <span class="time-ago">-{{ timeAgo }}</span> -->
+
+
+        <div class="horizontal">
+          <!-- -24h -->
+          <div class="clickable time-control"><span>≪</span></div>
+          <!-- -1h -->
+          <div class="clickable time-control"><span>&lt;</span></div>
+
+          <div class="timecode-string-container">
+            <span>{{ timecodeString }}</span>
+            <!-- <span class="time-ago">-{{ timeAgo }}</span> -->
+          </div>
+
+          <!-- +1h -->
+          <div class="clickable time-control"><span>&gt;</span></div>
+          <!-- +24h -->
+          <div class="clickable time-control"><span>≫</span></div>
+          
+
         </div>
         <span class="timeline-handle-triangle">▾</span>
 
@@ -95,6 +109,20 @@ export default {
   align-items: center;
   transform: translateX(-50%);
   cursor: grab;
+}
+
+
+.time-control {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(82 181 217 / 68%);
+  font-size: x-small;
+  margin: 5px;
+  box-shadow: 0 0 4px black;
 }
 
 .timecode-string-container {
