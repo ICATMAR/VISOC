@@ -3,7 +3,7 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
-    <TimeString @changeSelectedDate="stepInTimeInHours"></TimeString>
+    <TimelineHandle :startDate="limitStartDate" :endDate="limitEndDate"></TimelineHandle>
 
     <!-- timeline container -->
     <div class="timeline-inner-container">
@@ -62,7 +62,7 @@
 
 
 <script>
-import TimeString from './TimeString.vue';
+import TimelineHandle from './TimelineHandle.vue';
 
 
 export default {
@@ -345,7 +345,7 @@ export default {
     }
   },
   components: {
-    TimeString,
+    TimelineHandle,
   }
 }
 </script>

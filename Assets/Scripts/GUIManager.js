@@ -4,6 +4,8 @@ class GUIManager {
   isDataTimelineOpen = false;
   isPlatformDetailOpen = false;
 
+  selectedTime = new Date();
+
   selectedLanguage = 'en';
   languages = [
     { name: 'Català', id: 'ca' },
@@ -35,7 +37,8 @@ class GUIManager {
 
   // CONSTRUCTOR
   constructor() {
-
+    this.selectedTime = new Date();
+    this.selectedTime.setMinutes(0, 0, 0);
   }
 
   toggleMenu(){
