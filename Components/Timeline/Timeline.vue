@@ -74,7 +74,7 @@ export default {
 
 .timeline-container {
   position: relative;
-  margin: 0 30px;
+  margin: 0 80px 0 30px;
   padding: 0;
 }
 

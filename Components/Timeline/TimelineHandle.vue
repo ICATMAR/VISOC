@@ -11,9 +11,9 @@
 
         <div class="horizontal">
           <!-- -24h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(-24)"><span>≪</span></div>
+          <div v-if="hoursToStart >= 24" class="clickable time-control" @click="stepInTime(-24)"><span>≪</span></div>
           <!-- -1h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(-1)"><span>&lt;</span></div>
+          <div v-if="hoursToStart >= 1" class="clickable time-control" @click="stepInTime(-1)"><span>&lt;</span></div>
 
           <div class="timecode-string-container" @mousedown="onMouseDown">
             <span>{{ timecodeString }}</span>
@@ -21,9 +21,9 @@
           </div>
 
           <!-- +1h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(1)"><span>&gt;</span></div>
+          <div v-if="hoursToEnd >= 1" class="clickable time-control" @click="stepInTime(1)"><span>&gt;</span></div>
           <!-- +24h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTime(24)"><span>≫</span></div>
+          <div v-if="hoursToEnd >= 24" class="clickable time-control" @click="stepInTime(24)"><span>≫</span></div>
           
 
         </div>
@@ -58,7 +58,6 @@ export default {
   },
   data() {
     return {
-      daysThresholdForTimeControls: Infinity,
     }
   },
   methods: {
@@ -112,6 +111,12 @@ export default {
     },
     hoursInTimeline() {
       return Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
+    },
+    hoursToStart(){
+      return Math.round((this.$gui.selectedTime.getTime() - this.startDate.getTime()) / (1000 * 3600));
+    },
+    hoursToEnd() {
+      return Math.round((this.endDate.getTime() - this.$gui.selectedTime.getTime()) / (1000 * 3600));
     },
     timelineDays() {
       const totalTime = this.endDate.getTime() - this.startDate.getTime();
