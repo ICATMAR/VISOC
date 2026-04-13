@@ -103,6 +103,7 @@ export default {
 .timeline-handle {
   position: relative;
   z-index: 6;
+  font-size: small;
 }
 
 .timecode-container {
@@ -138,8 +139,9 @@ export default {
 }
 
 .timeline-handle-triangle {
-  margin: -20px;
-  font-size: xx-large;
+  margin-top: -18px;
+  margin-bottom: -14px;
+  font-size: x-large;
   color: var(--lightBlue);
   z-index: 5;
 }
