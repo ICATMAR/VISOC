@@ -11,9 +11,9 @@
 
         <div class="horizontal">
           <!-- -24h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>≪</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(-24)"><span>≪</span></div>
           <!-- -1h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>&lt;</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(-1)"><span>&lt;</span></div>
 
           <div class="timecode-string-container">
             <span>{{ timecodeString }}</span>
@@ -21,9 +21,9 @@
           </div>
 
           <!-- +1h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>&gt;</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(1)"><span>&gt;</span></div>
           <!-- +24h -->
-          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control"><span>≫</span></div>
+          <div v-if="timelineDays < daysThresholdForTimeControls" class="clickable time-control" @click="stepInTimeHours(24)"><span>≫</span></div>
           
 
         </div>
@@ -57,6 +57,9 @@ export default {
     }
   },
   methods: {
+    stepInTimeHours(hours) {
+      this.$emit('stepInTimeHours', hours);
+    },
   },
   computed: {
     percentageInTimeline() {
@@ -111,7 +114,6 @@ export default {
 .timecode-container {
   align-items: center;
   transform: translateX(-50%);
-  cursor: grab;
 }
 
 
@@ -140,6 +142,7 @@ export default {
   box-shadow: 0 0px 4px black;
   border-radius: 5px;
   z-index: 6;
+  cursor: grab;
 }
 
 .timeline-handle-triangle {

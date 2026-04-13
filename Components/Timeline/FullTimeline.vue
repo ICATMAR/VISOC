@@ -3,7 +3,7 @@
   <!-- Timeline -->
   <div class="timeline" ref="timeline">
 
-    <TimelineHandle :startDate="startDate" :endDate="endDate"></TimelineHandle>
+    <TimelineHandle :startDate="startDate" :endDate="endDate" @stepInTimeHours="stepInTimeHours"></TimelineHandle>
 
     <!-- timeline container -->
     <div class="timeline-inner-container">
@@ -212,6 +212,33 @@ export default {
       // Assign to start and end date
       this.startDate = newStartDate;
       this.endDate = newEndDate;
+    },
+    // EMITS
+    stepInTimeHours(hours) {
+      const newSelectedTime = new Date(this.$gui.selectedTime.getTime() + hours * 60 * 60 * 1000);
+      // Clamp to limits
+      if (newSelectedTime < this.limitStartDate) {
+        this.$gui.selectedTime = new Date(this.limitStartDate.getTime());
+      } else if (newSelectedTime > this.limitEndDate) {
+        this.$gui.selectedTime = new Date(this.limitEndDate.getTime());
+      } else {
+        this.$gui.selectedTime = newSelectedTime;
+      }
+      // If outside or close to the edge of the timeline, move the timeline as well
+      const hoursDiffFromStart = (this.$gui.selectedTime.getTime() - this.startDate.getTime()) / (1000 * 60 * 60);
+      const leftPercent = (hoursDiffFromStart / this.hoursInTimeline) * 100;
+      console.log(leftPercent);
+      const percentThreshold = 20;
+      const movementFactor = 0.3; // How much to move the timeline when the edge is hit (0.5 means half of the visible range)
+      if (leftPercent < percentThreshold) {
+        const hoursToMove = this.hoursInTimeline * (movementFactor -  leftPercent / 100);
+        this.startDate = new Date(this.startDate.getTime() - hoursToMove * 60 * 60 * 1000);
+        this.endDate = new Date(this.endDate.getTime() - hoursToMove * 60 * 60 * 1000);
+      } else if (leftPercent > (100 - percentThreshold)) {
+        const hoursToMove = this.hoursInTimeline * (movementFactor - (100 - leftPercent) / 100);
+        this.startDate = new Date(this.startDate.getTime() + hoursToMove * 60 * 60 * 1000);
+        this.endDate = new Date(this.endDate.getTime() + hoursToMove * 60 * 60 * 1000);
+      }
     },
   },
   computed: {
