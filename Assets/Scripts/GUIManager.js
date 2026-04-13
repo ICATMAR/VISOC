@@ -37,7 +37,8 @@ class GUIManager {
 
   // CONSTRUCTOR
   constructor() {
-    this.selectedTime = new Date(2024, 5, 15); // Example date: June 15, 2024
+    // this.selectedTime = new Date(2024, 5, 15); // Example date: June 15, 2024
+    this.selectedTime = new Date();
     this.selectedTime.setMinutes(0, 0, 0);
   }
 
