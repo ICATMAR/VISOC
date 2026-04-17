@@ -4,10 +4,13 @@
   <div id="map" ref="OLMap" v-on:drop="onDropFile($event)" v-on:dragover="onDragOver($event)"></div>
 
   <!-- OVERLAYS -->
+  <MapOverlayMockup></MapOverlayMockup>
 </template>
 
 
 <script>
+
+import MapOverlayMockup from './MapOverlayMockup.vue';
 
 export default {
   name: "Map",
@@ -46,6 +49,7 @@ export default {
     }
   },
   components: {
+    MapOverlayMockup
   }
 }
 
