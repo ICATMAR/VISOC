@@ -6,7 +6,7 @@
   
     <!-- Platform icon -->
     <div class="platform-icon-container" ref="mockupPlatform">
-      <img class="platform-icon clickable" :src="mockupIconURL" alt="Platform icon">
+      <img class="platform-icon clickable" :src="mockupIconURL" alt="Platform icon" @click="platformClicked($event)">
       <!-- Indicator marker -->
       <div class="platform-marker-indicator"></div>
 
@@ -53,6 +53,11 @@ export default {
   },
   methods: {
     //onclick: function(e){},
+    platformClicked: function(e) {
+      e.stopPropagation();
+      this.$gui.isDataTimelineOpen = true; 
+      this.$gui.isMenuOpen = false
+    }
   },
   computed: {
     

@@ -3,7 +3,6 @@
     <!-- MAP -->
     <section class="map-container">
       <Map></Map>
-      <button v-on:click="()=>{$gui.isDataTimelineOpen = true; $gui.isMenuOpen = false}">On platform click</button>
     </section>
 
     <!-- RIGHT PANEL AND BOTTOM PANEL-->
