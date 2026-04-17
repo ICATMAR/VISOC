@@ -1,16 +1,67 @@
 <template>
   <Transition name="slideBottom-fade">
-    <span class="datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
+    <!-- Vertical container -->
+    <div class="vertical datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
+
+      <!-- Cross and top-left icons -->
+      <div><i class="clickable close-x fa fa-xmark" v-on:click="() => { $gui.isDataTimelineOpen = false }"></i></div>
+
+      <!-- Data and timeline section -->
+      <div class="horizontal">
+        <!-- Variables -->
+        <div class="vertical variable-names-container">
+          <span>Week day</span>
+          <span>Time of day</span>
+          <span>Temperature</span>
+        </div>
+
+        <!-- Data timeline and info -->
+        <div class="horizontal table-and-info-container">
+          <!-- Timeline container -->
+          <div class="horizontal table-container">
+            <!-- Background canvas? -->
+            
+            <!-- Timetable -->
+            <table>
+              <tbody>
+                <!-- Days of week -->
+                <tr>
+                  <td v-for="day in timelineDays" :key="day.date" :colspan="day.hoursInDay / hourlyInterval">
+                    <span>{{ day.textLong }}</span>
+                  </td>
+                </tr>
+                <!-- Time of day -->
+                <tr>
+                  <td v-for="hour in timelineHours" :key="hour">
+                    <span>{{ hour % 24 }}</span>
+                  </td>
+                </tr>
+                <!-- Data points -->
+                <tr>
+                  <td v-for="(dataPoint, index) in timelineData" :key="index" style="font-size: small">
+                    <span>{{ dataPoint }}ºC</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+          </div>
+
+          <!-- Info section -->
+          <div class="info-section"><span>This is the info section where information about the platform is provided. Location, update rate...</span></div>
+        </div>
 
       
-
-      <!-- Data and timeline panel with data -->
-      <div class="datatimeline-pane-container">
-        <div>Data and timeline</div>
-        <button v-on:click="() => { $gui.isDataTimelineOpen = false }">Close data timeline</button>
-        <button v-on:click="() => { $gui.isPlatformDetailOpen = true }">Open platform detail</button>
       </div>
 
+      <!-- Bottom options -->
+      <div class="horizontal bottom-bar">
+        <span>Some option</span>
+        <span>Some option1</span>
+        <span>Some option2</span>
+      </div>
+
+      
 
       <!-- Platform detail -->
       <section class="platform-pane-container" v-show="$gui.isPlatformDetailOpen">
@@ -20,15 +71,101 @@
       </section>
 
 
-    </span>
+    </div>
   </Transition>
 </template>
+
+
+
+
+
+<script>
+
+export default {
+  name: "DataTimeline",
+  created() {
+    
+  },
+  mounted() {
+  },
+  data (){
+    return {
+      hourlyInterval: 3,
+    }
+  },
+  methods: {
+    //onclick: function(e){},
+  },
+  computed: {
+    startDate() {
+      let date = new Date(this.endDate.getTime());
+      date.setDate(date.getDate() - this.rangeOfDays);
+      date.setHours(0,0,0,0);
+      return date;
+    },
+    endDate() {
+      let date = new Date();
+      date.setMinutes(0,0,0);
+      return date;
+    },
+    rangeOfDays() {
+      const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
+      return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
+    },
+    timelineDays() {
+      const timelineDays = [];
+      let movingDate = new Date(this.startDate.getTime());
+      for (let i = 0; i < this.rangeOfDays; i++) {
+        timelineDays.push({
+          date: new Date(movingDate.getTime()),
+          day: movingDate.getDate(),
+          hoursInDay: i == 0 ? 24 - movingDate.getHours() : i == this.rangeOfDays - 1 ? this.endDate.getHours() : 24,
+          width: i == 0 ? (24 - movingDate.getHours()) / 24 * 100 : i == this.rangeOfDays - 1 ? this.endDate.getHours() / 24 * 100 : 100,
+          textXShort: movingDate.toLocaleString(this.$i18n.locale, { day: 'numeric' }),
+          textShort: movingDate.toLocaleString(this.$i18n.locale, { weekday: 'short', day: 'numeric' }),
+          textLong: movingDate.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric' }),
+        });
+        movingDate.setDate(movingDate.getDate() + 1);
+      }
+      return timelineDays;
+    },
+    timelineHours(){
+      let totalHours = Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
+      let timelineHours = [];
+      for (let i = 0; i < totalHours; i++) {
+        if (i % this.hourlyInterval === 0) 
+          timelineHours.push(i);
+      }
+      return timelineHours;
+    },
+    timelineData(){
+      let dataPoints = [];
+      for (let i = 0; i < this.timelineHours.length; i++) {
+        // Generate random data points for now
+        dataPoints[i] = Math.floor(Math.random() * 10);
+      }
+      return dataPoints;
+    },
+  },
+  components: {
+    
+  }
+}
+
+</script>
+
+
+
+
+
+
 
 <style scoped>
 .datatimeline-pane-section {
   align-self: flex-start;
   background: brown;
   position: relative;
+  pointer-events: auto;
 }
 
 .datatimeline-pane-container {
@@ -57,5 +194,54 @@
   background: orange;
 }
 
+
+.table-and-info-container {
+  overflow-y: hidden;
+  overflow-x: scroll;
+  -webkit-overflow-scrolling: touch;
+  /* scrollbar-width: none; */
+  width: calc(100vw - 125px);
+}
+
+.table-container {
+  flex-shrink: 0;
+}
+
+td {
+  width: 30px;
+  box-shadow: 0 0 1px black;
+  border-width: 0;
+}
+
+.variable-names-container {
+  width: 125px;
+}
+
+.info-section {
+  width: 250px;
+  min-width: 250px;
+}
+
+.bottom-bar > span {
+  padding-left: 10px;
+}
+
+.close-x {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  top: -15px;
+  left: 25px;
+  
+  background: var(--red);
+  color: white;
+  box-shadow: 0 0 4px black;
+  border-radius: 50%;
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+    
+}
 
 </style>

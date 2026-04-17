@@ -56,6 +56,7 @@ export default {
     platformClicked: function(e) {
       e.stopPropagation();
       this.$gui.isDataTimelineOpen = true; 
+      this.$gui.isPlatformDetailOpen = true;
       this.$gui.isMenuOpen = false
     }
   },
