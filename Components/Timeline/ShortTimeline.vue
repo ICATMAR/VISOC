@@ -196,6 +196,7 @@ export default {
 
 .timeline-handle {
   position: relative;
+  pointer-events: none;
 }
 
 .timeline-handle-triangle {

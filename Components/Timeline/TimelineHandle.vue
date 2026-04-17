@@ -163,6 +163,7 @@ export default {
 .timecode-container {
   align-items: center;
   transform: translateX(-50%);
+  pointer-events: all;
 }
 
 
