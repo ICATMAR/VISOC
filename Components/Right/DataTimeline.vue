@@ -9,10 +9,17 @@
       <!-- Data and timeline section -->
       <div class="horizontal">
         <!-- Variables -->
-        <div class="vertical variable-names-container">
-          <span>Week day</span>
-          <span>Time of day</span>
-          <span>Temperature</span>
+        <div class="horizontal variable-names-container">
+          <!-- Variable names -->
+          <div class="vertical variable-names-subcontainer">
+            <span>Temperature</span>
+            <span>Salinity</span>
+          </div>
+          <!-- Variable units -->
+          <div class="vertical variable-names-subcontainer">
+            <span class="clickable" style="text-decoration: underline;">ºC</span>
+            <span class="clickable" style="text-decoration: underline;">PSU</span>
+          </div>
         </div>
 
         <!-- Data timeline and info -->
@@ -28,19 +35,20 @@
               <tbody>
                 <!-- Days of week -->
                 <tr>
-                  <td v-for="day in timelineDays" :key="day.date" :colspan="day.hoursInDay / hourlyInterval">
+                  <td v-for="day in timelineDays" :key="day.date" :colspan="day.hoursInDay / hourlyInterval"
+                    class="weekDayCell">
                     <span>{{ day.textLong }}</span>
                   </td>
                 </tr>
                 <!-- Time of day -->
                 <tr>
-                  <td v-for="hour in timelineHours" :key="hour">
+                  <td v-for="hour in timelineHours" :key="hour" class="hourCell">
                     <span>{{ hour % 24 }}</span>
                   </td>
                 </tr>
                 <!-- Data points -->
-                <tr>
-                  <td v-for="(dataPoint, index) in timelineData" :key="index" style="font-size: small">
+                <tr v-for="(varDataPoints, index) in timelineData" :key="index">
+                  <td v-for="(dataPoint, index) in varDataPoints" :key="index" style="font-size: small">
                     <span>{{ dataPoint }}ºC</span>
                   </td>
                 </tr>
@@ -57,12 +65,16 @@
       </div>
 
       <!-- Bottom options -->
-      <div class="horizontal bottom-bar">
-        <span>Some option</span>
-        <span>Some option1</span>
-        <span>Some option2</span>
-      </div>
+      <!-- <div class="horizontal bottom-bar">
+        <span>Default view</span>
+        <span>Compare with models</span>
+        <span>Detail currents</span>
+      </div> -->
 
+      <div class="horizontal wrap button-group bottom-bar">
+        <button v-for="opt in bottomOptions" :key="opt" class="clickable" :class="{ 'selectedOption': selectedOption == opt }"
+          @click="selectedOption = opt"><span>{{ $t(opt) }}</span></button>
+      </div>
       
 
       <!-- Platform detail -->
@@ -98,6 +110,8 @@ export default {
   data (){
     return {
       hourlyInterval: 3,
+      bottomOptions: ['Default view', 'Compare with models', 'Detail currents'],
+      selectedOption: 'Default view',
       // Dragging variables
       isDragging: false,
       startX: 0,
@@ -165,13 +179,14 @@ export default {
     },
     timelineDays() {
       const timelineDays = [];
+      const rangeOfDays = this.rangeOfDays + 1;
       let movingDate = new Date(this.startDate.getTime());
-      for (let i = 0; i < this.rangeOfDays; i++) {
+      for (let i = 0; i < rangeOfDays; i++) {
         timelineDays.push({
           date: new Date(movingDate.getTime()),
           day: movingDate.getDate(),
-          hoursInDay: i == 0 ? 24 - movingDate.getHours() : i == this.rangeOfDays - 1 ? this.endDate.getHours() : 24,
-          width: i == 0 ? (24 - movingDate.getHours()) / 24 * 100 : i == this.rangeOfDays - 1 ? this.endDate.getHours() / 24 * 100 : 100,
+          hoursInDay: i == 0 ? 24 - movingDate.getHours() : i == rangeOfDays - 1 ? this.endDate.getHours() : 24,
+          width: i == 0 ? (24 - movingDate.getHours()) / 24 * 100 : i == rangeOfDays - 1 ? this.endDate.getHours() / 24 * 100 : 100,
           textXShort: movingDate.toLocaleString(this.$i18n.locale, { day: 'numeric' }),
           textShort: movingDate.toLocaleString(this.$i18n.locale, { weekday: 'short', day: 'numeric' }),
           textLong: movingDate.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric' }),
@@ -190,12 +205,15 @@ export default {
       return timelineHours;
     },
     timelineData(){
-      let dataPoints = [];
-      for (let i = 0; i < this.timelineHours.length; i++) {
-        // Generate random data points for now
-        dataPoints[i] = Math.floor(Math.random() * 10);
+      let variablesDataPoints = [];
+      for (let vI = 0; vI < 2; vI++) {
+        variablesDataPoints[vI] = [];
+        for (let i = 0; i < this.timelineHours.length; i++) {
+          // Generate random data points for now
+          variablesDataPoints[vI][i] = Math.floor(Math.random() * 10);
+        }
       }
-      return dataPoints;
+      return variablesDataPoints;
     },
   },
   components: {
@@ -214,7 +232,6 @@ export default {
 <style scoped>
 .datatimeline-pane-section {
   align-self: flex-start;
-  background: brown;
   position: relative;
   pointer-events: auto;
 
@@ -266,25 +283,62 @@ export default {
 
 .table-container {
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.85);
 }
 
 td {
   width: 30px;
-  box-shadow: 0 0 1px black;
-  border-width: 0;
+  text-align: center;
+}
+
+td > * {
+  color: black;
+  text-shadow: none;
+}
+
+.weekDayCell {
+  text-align: left;
+  padding-left: 15px;
+}
+
+.hourCell {
+  font-size: x-small;
 }
 
 .variable-names-container {
   width: 125px;
+  justify-content: flex-end;
+  font-size: x-small;
+  height: 100%;
+  background: var(--lightBlue);
 }
+
+.variable-names-container > div {
+  padding-top: 50px;
+  padding-right: 10px;
+  text-align: right;
+}
+
+.variable-names-subcontainer > span {
+  color: black;
+  text-shadow: none;
+  height: 22px;
+}
+
+
 
 .info-section {
   width: 250px;
   min-width: 250px;
 }
 
-.bottom-bar > span {
+.bottom-bar {
+  border-top: 1px white solid;
+  background: var(--blue);
+}
+.bottom-bar > * {
   padding-left: 10px;
+  font-size: x-small;
 }
 
 .close-x {
