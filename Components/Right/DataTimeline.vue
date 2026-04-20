@@ -16,7 +16,9 @@
         </div>
 
         <!-- Data timeline and info -->
-        <div class="horizontal table-and-info-container">
+        <div class="horizontal table-and-info-container" ref="tableSlidingContainer"
+          @mousedown="startDragging"
+          @touchstart="startDragging">
           <!-- Timeline container -->
           <div class="horizontal table-container">
             <!-- Background canvas? -->
@@ -87,14 +89,63 @@ export default {
     
   },
   mounted() {
+    // EVENTS
+  },
+  // Clean up global listeners if component is destroyed
+  beforeUnmount() {
+    this.stopDragging();
   },
   data (){
     return {
       hourlyInterval: 3,
+      // Dragging variables
+      isDragging: false,
+      startX: 0,
+      scrollLeft: 0,
     }
   },
   methods: {
     //onclick: function(e){},
+    // DRAGGING THE TIMELINE
+    startDragging(e) {
+      this.isDragging = true;
+      
+      // Get the initial X position (support both Mouse and Touch)
+      const pageX = e.type === 'touchstart' ? e.touches[0].pageX : e.pageX;
+      
+      const container = this.$refs.tableSlidingContainer;
+      this.startX = pageX - container.offsetLeft;
+      this.scrollLeft = container.scrollLeft;
+
+      // Add global listeners so dragging continues even if mouse leaves the div
+      window.addEventListener('mousemove', this.onDragging);
+      window.addEventListener('touchmove', this.onDragging);
+      window.addEventListener('mouseup', this.stopDragging);
+      window.addEventListener('touchend', this.stopDragging);
+    },
+    onDragging(e) {
+      if (!this.isDragging) return;
+
+      // Prevent default behavior to stop text selection or page bounce
+      if (e.cancelable) e.preventDefault();
+
+      const pageX = e.type === 'touchmove' ? e.touches[0].pageX : e.pageX;
+      const container = this.$refs.tableSlidingContainer;
+      
+      const x = pageX - container.offsetLeft;
+      // Multiplier makes the scroll speed feel more responsive
+      const walk = (x - this.startX) * 1.5; 
+      container.scrollLeft = this.scrollLeft - walk;
+
+      console.log("dragging")
+    },
+    stopDragging() {
+      this.isDragging = false;
+      window.removeEventListener('mousemove', this.onDragging);
+      window.removeEventListener('touchmove', this.onDragging);
+      window.removeEventListener('mouseup', this.stopDragging);
+      window.removeEventListener('touchend', this.stopDragging);
+    },
   },
   computed: {
     startDate() {
@@ -166,6 +217,8 @@ export default {
   background: brown;
   position: relative;
   pointer-events: auto;
+
+  font-size: small;
 }
 
 .datatimeline-pane-container {
@@ -196,11 +249,19 @@ export default {
 
 
 .table-and-info-container {
-  overflow-y: hidden;
-  overflow-x: scroll;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
+  /* overflow-x: scroll; */
+  /* -webkit-overflow-scrolling: touch; */
   /* scrollbar-width: none; */
+  cursor: grab;
+  user-select: none;
+  scroll-behavior: auto;
   width: calc(100vw - 125px);
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.table-and-info-container:active {
+  cursor: grabbing;
 }
 
 .table-container {
