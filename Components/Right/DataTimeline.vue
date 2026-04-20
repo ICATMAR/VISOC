@@ -43,13 +43,14 @@
                 <!-- Time of day -->
                 <tr>
                   <td v-for="hour in timelineHours" :key="hour" class="hourCell">
-                    <span>{{ hour % 24 }}</span>
+                    <span :style="{ opacity: (hour % 24 < 6 || hour % 24 >= 21) ? '0.4' : '1' }">{{ hour % 24 }}</span>
                   </td>
                 </tr>
                 <!-- Data points -->
-                <tr v-for="(varDataPoints, index) in timelineData" :key="index">
-                  <td v-for="(dataPoint, index) in varDataPoints" :key="index" style="font-size: small">
-                    <span>{{ dataPoint }}ºC</span>
+                <tr v-for="(varDataPoints, varIndex) in timelineData" :key="varIndex">
+                  <td v-for="(dataPoint, index) in varDataPoints" :key="index" 
+                  :style="getGradientStyle(index, varDataPoints)" style="font-size: small">
+                    <span>{{ dataPoint }}º</span>
                   </td>
                 </tr>
               </tbody>
@@ -120,6 +121,29 @@ export default {
   },
   methods: {
     //onclick: function(e){},
+    // LEGEND COLORS
+    // Helper to map temperature to a color (example logic)
+    getColorFromValue(value) {
+      if (value < 3) return 'white';
+      if (value < 6) return 'yellow'; // Blue
+      if (value < 9) return 'orange'; // Yellow
+      return 'red'; // Orange
+    },
+    getGradientStyle(index, dataArray) {
+      const currentVal = dataArray[index];
+      // Use the current value as fallback if neighbor doesn't exist
+      const prevVal = index > 0 ? dataArray[index - 1] : currentVal;
+      const nextVal = index < dataArray.length - 1 ? dataArray[index + 1] : currentVal;
+
+      const prevColor = this.getColorFromValue((prevVal + currentVal) / 2);
+      const currColor = this.getColorFromValue(currentVal);
+      const nextColor = this.getColorFromValue((nextVal + currentVal) / 2);
+
+      return {
+        background: `linear-gradient(to right, ${prevColor}, ${currColor}, ${nextColor})`
+      };
+    },
+
     // DRAGGING THE TIMELINE
     startDragging(e) {
       this.isDragging = true;
@@ -266,6 +290,7 @@ export default {
 
 
 .table-and-info-container {
+  height: 100%;
   overflow: hidden;
   /* overflow-x: scroll; */
   /* -webkit-overflow-scrolling: touch; */
@@ -282,8 +307,14 @@ export default {
 }
 
 .table-container {
+  height: 100%;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.85);
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
 }
 
 td {
@@ -303,6 +334,7 @@ td > * {
 
 .hourCell {
   font-size: x-small;
+  border-bottom: 1px solid #0000002e;
 }
 
 .variable-names-container {
@@ -328,8 +360,11 @@ td > * {
 
 
 .info-section {
-  width: 250px;
-  min-width: 250px;
+  width: 400px;
+  min-width: 400px;
+  background: var(--lightBlue);
+  padding-left: 10px;
+  height: 100%;
 }
 
 .bottom-bar {
