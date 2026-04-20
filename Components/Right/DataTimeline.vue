@@ -59,7 +59,10 @@
           </div>
 
           <!-- Info section -->
-          <div class="info-section"><span>This is the info section where information about the platform is provided. Location, update rate...</span></div>
+          <div class="horizontal info-section">
+            <img :src="imgSrc">
+            <span>This is the info section where information about the platform is provided. Location, update rate...</span>
+          </div>
         </div>
 
       
@@ -117,6 +120,8 @@ export default {
       isDragging: false,
       startX: 0,
       scrollLeft: 0,
+      // Example image
+      imgSrc: './Assets/Images/platforms/HFRCREU.png'
     }
   },
   methods: {
@@ -365,6 +370,11 @@ td > * {
   background: var(--lightBlue);
   padding-left: 10px;
   height: 100%;
+}
+
+.info-section > img {
+  max-height: 190px;
+  padding-right: 10px;
 }
 
 .bottom-bar {
