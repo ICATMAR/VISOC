@@ -26,6 +26,12 @@
         <div class="horizontal table-and-info-container" ref="tableSlidingContainer"
           @mousedown="startDragging"
           @touchstart="startDragging">
+
+          <!-- Load previous days -->
+          <div class="button-next-prev-container">
+            <button class="clickable button-next-previous-days"><span><i class="fa-solid fa-angle-up" style="padding-top: 10px;"></i>3 days before</span></button>
+          </div>
+
           <!-- Timeline container -->
           <div class="horizontal table-container">
             <!-- Background canvas? -->
@@ -56,6 +62,12 @@
               </tbody>
             </table>
 
+          </div>
+
+
+          <!-- Load next days -->
+          <div class="button-next-prev-container ">
+          <button class="clickable button-next-previous-days button-next-days"><span> <i class="fa-solid fa-angle-up" style="padding-top: 10px;"></i> 3 days after</span></button>
           </div>
 
           <!-- Info section -->
@@ -361,6 +373,34 @@ td > * {
   text-shadow: none;
   height: 22px;
 }
+
+.button-next-prev-container {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  background: #b3b3b3;
+}
+
+.button-next-previous-days {
+  width: 20px;
+  writing-mode: sideways-lr;
+  text-orientation: mixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--red);
+  border: none;
+  padding: 0;
+  font-size: x-small;
+  text-transform: uppercase;
+  border-radius: 10px 0px 0px 10px;
+  padding-inline: 10px;
+}
+
+.button-next-days {
+  rotate: 180deg;
+}
+
 
 
 
