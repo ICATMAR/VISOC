@@ -33,7 +33,7 @@
           </div>
 
           <!-- Timeline container -->
-          <div class="horizontal table-container">
+          <div class="horizontal table-container" ref="tableContainer">
             <!-- Background canvas? -->
             
             <!-- Timetable -->
@@ -41,7 +41,7 @@
               <tbody>
                 <!-- Days of week -->
                 <tr>
-                  <td v-for="day in timelineDays" :key="day.date" :colspan="day.hoursInDay / hourlyInterval"
+                  <td v-for="day in timelineDays" :key="day.date" :colspan="Math.ceil(day.hoursInDay / hourlyInterval)"
                     class="weekDayCell">
                     <span>{{ day.textLong }}</span>
                   </td>
@@ -117,7 +117,6 @@ export default {
     
   },
   mounted() {
-    // EVENTS
   },
   // Clean up global listeners if component is destroyed
   beforeUnmount() {
@@ -191,8 +190,6 @@ export default {
       // Multiplier makes the scroll speed feel more responsive
       const walk = (x - this.startX) * 1.5; 
       container.scrollLeft = this.scrollLeft - walk;
-
-      console.log("dragging")
     },
     stopDragging() {
       this.isDragging = false;
@@ -256,6 +253,21 @@ export default {
       }
       return variablesDataPoints;
     },
+    isComponentVisible() {
+      return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
+    }
+  },
+  watch: {
+    isComponentVisible(isVisible) {
+      if (isVisible) {
+        // Reset scroll position when timeline is opened
+        this.$nextTick(() => {
+          const infoAndTableContainer = this.$refs.tableSlidingContainer;
+          const tableContainer = this.$refs.tableContainer;
+          infoAndTableContainer.scrollLeft = Math.max(0, 20 + tableContainer.offsetWidth - infoAndTableContainer.offsetWidth); // Start at the end (latest time)
+        });
+      }
+    }
   },
   components: {
     
@@ -347,6 +359,8 @@ td > * {
 .weekDayCell {
   text-align: left;
   padding-left: 15px;
+  border-left: 1px solid gray;
+  border-bottom: 1px solid gray;
 }
 
 .hourCell {
@@ -413,8 +427,8 @@ td > * {
 }
 
 .info-section > img {
-  max-height: 190px;
-  padding-right: 10px;
+  max-height: 160px;
+  padding: 10px;
 }
 
 .bottom-bar {
