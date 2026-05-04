@@ -15,7 +15,7 @@
       </div>
 
       <!-- Map -->
-      <div class="map-placeholder">
+      <div id="platformMap" ref="platformMap" class="map-placeholder">
       </div>
     </div>
 
@@ -55,9 +55,28 @@
 export default {
   name: "PlatformDetail",
   created() {
-    
+    this.map = undefined;
   },
   mounted() {
+    this.map = new ol.Map({
+      target: this.$refs.platformMap,
+      controls: [],
+      interactions: [],
+      layers: [
+        new ol.layer.Tile({
+          source: new ol.source.XYZ({ // https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/0
+            url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
+            attributions: '© Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community',
+            cacheSize: 500,
+            crossOrigin: 'anonymous',
+          }),
+        })
+      ],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([2.5, 41.5]),
+        zoom: 10
+      })
+    });
   },
   data (){
     return {
@@ -89,6 +108,7 @@ export default {
 
 .map-info-overlay {
   position: absolute;
+  z-index: 1;
   top: 4px;
   right: 4px;
   font-size: x-small;
@@ -98,8 +118,8 @@ export default {
 }
 
 .map-placeholder {
-  width: 150px;
-  height: 150px;
+  width: 180px;
+  height: 180px;
   background: lightblue;
 }
 
@@ -122,8 +142,8 @@ export default {
 }
 
 .dto-gif {
-  width: 120px;
-  height: 120px;
+  width: 150px;
+  height: 150px;
   border-radius: 50%;
   margin: 10px;
   box-shadow: 0 0 4px black;

@@ -316,7 +316,8 @@ export default {
   padding: 0;
   margin-left: 0;
   left: calc((100vw - 600px) / 2);
-  background: orange;
+  background: var(--gray);
+  border-radius: 10px 10px 0px 0px;
 }
 
 
