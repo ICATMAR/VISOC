@@ -14,6 +14,10 @@
         </div>
       </div>
 
+      <!-- Overlay arrows (wind, waves, currents?) -->
+      <MapCircleArrows></MapCircleArrows>
+
+
       <!-- Map -->
       <div id="platformMap" ref="platformMap" class="map-placeholder">
       </div>
@@ -50,6 +54,8 @@
 
 
 <script>
+import MapCircleArrows from './MapCircleArrows.vue';
+
 
 
 export default {
@@ -91,6 +97,7 @@ export default {
     
   },
   components: {
+    MapCircleArrows
   }
 }
 </script>
@@ -165,8 +172,6 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-
-  
 }
 
 

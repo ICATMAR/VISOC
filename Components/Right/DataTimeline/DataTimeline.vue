@@ -318,6 +318,11 @@ export default {
   left: calc((100vw - 600px) / 2);
   background: var(--gray);
   border-radius: 10px 10px 0px 0px;
+
+  /* horizontal | vertical | blur | spread | color */
+  box-shadow: 0px -10px 10px -5px rgba(0, 0, 0, 0.5), /* Top shadow */
+              -10px 0px 10px -5px rgba(0, 0, 0, 0.5), /* Left shadow */
+              10px 0px 10px -5px rgba(0, 0, 0, 0.5);  /* Right shadow */
 }
 
 
