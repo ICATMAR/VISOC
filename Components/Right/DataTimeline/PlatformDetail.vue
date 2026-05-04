@@ -36,8 +36,12 @@
     </div>
 
     <!-- 3D DTO -->
-    <div class="dto">
+    <div class="dto-container">
+      <img class="dto-gif" :src="mockupGifSource">
+      </img>
+      <i class="fa-solid fa-arrow-up-right-from-square icon-open-link clickable"></i>
     </div>
+    
   
   </div>
 
@@ -58,6 +62,7 @@ export default {
   data (){
     return {
       platformType: "buoy",
+      mockupGifSource: "./Assets/Images/mockup/buoydto.gif",
     }
   },
   methods: {
@@ -105,12 +110,43 @@ export default {
 .value-container {
   background: lightgreen;
   border-radius: 10px;
+  padding: 10px;
 }
 
-.dto {
-  width: 150px;
-  height: 150px;
-  background: lightpink;
+.value-container span:first-child {
+  font-size: x-small;
+}
+
+.dto-container {
+  position: relative;
+}
+
+.dto-gif {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  margin: 10px;
+  box-shadow: 0 0 4px black;
+}
+
+.icon-open-link {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+
+  width: 30px;
+  height: 30px;
+
+  background: var(--blue);
+  color: white;
+  box-shadow: 0 0 4px black;
+  border-radius: 50%;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  
 }
 
 
