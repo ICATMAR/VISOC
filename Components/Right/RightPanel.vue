@@ -42,7 +42,7 @@
 
 
 <script>
-import DataTimeline from './DataTimeline.vue';
+import DataTimeline from './DataTimeline/DataTimeline.vue';
 import BottomRight from './BottomRight/BottomRight.vue';
 
 

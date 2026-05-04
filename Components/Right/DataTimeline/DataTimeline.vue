@@ -4,7 +4,7 @@
     <div class="vertical datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
 
       <!-- Cross and top-left icons -->
-      <div><i class="clickable close-x fa fa-xmark" v-on:click="() => { $gui.isDataTimelineOpen = false }"></i></div>
+      <div><i class="clickable close-x close-x-position fa fa-xmark" v-on:click="() => { $gui.isDataTimelineOpen = false }"></i></div>
 
       <!-- Data and timeline section -->
       <div class="horizontal">
@@ -94,11 +94,11 @@
       
 
       <!-- Platform detail -->
-      <section class="platform-pane-container" v-show="$gui.isPlatformDetailOpen">
-        <div>Map</div>
-        <div>Platform name</div>
-        <button v-on:click="() => { $gui.isPlatformDetailOpen = false }">Close platform detail</button>
-      </section>
+      <Transition name="fade">
+        <section class="platform-pane-container" v-show="$gui.isPlatformDetailOpen">
+          <PlatformDetail></PlatformDetail>
+        </section>
+      </Transition>
 
 
     </div>
@@ -110,6 +110,8 @@
 
 
 <script>
+import PlatformDetail from './PlatformDetail.vue';
+
 
 export default {
   name: "DataTimeline",
@@ -270,7 +272,7 @@ export default {
     }
   },
   components: {
-    
+    PlatformDetail
   }
 }
 
@@ -310,10 +312,10 @@ export default {
   top: initial;
   height: initial;
   bottom: 100%;
-  width: 750px;
+  width: 600px;
   padding: 0;
   margin-left: 0;
-  left: calc((100vw - 750px) / 2);
+  left: calc((100vw - 600px) / 2);
   background: orange;
 }
 
@@ -440,22 +442,12 @@ td > * {
   font-size: x-small;
 }
 
-.close-x {
+.close-x-position {
   position: absolute;
-  width: 30px;
-  height: 30px;
   top: -15px;
   left: 25px;
-  
-  background: var(--red);
-  color: white;
-  box-shadow: 0 0 4px black;
-  border-radius: 50%;
-  
-  display: flex;
-  justify-content: center;
-  align-items: center;
-    
 }
+
+
 
 </style>

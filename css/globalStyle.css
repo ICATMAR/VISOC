@@ -102,6 +102,22 @@ span {
 }
 
 
+
+.close-x {
+  width: 30px;
+  height: 30px;
+  
+  background: var(--red);
+  color: white;
+  box-shadow: 0 0 4px black;
+  border-radius: 50%;
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+
 .divider {
   width: 100%;
   height: 1px;
@@ -175,6 +191,18 @@ span {
 
 
 
+
+
+/* Fade */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
 
 
 
