@@ -70,37 +70,7 @@ export default {
 
 
 <style scoped>
-  .platform-icon-container {
-    position: relative;
-    display: flex;
-    /* align-items: center; */
-  }
-
-  .platform-icon {
-    width: 25px;
-    height: 25px;
-
-    background: var(--lightBlue);
-    border-radius: 50%;
-    box-shadow: 0px 0px 5px black;
-
-    margin-left: 3px;
-    margin-right: 3px;
-  }
-
-  .platform-icon:hover {
-    background-color: var(--blue);
-  }
-
-  .platform-marker-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--red);
-    border: solid 1px black;
-    translate: 22px;
-    position: absolute;
-  }
+  
 
 </style>
 
