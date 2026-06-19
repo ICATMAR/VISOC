@@ -70,11 +70,29 @@
 
 
 
+        <!-- Dashboards by application -->
+       <div class="dashboard-section-text">
+          {{ $t('By application') }}
+        </div>
+        <!-- List of applications -->
+        <div class="horizontal wrap dashboards-container">
+          <div class="dashboard-container clickable"v-for="dashboard in applicationDashboards" :key="dashboard.id"
+            v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
+            :class="dashboardClasses[dashboard.id]">
+            <div class="dashboard-img-container">
+              <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
+              <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
+            </div>
+            
+            <span class="dashboard-bottom-text">{{ $t(dashboard.name) }}</span>
+          </div>
+        </div>
+
 
 
         <!-- Dashboards by model -->
        <div class="dashboard-section-text">
-          {{ $t('By model') }}
+          {{ $t('By forecast model') }}
         </div>
         <!-- List of models -->
         <div class="horizontal wrap dashboards-container">
@@ -152,6 +170,9 @@ export default {
     },
     modelDashboards() {
       return this.$gui.dashboards.filter(d => d.type === 'model');
+    },
+    applicationDashboards() {
+      return this.$gui.dashboards.filter(d => d.type === 'application');
     },
     variableDashboards() {
       return this.$gui.dashboards.filter(d => d.type === 'variable');
