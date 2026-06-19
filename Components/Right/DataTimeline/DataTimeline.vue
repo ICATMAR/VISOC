@@ -37,6 +37,7 @@
             <!-- Background canvas? -->
             
             <!-- Timetable -->
+            <div class="vertical" style="align-self: flex-start">
             <table>
               <tbody>
                 <!-- Days of week -->
@@ -62,6 +63,8 @@
               </tbody>
             </table>
 
+            <DataTimelineRadarAvailability></DataTimelineRadarAvailability>
+            </div>
           </div>
 
 
@@ -111,6 +114,7 @@
 
 <script>
 import PlatformDetail from './PlatformDetail.vue';
+import DataTimelineRadarAvailability from './DataTimelineRadarAvailability.vue';
 
 
 export default {
@@ -272,7 +276,8 @@ export default {
     }
   },
   components: {
-    PlatformDetail
+    PlatformDetail,
+    DataTimelineRadarAvailability
   }
 }
 
