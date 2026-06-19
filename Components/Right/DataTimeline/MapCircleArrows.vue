@@ -4,11 +4,21 @@
 
     <!-- Variable name -->
     <template v-for="(item, index) in data" :key="index">
-      <div class="variableName" :style="{ rotate: (item.angle - 90) + 'deg' }">
+      <div class="variableName animatedLayer" :style="{
+        rotate: (item.angle - 90) + 'deg',
+        '--maxZIndex': data.length,
+        '--duration': (data.length * loopInterval) + 's',
+        '--delay': (-index * loopInterval) + 's'
+        }">
         <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ $t(item.name) }}</span>
       </div>
       <!-- Variable value -->
-      <div class="variableValue horizontal" :style="{ rotate: (item.angle - 90) + 'deg' }">
+      <div class="variableValue horizontal animatedLayer" :style="{
+        rotate: (item.angle - 90) + 'deg',
+        '--maxZIndex': data.length,
+        '--duration': (data.length * loopInterval) + 's',
+        '--delay': (-index * loopInterval) + 's'
+        }">
         <div class="variableArrow"></div>
         <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ item.value }}</span>
       </div>
@@ -29,6 +39,7 @@ export default {
   },
   data (){
     return {
+      loopInterval: 2,
       data: [
         {
           name: 'Wind',
@@ -38,7 +49,7 @@ export default {
         {
           name: 'Waves',
           value: '1.5m, 4s',
-          angle: 45,
+          angle: 190,
         },
         {
           name: 'Currents',
@@ -119,6 +130,29 @@ export default {
   height: 10px;
   width: 10px;
   z-index: 0;
+}
+
+
+/* Register the custom property so it works inside @keyframes */
+@property --maxZIndex {
+  syntax: '<integer>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@keyframes depthLoop {
+  0% {
+    z-index: 0;
+  }
+  100% {
+    z-index: var(--maxZIndex);
+  }
+}
+
+.animatedLayer {
+  /* position: absolute; */
+  animation: depthLoop var(--duration) infinite linear;
+  animation-delay: var(--delay);
 }
 
 </style>
