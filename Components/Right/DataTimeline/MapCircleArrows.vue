@@ -3,12 +3,18 @@
     <div class="map-arrows-center"></div>
 
     <!-- Variable name -->
-    <div class="variableName" :style="{ rotate: direction }"><span>{{ $t('Wind') }}</span></div>
-    <!-- Variable value -->
-    <div class="variableValue horizontal" :style="{ rotate: direction }">
-      <div class="variableArrow"></div>
-      <span>15 kn</span>
-    </div>
+    <template v-for="(item, index) in data" :key="index">
+      <div class="variableName" :style="{ rotate: (item.angle - 90) + 'deg' }">
+        <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ $t(item.name) }}</span>
+      </div>
+      <!-- Variable value -->
+      <div class="variableValue horizontal" :style="{ rotate: (item.angle - 90) + 'deg' }">
+        <div class="variableArrow"></div>
+        <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ item.value }}</span>
+      </div>
+    </template>
+
+
   </div>
 </template>
 
@@ -23,11 +29,30 @@ export default {
   },
   data (){
     return {
-      direction: '180deg'
+      data: [
+        {
+          name: 'Wind',
+          value: '15kn',
+          angle: 185,
+        },
+        {
+          name: 'Waves',
+          value: '1.5m, 4s',
+          angle: 45,
+        },
+        {
+          name: 'Currents',
+          value: '0.5m/s',
+          angle: 180,
+        }
+      ],
     }
   },
   methods: {
     //onclick: function(e){},
+    textRotation(angle) {
+      return angle > 180 ? '180deg' : '0deg';
+    }
   },
   computed: {
     
