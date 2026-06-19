@@ -3,12 +3,9 @@
   <!-- Overlay container -->
   <div class="overlay-container">
   
-  DO THE V-FOR FOR STATIONS
     <!-- Platform icon -->
-    <div class="platform-icon-container" ref="platformIcon">
-      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event)">
-      <!-- Indicator marker -->
-      <div class="platform-marker-indicator"></div>
+    <div class="platform-icon-container" v-for="station in stations" :ref="station.name" :id="station.name">
+      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">     <!-- Indicator marker -->   <div class="platform-marker-indicator"></div>
     </div>
   
   </div>
@@ -31,18 +28,22 @@ export default {
       if (this.map == undefined) {
         this.map = this.$parent.map; // Access the map instance from the parent component
       }
-      // Create overlay
-      const olOverlay = new ol.Overlay({
-        element: this.$refs.platformIcon,
-        positioning: 'center-center',
-        position: ol.proj.fromLonLat([2.191653, 41.369982]),
-        stopEvent: false,
-      });
-      const overlayEl = olOverlay.getElement();
-      overlayEl.classList.add('no-pointer-events');
-      overlayEl.parentElement.classList.add('no-pointer-events');
-      olOverlay.element.classList.add('no-pointer-events');
-      this.map.addOverlay(olOverlay);
+      // Create overlays
+      for (let i = 0 ; i < this.stations.length; i++) {
+        let station = this.stations[i];
+        const olOverlay = new ol.Overlay({
+          element: this.$refs[station.name]?.[0],
+          positioning: 'center-center',
+          position: ol.proj.fromLonLat([station.lon, station.lat]),
+          stopEvent: false,
+        });
+        const overlayEl = olOverlay.getElement();
+        overlayEl.classList.add('no-pointer-events');
+        overlayEl.parentElement.classList.add('no-pointer-events');
+        olOverlay.element.classList.add('no-pointer-events');
+        this.map.addOverlay(olOverlay);
+      }
+      
     });
   },
   data (){
@@ -69,7 +70,7 @@ export default {
   },
   methods: {
     //onclick: function(e){},
-    platformClicked: function(e) {
+    platformClicked: function(e, station) {
       e.stopPropagation();
       this.$gui.isDataTimelineOpen = true; 
       this.$gui.isPlatformDetailOpen = true;

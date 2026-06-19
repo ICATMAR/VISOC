@@ -5,11 +5,13 @@
 
   <!-- OVERLAYS -->
   <MapOverlayMockup></MapOverlayMockup>
+  <MapOverlayHFRStations></MapOverlayHFRStations>
 </template>
 
 
 <script>
 
+import MapOverlayHFRStations from './MapOverlayHFRStations.vue';
 import MapOverlayMockup from './MapOverlayMockup.vue';
 
 export default {
@@ -49,7 +51,8 @@ export default {
     }
   },
   components: {
-    MapOverlayMockup
+    MapOverlayMockup,
+    MapOverlayHFRStations,
   }
 }
 
