@@ -352,6 +352,7 @@ export default {
 table {
   border-collapse: collapse;
   border-spacing: 0;
+  align-self: flex-start;
 }
 
 td {
@@ -385,9 +386,13 @@ td > * {
 }
 
 .variable-names-container > div {
-  padding-top: 50px;
+  padding-top: 43px;
   padding-right: 10px;
   text-align: right;
+}
+
+.variable-names-subcontainer {
+  align-self: flex-start;
 }
 
 .variable-names-subcontainer > span {
