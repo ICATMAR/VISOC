@@ -5,7 +5,9 @@
   
     <!-- Platform icon -->
     <div class="platform-icon-container" v-for="station in stations" :ref="station.name" :id="station.name">
-      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">     <!-- Indicator marker -->   <div class="platform-marker-indicator"></div>
+      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">     
+      <!-- Indicator marker -->   
+      <div class="platform-marker-indicator"></div>
     </div>
   
   </div>
