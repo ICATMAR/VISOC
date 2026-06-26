@@ -11,9 +11,9 @@
 
         <div class="horizontal">
           <!-- -24h -->
-          <div v-if="hoursToStart >= 24" class="clickable time-control" @click="stepInTime(-24)"><span>≪</span></div>
+          <div v-if="hoursToStart >= 24" class="clickable time-control" @click="stepInTime(-24)" title="-24h"><span>≪</span></div>
           <!-- -1h -->
-          <div v-if="hoursToStart >= 1" class="clickable time-control" @click="stepInTime(-1)"><span>&lt;</span></div>
+          <div v-if="hoursToStart >= 1" class="clickable time-control" @click="stepInTime(-1)" title="-1h"><span>&lt;</span></div>
 
           <div class="timecode-string-container" @mousedown="onMouseDown">
             <span>{{ timecodeString }}</span>
@@ -21,9 +21,9 @@
           </div>
 
           <!-- +1h -->
-          <div v-if="hoursToEnd >= 1" class="clickable time-control" @click="stepInTime(1)"><span>&gt;</span></div>
+          <div v-if="hoursToEnd >= 1" class="clickable time-control" @click="stepInTime(1)" title="+1h"><span>&gt;</span></div>
           <!-- +24h -->
-          <div v-if="hoursToEnd >= 24" class="clickable time-control" @click="stepInTime(24)"><span>≫</span></div>
+          <div v-if="hoursToEnd >= 24" class="clickable time-control" @click="stepInTime(24)" title="+24h"><span>≫</span></div>
           
 
         </div>
