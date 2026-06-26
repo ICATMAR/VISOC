@@ -6,14 +6,9 @@
     <tbody>
       <!-- Data points -->
       <tr v-for="station in stations" :key="station.name">
-        <template v-for="(dataPoint, index) in station.data" :key="index">
-          <!-- Create the same cells as hourlyInterval and fill with more detail -->
-          <td v-if="index % hourlyInterval == 0">
-            <div class="cell-container">
-              <div class="hourly-cell" v-for="n in hourlyInterval" :key="n" :style="{height: (station.data[index + n - 1]/station.maxValue * 100) + '%'}" :title="station.data[index + n - 1] + ' ' + $t('valid points')"></div>
-            </div>
+          <td v-for="(dataPoint, index) in station.data" :key="index">
+            <div :style="{height: (dataPoint/station.maxValue * 100) + '%'}" :title="dataPoint + ' ' + $t('valid points')"></div>
           </td>
-        </template>
       </tr>
     </tbody>
   </table>
@@ -108,7 +103,6 @@ export default {
       let totalHours = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 3600));
       // Correct the total number of hours so it fills the last hourlyInterval cell
       totalHours = Math.ceil(totalHours / hourlyInterval) * hourlyInterval;
-      console.log("There are " + totalHours + " subcells");
       return totalHours;
     },
   }
@@ -120,17 +114,11 @@ export default {
 <style scoped>
 td {
   padding: 0px;
-}
-
-.cell-container {
-  height: 22px;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-}
-
-.hourly-cell {
   width: calc(v-bind(cellWidth));
+  vertical-align: bottom;
+}
+
+td > div {
   background: var(--blue);
 }
 
