@@ -63,7 +63,7 @@
               </tbody>
             </table>
 
-            <DataTimelineRadarAvailability></DataTimelineRadarAvailability>
+            <DataTimelineRadarAvailability :startTmst="startTmst" :endTmst="endTmst" :hourlyInterval="hourlyInterval"></DataTimelineRadarAvailability>
             </div>
           </div>
 
@@ -217,9 +217,22 @@ export default {
       date.setMinutes(0,0,0);
       return date;
     },
+    startTmst() {
+      return this.startDate.toISOString();
+    },
+    endTmst() {
+      return this.endDate.toISOString();
+    },
     rangeOfDays() {
       const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
-      return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
+      // If selected dashboard does not exist
+      if (selectedDashboard == undefined)
+        return this.$gui.defaultTimelineDays;
+      // If no latestDaysRange exists
+      if (selectedDashboard.latestDaysRange == undefined)
+        return this.$gui.defaultTimelineDays;
+      
+      return selectedDashboard.latestDaysRange;
     },
     timelineDays() {
       const timelineDays = [];
@@ -354,18 +367,19 @@ export default {
   background: rgba(255, 255, 255, 0.85);
 }
 
-table {
+:deep(table) {
   border-collapse: collapse;
   border-spacing: 0;
   align-self: flex-start;
 }
 
-td {
+:deep(td) {
   width: 30px;
+  height: 22px;
   text-align: center;
 }
 
-td > * {
+:deep(td > *) {
   color: black;
   text-shadow: none;
 }

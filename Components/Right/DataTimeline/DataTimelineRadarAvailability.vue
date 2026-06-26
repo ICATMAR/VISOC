@@ -6,9 +6,8 @@
     <tbody>
       <!-- Data points -->
       <tr v-for="station in stations" :key="station.name">
-        <td v-for="(dataPoint, index) in station.data" :key="index"
-          style="font-size: small">
-          <span>{{ dataPoint }}</span>
+        <td v-for="(dataPoint, index) in station.data" :key="index">
+          <div :style="{height: (dataPoint/station.maxValue * 100) + '%'}" :title="dataPoint + ' ' + $t('valid points')"></div>
         </td>
       </tr>
     </tbody>
@@ -22,85 +21,88 @@
 
 export default {
   name: "DataTimelineRadarAvailability",
+  props: {
+    startTmst: String,
+    endTmst: String,
+    hourlyInterval: Number,
+  },
   created() {
+
+    let numHours = this.getNumHours(this.startTmst, this.endTmst, this.hourlyInterval);
+
+    this.cellWidth = (30 + 2) / this.hourlyInterval + 'px';
+    
+    for (let i = 0; i < this.stations.length; i++){
+      let station = this.stations[i];
+      // Fill data
+      for (let j = 0; j < numHours; j++){
+        station.data[j] = 500 + Math.round(Math.random()*500);
+        if (station.data[j] > station.maxValue)
+          station.maxValue = station.data[j];
+      }
+    }
     
   },
   mounted() {
-    // HFR Node URL
-    // TODO: all this fetch activities, move them somewhere else. The fetch
-    // should only return the array ready? or the data to be parsed and fitted
-    // to this component?
-    let startTmst = '2026-06-14T15:00:00Z';
-    let endTmst = '2026-06-15T05:00:00Z';
-    
-    for (let i = 0; i < this.stations.length; i++) {
-      let station = this.stations[i];
-      let url = this.baseURL.replace('{{stationName}}', station.name);
-      url = url.replace('{{startTmst}}', startTmst);
-      url = url.replace('{{endTmst}}', endTmst);
-      console.log(url.replace('csv', 'htmlTable'));
-      const encodedUrl = encodeURIComponent(url);
-      const proxyFullURL = this.proxyURL + '?url=' + encodedUrl;
-      //fetch(proxyFullURL).then(r => r.jsonlKVP()).then(res => console.log(res));
-      this.parseMessage(this.returnMessage, station);
 
-    }
+    
 
   },
   data() {
     return {
-      proxyURL: 'https://api.icatmar.cat/proxy/',
-      baseURL: `https://erddap.hfrnode.eu/erddap/tabledap/EUHFR_NRTcurrent_HFR-ICATMAR-{{stationName}}_v3_table.csv?time,RDVA
-&time>={{startTmst}}
-&time<={{endTmst}}
-&RDVA!=NaN
-&orderByCount("time")`,
       stations: [
+        {
+          name: 'CNET',
+          data: [],
+          maxValue: 0,
+        },
         {
           name: 'CREU',
           data: [],
+          maxValue: 0,
+        },
+        {
+          name: 'BEGU',
+          data: [],
+          maxValue: 0,
+        },
+        {
+          name: 'TOSS',
+          data: [],
+          maxValue: 0,
+        },
+        {
+          name: 'AREN',
+          data: [],
+          maxValue: 0,
+        },
+        {
+          name: 'PBCN',
+          data: [],
+          maxValue: 0,
+        },
+        {
+          name: 'GNST',
+          data: [],
+          maxValue: 0,
+        },
+        {
+          name: 'SVLR',
+          data: [],
+          maxValue: 0,
         }
       ],
-      returnMessage: `time,RDVA
-UTC,count
-2026-06-14T15:00:00Z,1182
-2026-06-14T16:00:00Z,1220
-2026-06-14T17:00:00Z,1640
-2026-06-14T18:00:00Z,861
-2026-06-14T19:00:00Z,809
-2026-06-14T20:00:00Z,1448
-2026-06-14T21:00:00Z,1528
-2026-06-14T22:00:00Z,1088
-2026-06-14T23:00:00Z,1123
-2026-06-15T00:00:00Z,1606
-2026-06-15T01:00:00Z,1724
-2026-06-15T02:00:00Z,1367
-2026-06-15T03:00:00Z,1275
-2026-06-15T04:00:00Z,954
-2026-06-15T05:00:00Z,1106`
-      ,
     }
   },
   methods: {
     //onclick: function(e){},
-    parseMessage: function (msg, stationObj) {
-      const text = msg.trim();
-      const lines = text.split(/\r?\n/);
-      // Skip the two header lines
-      const data = lines.slice(2).map(line => {
-        const [time, rdva] = line.split(',');
+    getNumHours: function(startTmst, endTmst, hourlyInterval){
+      let startDate = new Date(startTmst);
+      let endDate = new Date(endTmst);
 
-        return {
-          time: new Date(time),
-          RDVA: Number(rdva)
-        };
-      });
-
-      // Assign values to station
-      for (let i = 0; i < data.length; i++){
-        stationObj.data.push(data[i].RDVA);
-      }
-    }
+      let totalHours = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 3600));
+      return totalHours;
+    },
   }
 }
 
@@ -108,5 +110,16 @@ UTC,count
 
 
 <style scoped>
+td {
+  vertical-align: bottom;
+  padding: 0px;
+  width: calc(v-bind(cellWidth));
+}
+
+
+td > div {
+  width: 100%;
+  background: var(--blue);
+}
 
 </style>
