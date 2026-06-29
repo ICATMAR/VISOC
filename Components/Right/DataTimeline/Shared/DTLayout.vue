@@ -5,7 +5,7 @@
     <div class="vertical variable-names-container">
       <!-- Interval picker (click to cycle) -->
       <div class="horizontal interval-picker">
-        <span class="clickable" style="text-decoration: underline;" @click="cycleInterval">{{ currentIntervalLabel }}</span>
+        <span class="clickable" style="text-decoration: underline;" @click="cycleInterval" :title="$t('Time interval')">{{ currentIntervalLabel }}</span>
       </div>
       <!-- Timezone toggle -->
       <div class="horizontal interval-picker">
@@ -75,8 +75,9 @@ export default {
       // Interval options
       intervalOptions: [
         { label: 'Daily', minutes: 1440 },
-        { label: '3-hourly', minutes: 180 },
+        { label: '3 hours', minutes: 180 },
         { label: 'Hourly', minutes: 60 },
+        { label: '3 hours', minutes: 180 },
       ],
     }
   },
@@ -141,7 +142,7 @@ export default {
     },
     currentIntervalLabel() {
       const opt = this.intervalOptions.find(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
-      return opt ? opt.label : '3-hourly';
+      return opt ? opt.label : '3 hours';
     },
     isComponentVisible() {
       return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
