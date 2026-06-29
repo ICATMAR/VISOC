@@ -1,31 +1,59 @@
 <template>
-  <DTLayout :variables="variables">
-    <template #grid>
-      <DataTimelineRadarAvailability :startTmst="$gui.timelineStartTmst" :endTmst="$gui.timelineEndTmst" :hourlyInterval="3"></DataTimelineRadarAvailability>
-    </template>
-  </DTLayout>
+  <!-- Selected view -->
+  <component :is="currentView"></component>
+
+  <!-- Bottom options -->
+  <div class="horizontal wrap button-group bottom-bar">
+    <button v-for="opt in bottomOptions" :key="opt" class="clickable" :class="{ 'selectedOption': selectedOption == opt }"
+      @click="selectedOption = opt"><span>{{ $t(opt) }}</span></button>
+  </div>
 </template>
 
 
 <script>
-import DTLayout from '../Shared/DTLayout.vue';
-import DataTimelineRadarAvailability from '../DataTimelineRadarAvailability.vue';
+import DTAPHFR from './DTAPHFR.vue';
+import DTAPBuoys from './DTAPBuoys.vue';
+import DTAPDrifters from './DTAPDrifters.vue';
+import DTAPArgos from './DTAPArgos.vue';
 
 export default {
   name: "DTAllPlatforms",
   data() {
     return {
-      // HFR stations (number of valid points per radial)
-      variables: [
-        { name: 'CNET' }, { name: 'CREU' }, { name: 'BEGU' }, { name: 'TOSS' },
-        { name: 'AREN' }, { name: 'PBCN' }, { name: 'GNST' }, { name: 'SVLR' },
-      ],
+      bottomOptions: ['HF radars', 'Buoys', 'Drifters', 'Argos', 'Satellite'],
+      selectedOption: 'HF radars',
+    }
+  },
+  computed: {
+    currentView() {
+      const map = {
+        'HF radars': 'DTAPHFR',
+        'Buoys': 'DTAPBuoys',
+        'Drifters': 'DTAPDrifters',
+        'Argos': 'DTAPArgos',
+      };
+      return map[this.selectedOption] || 'DTAPHFR';
     }
   },
   components: {
-    DTLayout,
-    DataTimelineRadarAvailability
+    DTAPHFR,
+    DTAPBuoys,
+    DTAPDrifters,
+    DTAPArgos
   }
 }
 
 </script>
+
+
+<style scoped>
+.bottom-bar {
+  border-top: 1px white solid;
+  background: var(--blue);
+}
+.bottom-bar > * {
+  padding-left: 10px;
+  font-size: x-small;
+}
+
+</style>
