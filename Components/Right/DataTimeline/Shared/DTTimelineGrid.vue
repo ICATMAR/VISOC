@@ -130,6 +130,16 @@ td > * {
 .hourCell {
   font-size: x-small;
   border-bottom: 1px solid #0000002e;
+  position: relative;
+  overflow: visible;
+}
+
+.hourCell > span {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
 }
 
 </style>

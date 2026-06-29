@@ -84,9 +84,13 @@ export default {
   methods: {
     //onclick: function(e){},
     cycleInterval() {
-      const minutes = this.intervalOptions.map(o => o.minutes);
-      const idx = minutes.indexOf(this.$gui.timelineEffectiveIntervalMinutes);
-      this.$gui.timelineIntervalMinutes = minutes[(idx + 1) % minutes.length];
+      if (this.intervalIdx == undefined){
+        // Find intervalOptions index
+        const minutesArray = this.intervalOptions.map(o => o.minutes);
+        this.intervalIdx = minutesArray.indexOf(this.$gui.timelineEffectiveIntervalMinutes);
+        this.intervalIdx++;
+      }
+      this.$gui.timelineIntervalMinutes = this.intervalOptions[this.intervalIdx++ % this.intervalOptions.length].minutes;
       this.resetScroll();
     },
     resetScroll() {
