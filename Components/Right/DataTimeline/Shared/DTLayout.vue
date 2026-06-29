@@ -207,7 +207,7 @@ export default {
 .variable-names-row {
   padding-right: 10px;
   text-align: right;
-  align-self: flex-start;
+  align-self: flex-end;
 }
 
 .variable-names-subcontainer {
@@ -218,7 +218,10 @@ export default {
   color: black;
   text-shadow: none;
   height: 22px;
-  display: block;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding-left: 5px;
 }
 
 .button-next-prev-container {
