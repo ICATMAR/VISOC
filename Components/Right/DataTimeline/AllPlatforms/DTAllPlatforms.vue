@@ -1,11 +1,12 @@
 <template>
   <!-- Selected view -->
-  <component :is="currentView"></component>
+  <component :is="currentView" v-if="currentView"></component>
 
   <!-- Bottom options -->
   <div class="horizontal wrap button-group bottom-bar">
-    <button v-for="opt in bottomOptions" :key="opt" class="clickable" :class="{ 'selectedOption': selectedOption == opt }"
-      @click="selectedOption = opt"><span>{{ $t(opt) }}</span></button>
+    <button v-for="view in views" :key="view.label" class="clickable"
+      :class="{ 'selectedOption': selectedView === view }"
+      @click="selectView(view)"><span>{{ $t(view.label) }}</span></button>
   </div>
 </template>
 
@@ -18,21 +19,37 @@ import DTAPArgos from './DTAPArgos.vue';
 
 export default {
   name: "DTAllPlatforms",
+  created() {
+    this.$gui.timelineDashboardId = this.selectedView.dashboardId;
+    this.$gui.timelineIntervalMinutes = this.selectedView.defaultInterval;
+  },
+  beforeUnmount() {
+    this.$gui.timelineDashboardId = null;
+  },
   data() {
+    const views = [
+      { label: 'HF radars',  component: 'DTAPHFR',      defaultInterval: 60,   dashboardId: 'hfr'           },
+      { label: 'Buoys',      component: 'DTAPBuoys',     defaultInterval: 180,  dashboardId: 'buoys'         },
+      { label: 'Drifters',   component: 'DTAPDrifters',  defaultInterval: 180,  dashboardId: 'drifters'      },
+      { label: 'Argos',      component: 'DTAPArgos',     defaultInterval: 1440, dashboardId: 'argos'         },
+      { label: 'Satellite',  component: null,             defaultInterval: 1440, dashboardId: 'remoteSensing' },
+    ];
     return {
-      bottomOptions: ['HF radars', 'Buoys', 'Drifters', 'Argos', 'Satellite'],
-      selectedOption: 'HF radars',
+      views,
+      selectedView: views[0],
+    }
+  },
+  methods: {
+    //onclick: function(e){},
+    selectView(view) {
+      this.selectedView = view;
+      this.$gui.timelineDashboardId = view.dashboardId;
+      this.$gui.timelineIntervalMinutes = view.defaultInterval;
     }
   },
   computed: {
     currentView() {
-      const map = {
-        'HF radars': 'DTAPHFR',
-        'Buoys': 'DTAPBuoys',
-        'Drifters': 'DTAPDrifters',
-        'Argos': 'DTAPArgos',
-      };
-      return map[this.selectedOption] || 'DTAPHFR';
+      return this.selectedView.component || null;
     }
   },
   components: {

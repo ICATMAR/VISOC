@@ -9,16 +9,22 @@
               <span>{{ day.textLong }}</span>
             </td>
           </tr>
-          <!-- Hours -->
-          <tr>
+          <!-- Hours (hidden for daily interval) -->
+          <tr v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
             <td v-for="(cell, index) in cells" :key="index" class="hourCell">
-              <span :style="{ opacity: (cell.getHours() < 6 || cell.getHours() >= 21) ? '0.4' : '1' }">{{ cell.getHours() }}</span>
+              <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
             </td>
           </tr>
-          <!-- Station availability bars -->
+          <!-- Station availability bars — barsPerCell hourly sub-bars per grid cell -->
           <tr v-for="station in stations" :key="station.name">
-            <td v-for="(value, index) in station.data" :key="index" class="bar-cell">
-              <div class="bar" :style="{ height: (value / station.maxValue * 100) + '%' }" :title="value + ' valid points'"></div>
+            <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
+              <div class="bars-group">
+                <div v-for="sub in barsPerCell" :key="sub"
+                  class="bar"
+                  :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"
+                  :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'">
+                </div>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -34,33 +40,46 @@ import DTLayout from '../Shared/DTLayout.vue';
 export default {
   name: "DTAPHFR",
   created() {
+    // Always generate hourly data regardless of display interval
+    const totalHours = Math.round(
+      (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
+    );
     for (const station of this.stations) {
-      for (let i = 0; i < this.cells.length; i++) {
-        station.data[i] = 500 + Math.round(Math.random() * 500);
-        if (station.data[i] > station.maxValue)
-          station.maxValue = station.data[i];
+      for (let i = 0; i < totalHours; i++) {
+        station.hourlyData[i] = 500 + Math.round(Math.random() * 500);
+        if (station.hourlyData[i] > station.maxValue)
+          station.maxValue = station.hourlyData[i];
       }
     }
   },
   data() {
     return {
       stations: [
-        { name: 'CNET', data: [], maxValue: 0 },
-        { name: 'CREU', data: [], maxValue: 0 },
-        { name: 'BEGU', data: [], maxValue: 0 },
-        { name: 'TOSS', data: [], maxValue: 0 },
-        { name: 'AREN', data: [], maxValue: 0 },
-        { name: 'PBCN', data: [], maxValue: 0 },
-        { name: 'GNST', data: [], maxValue: 0 },
-        { name: 'SVLR', data: [], maxValue: 0 },
+        { name: 'CNET', hourlyData: [], maxValue: 0 },
+        { name: 'CREU', hourlyData: [], maxValue: 0 },
+        { name: 'BEGU', hourlyData: [], maxValue: 0 },
+        { name: 'TOSS', hourlyData: [], maxValue: 0 },
+        { name: 'AREN', hourlyData: [], maxValue: 0 },
+        { name: 'PBCN', hourlyData: [], maxValue: 0 },
+        { name: 'GNST', hourlyData: [], maxValue: 0 },
+        { name: 'SVLR', hourlyData: [], maxValue: 0 },
       ],
     }
   },
+  methods: {
+    //onclick: function(e){},
+    getHourlyValue(station, cellIndex, subIndex) {
+      return station.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
+    }
+  },
   computed: {
+    barsPerCell() {
+      return Math.round(this.$gui.timelineEffectiveIntervalMinutes / 60);
+    },
     cells() {
       const startTime = this.$gui.timelineStartDate.getTime();
       const endTime = this.$gui.timelineEndDate.getTime();
-      const stepMs = 60 * 60 * 1000; // 1h interval
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
       let cells = [];
       for (let t = startTime; t < endTime; t += stepMs)
         cells.push(new Date(t));
@@ -70,13 +89,13 @@ export default {
       let days = [];
       for (const cell of this.cells) {
         const last = days[days.length - 1];
-        if (last && last.date.getDate() === cell.getDate())
+        if (last && this.$gui.timelineDate(last.date) === this.$gui.timelineDate(cell))
           last.span++;
         else
           days.push({
             date: cell,
             span: 1,
-            textLong: cell.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric' }),
+            textLong: this.$gui.timelineFormatDay(cell, this.$i18n.locale),
           });
       }
       return days;
@@ -125,8 +144,18 @@ td > * {
   vertical-align: bottom;
 }
 
+.bars-group {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  height: 100%;
+  width: 100%;
+}
+
 .bar {
+  flex: 1;
   background: var(--blue);
+  min-width: 0.5px;
 }
 
 </style>

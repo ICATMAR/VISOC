@@ -2,14 +2,23 @@
   <!-- Data and timeline section -->
   <div class="horizontal">
     <!-- Variables -->
-    <div class="horizontal variable-names-container">
-      <!-- Variable names -->
-      <div class="vertical variable-names-subcontainer">
-        <span v-for="v in variables" :key="v.name">{{ $t(v.name) }}</span>
+    <div class="vertical variable-names-container">
+      <!-- Interval picker (click to cycle) -->
+      <div class="horizontal interval-picker">
+        <span class="clickable" style="text-decoration: underline;" @click="cycleInterval">{{ currentIntervalLabel }}</span>
       </div>
-      <!-- Variable units -->
-      <div class="vertical variable-names-subcontainer" v-if="hasUnits">
-        <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
+      <!-- Timezone toggle -->
+      <div class="horizontal interval-picker">
+        <span class="clickable" style="text-decoration: underline;" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">{{ $gui.timelineTimezoneLabel }}</span>
+      </div>
+      <!-- Variable names and units -->
+      <div class="horizontal variable-names-row">
+        <div class="vertical variable-names-subcontainer">
+          <span v-for="v in variables" :key="v.name">{{ $t(v.name) }}</span>
+        </div>
+        <div class="vertical variable-names-subcontainer" v-if="hasUnits">
+          <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
+        </div>
       </div>
     </div>
 
@@ -63,10 +72,21 @@ export default {
       isDragging: false,
       startX: 0,
       scrollLeft: 0,
+      // Interval options
+      intervalOptions: [
+        { label: 'Daily', minutes: 1440 },
+        { label: '3-hourly', minutes: 180 },
+        { label: 'Hourly', minutes: 60 },
+      ],
     }
   },
   methods: {
     //onclick: function(e){},
+    cycleInterval() {
+      const minutes = this.intervalOptions.map(o => o.minutes);
+      const idx = minutes.indexOf(this.$gui.timelineEffectiveIntervalMinutes);
+      this.$gui.timelineIntervalMinutes = minutes[(idx + 1) % minutes.length];
+    },
     resetScroll() {
       // Reset scroll position so the latest time is visible
       this.$nextTick(() => {
@@ -119,6 +139,10 @@ export default {
     hasUnits() {
       return this.variables.some(v => v.unit != undefined);
     },
+    currentIntervalLabel() {
+      const opt = this.intervalOptions.find(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
+      return opt ? opt.label : '3-hourly';
+    },
     isComponentVisible() {
       return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
     }
@@ -160,16 +184,30 @@ export default {
 
 .variable-names-container {
   width: 125px;
-  justify-content: flex-end;
   font-size: x-small;
   height: 100%;
   background: var(--lightBlue);
+  align-items: flex-end;
 }
 
-.variable-names-container > div {
-  padding-top: 43px;
+.interval-picker {
+  height: 22px;
+  width: 100%;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 10px;
+  gap: 5px;
+}
+
+.interval-picker > span {
+  color: black;
+  text-shadow: none;
+}
+
+.variable-names-row {
   padding-right: 10px;
   text-align: right;
+  align-self: flex-start;
 }
 
 .variable-names-subcontainer {
@@ -180,6 +218,7 @@ export default {
   color: black;
   text-shadow: none;
   height: 22px;
+  display: block;
 }
 
 .button-next-prev-container {

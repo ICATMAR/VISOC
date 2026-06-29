@@ -9,11 +9,10 @@
         <span>{{ day.textLong }}</span>
       </td>
     </tr>
-    <!-- Time of day -->
-    <tr>
+    <!-- Time of day (hidden for daily interval) -->
+    <tr v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
       <td v-for="(cell, index) in cells" :key="index" class="hourCell">
-        <span v-if="cell.getMinutes() === 0"
-          :style="{ opacity: (cell.getHours() < 6 || cell.getHours() >= 21) ? '0.4' : '1' }">{{ cell.getHours() }}</span>
+        <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
       </td>
     </tr>
     <!-- Data points -->
@@ -35,7 +34,6 @@ export default {
   name: "DTTimelineGrid",
   props: {
     variables: Array,
-    intervalMinutes: { type: Number, default: 180 }, // 180 (3h), 60 (1h) or 15 (15min)
   },
   methods: {
     //onclick: function(e){},
@@ -66,7 +64,7 @@ export default {
     cells() {
       const startTime = this.$gui.timelineStartDate.getTime();
       const endTime = this.$gui.timelineEndDate.getTime();
-      const stepMs = this.intervalMinutes * 60 * 1000;
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
       let cells = [];
       for (let t = startTime; t < endTime; t += stepMs)
         cells.push(new Date(t));
@@ -76,13 +74,13 @@ export default {
       let days = [];
       for (const cell of this.cells) {
         const last = days[days.length - 1];
-        if (last && last.date.getDate() === cell.getDate())
+        if (last && this.$gui.timelineDate(last.date) === this.$gui.timelineDate(cell))
           last.span++;
         else
           days.push({
             date: cell,
             span: 1,
-            textLong: cell.toLocaleString(this.$i18n.locale, { weekday: 'long', day: 'numeric' }),
+            textLong: this.$gui.timelineFormatDay(cell, this.$i18n.locale),
           });
       }
       return days;

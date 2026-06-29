@@ -1,7 +1,7 @@
 <template>
   <DTLayout :variables="variables">
     <template #grid>
-      <DTTimelineGrid :variables="variables" :intervalMinutes="180"></DTTimelineGrid>
+      <DTTimelineGrid :variables="variables"></DTTimelineGrid>
     </template>
   </DTLayout>
 </template>
