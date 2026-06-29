@@ -7,8 +7,8 @@
 
 <script>
 import PlatformDetail from './PlatformDetail.vue';
-import DTAPHFRPlatformDetail from './AllPlatforms/DTAPHFRPlatformDetail.vue';
-import DTAPBuoysPlatformDetail from './AllPlatforms/DTAPBuoysPlatformDetail.vue';
+import DTAPHFRPlatformDetail from './AllPlatforms/PlatformDetails/DTAPHFRPlatformDetail.vue';
+import DTAPBuoysPlatformDetail from './AllPlatforms/PlatformDetails/DTAPBuoysPlatformDetail.vue';
 
 export default {
   name: "DTPlatformDetail",
