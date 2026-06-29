@@ -11,8 +11,20 @@ class RequestsManager {
     { id: 'SCAL', name: 'Segur de Calafell',    lon: 1.6073,  lat: 41.1862, range: 'R24', owner: 'ICATMAR' },
   ];
 
+  buoyStations = [
+    { id: 'CCRE', name: 'Cap de Creus', lon: 3.3495, lat: 42.3212, depth: 100, owner: 'MSM'      },
+    { id: 'TORD', name: 'Tordera',      lon: 2.7698, lat: 41.5997, depth:  86, owner: 'MSM'      },
+    { id: 'TARG', name: 'Tarragona',    lon: 1.3469, lat: 41.0763, depth:  70, owner: 'MSM'      },
+    { id: 'TORT', name: 'Cap de Tortosa', lon: 0.9852, lat: 40.7149, depth: 66, owner: 'MSM'     },
+    { id: 'ODAS', name: 'Somorrostro',     lon: 2.2162, lat: 41.3757, depth:  40, owner: 'ICM/CSIC' },
+  ];
+
   getHFRStation(id) {
     return this.hfrStations.find(s => s.id === id);
+  }
+
+  getBuoyStation(id) {
+    return this.buoyStations.find(s => s.id === id);
   }
 }
 

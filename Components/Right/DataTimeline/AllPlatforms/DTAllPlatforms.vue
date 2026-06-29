@@ -20,6 +20,11 @@ import DTAPArgos from './DTAPArgos.vue';
 export default {
   name: "DTAllPlatforms",
   created() {
+    // If timelineDashboardId was pre-set (e.g. from a map icon click), jump to that view
+    if (this.$gui.timelineDashboardId) {
+      const preSelected = this.views.find(v => v.dashboardId === this.$gui.timelineDashboardId);
+      if (preSelected) this.selectedView = preSelected;
+    }
     this.$gui.timelineDashboardId = this.selectedView.dashboardId;
     this.$gui.timelineIntervalMinutes = this.selectedView.defaultInterval;
   },

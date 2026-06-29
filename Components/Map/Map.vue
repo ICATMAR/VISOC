@@ -6,6 +6,7 @@
   <!-- OVERLAYS -->
   <MapOverlayMockup></MapOverlayMockup>
   <MapOverlayHFRStations></MapOverlayHFRStations>
+  <MapOverlayBuoys></MapOverlayBuoys>
 </template>
 
 
@@ -13,6 +14,7 @@
 
 import MapOverlayHFRStations from './MapOverlayHFRStations.vue';
 import MapOverlayMockup from './MapOverlayMockup.vue';
+import MapOverlayBuoys from './MapOverlayBuoys.vue';
 
 export default {
   name: "Map",
@@ -53,6 +55,7 @@ export default {
   components: {
     MapOverlayMockup,
     MapOverlayHFRStations,
+    MapOverlayBuoys,
   }
 }
 

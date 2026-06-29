@@ -4,8 +4,8 @@
   <div class="overlay-container">
 
     <!-- Platform icon -->
-    <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
-      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
+    <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id">
+      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
       <!-- Indicator marker -->
       <div class="platform-marker-indicator"></div>
     </div>
@@ -20,7 +20,7 @@
 <script>
 
 export default {
-  name: "MapOverlayHFRStations",
+  name: "MapOverlayBuoys",
   created() {
 
   },
@@ -31,12 +31,12 @@ export default {
         this.map = this.$parent.map; // Access the map instance from the parent component
       }
       // Create overlays
-      for (let i = 0 ; i < this.stations.length; i++) {
-        let station = this.stations[i];
+      for (let i = 0; i < this.buoys.length; i++) {
+        let buoy = this.buoys[i];
         const olOverlay = new ol.Overlay({
-          element: this.$refs[station.id]?.[0],
+          element: this.$refs[buoy.id]?.[0],
           positioning: 'center-center',
-          position: ol.proj.fromLonLat([station.lon, station.lat]),
+          position: ol.proj.fromLonLat([buoy.lon, buoy.lat]),
           stopEvent: false,
         });
         const overlayEl = olOverlay.getElement();
@@ -48,17 +48,18 @@ export default {
 
     });
   },
-  data (){
+  data() {
     return {
-      iconURL: './Assets/Icons/radar.svg',
+      iconURL: './Assets/Icons/buoy.svg',
     }
   },
   methods: {
     //onclick: function(e){},
-    platformClicked: function(e, station) {
+    platformClicked(e, buoy) {
       e.stopPropagation();
-      this.$gui.timelineDashboardId = 'hfr';
-      this.$gui.selectedPlatform = { stationId: station.id };
+      // Set timelineDashboardId BEFORE selectedDashboard so DTAllPlatforms can read it in created()
+      this.$gui.timelineDashboardId = 'buoys';
+      this.$gui.selectedPlatform = { stationId: buoy.id };
       this.$gui.selectedDashboard = 'platforms';
       this.$gui.isDataTimelineOpen = true;
       this.$gui.isPlatformDetailOpen = true;
@@ -66,8 +67,8 @@ export default {
     }
   },
   computed: {
-    stations() {
-      return this.$requests.hfrStations;
+    buoys() {
+      return this.$requests.buoyStations;
     }
   },
 }
