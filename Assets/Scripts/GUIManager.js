@@ -89,6 +89,7 @@ class GUIManager {
   get timelineEndDate() {
     let date = new Date();
     date.setMinutes(0, 0, 0);
+    date.setHours(date.getHours() + 1);
     return date;
   }
   get timelineStartDate() {
