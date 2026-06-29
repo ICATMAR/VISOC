@@ -87,6 +87,7 @@ export default {
       const minutes = this.intervalOptions.map(o => o.minutes);
       const idx = minutes.indexOf(this.$gui.timelineEffectiveIntervalMinutes);
       this.$gui.timelineIntervalMinutes = minutes[(idx + 1) % minutes.length];
+      this.resetScroll();
     },
     resetScroll() {
       // Reset scroll position so the latest time is visible
