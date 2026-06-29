@@ -41,6 +41,33 @@ class GUIManager {
 
   defaultTimelineDays = 4;
 
+  // TIMELINE RANGE (common to all DataTimeline views)
+  get timelineRangeOfDays() {
+    const selectedDashboard = this.dashboards.find(d => d.id === this.selectedDashboard);
+    if (selectedDashboard == undefined)
+      return this.defaultTimelineDays;
+    if (selectedDashboard.latestDaysRange == undefined)
+      return this.defaultTimelineDays;
+    return selectedDashboard.latestDaysRange;
+  }
+  get timelineEndDate() {
+    let date = new Date();
+    date.setMinutes(0, 0, 0);
+    return date;
+  }
+  get timelineStartDate() {
+    let date = new Date(this.timelineEndDate.getTime());
+    date.setDate(date.getDate() - this.timelineRangeOfDays);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+  get timelineStartTmst() {
+    return this.timelineStartDate.toISOString();
+  }
+  get timelineEndTmst() {
+    return this.timelineEndDate.toISOString();
+  }
+
   // CONSTRUCTOR
   constructor() {
     // this.selectedTime = new Date(2024, 5, 15); // Example date: June 15, 2024
