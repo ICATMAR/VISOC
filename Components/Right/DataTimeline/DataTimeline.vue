@@ -12,7 +12,7 @@
       <!-- Platform detail -->
       <Transition name="fade">
         <section class="platform-pane-container" v-show="$gui.isPlatformDetailOpen">
-          <PlatformDetail></PlatformDetail>
+          <DTPlatformDetail></DTPlatformDetail>
         </section>
       </Transition>
 
@@ -22,13 +22,13 @@
 
 
 <script>
-import PlatformDetail from './PlatformDetail.vue';
+import DTPlatformDetail from './DTPlatformDetail.vue';
 import DTContent from './DTContent.vue';
 
 export default {
   name: "DataTimeline",
   components: {
-    PlatformDetail,
+    DTPlatformDetail,
     DTContent
   }
 }

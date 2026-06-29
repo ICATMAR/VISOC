@@ -20,9 +20,10 @@
             <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
               <div class="bars-group">
                 <div v-for="sub in barsPerCell" :key="sub"
-                  class="bar"
+                  class="bar clickable"
                   :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"
-                  :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'">
+                  :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'"
+                  @click="stationClicked(station, cellIndex, sub - 1)">
                 </div>
               </div>
             </td>
@@ -62,12 +63,16 @@ export default {
         { name: 'AREN', hourlyData: [], maxValue: 0 },
         { name: 'PBCN', hourlyData: [], maxValue: 0 },
         { name: 'GNST', hourlyData: [], maxValue: 0 },
-        { name: 'SVLR', hourlyData: [], maxValue: 0 },
+        { name: 'SCAL', hourlyData: [], maxValue: 0 },
       ],
     }
   },
   methods: {
     //onclick: function(e){},
+    stationClicked(station, cellIndex, subIndex) {
+      this.$gui.selectedPlatform = { stationId: station.name, value: this.getHourlyValue(station, cellIndex, subIndex) };
+      this.$gui.isPlatformDetailOpen = true;
+    },
     getHourlyValue(station, cellIndex, subIndex) {
       return station.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
     }

@@ -3,6 +3,7 @@ class GUIManager {
   isMenuOpen = false;
   isDataTimelineOpen = false;
   isPlatformDetailOpen = false;
+  selectedPlatform = null; // { stationId, value }
 
   selectedTime = new Date();
 

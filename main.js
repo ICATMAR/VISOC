@@ -18,8 +18,10 @@ window.location.removeHash = removeHash;
 
 // Load scripts
 import GUIManager from './Assets/Scripts/GUIManager.js';
+import RequestsManager from './Assets/Scripts/RequestsManager.js';
 
 window.GUIManager = Vue.reactive(new GUIManager());
+window.RequestsManager = new RequestsManager();
 
 
 // Declare translations
@@ -88,4 +90,5 @@ app.use(i18n);
 
 // Global properties
 app.config.globalProperties.$gui = window.GUIManager;
+app.config.globalProperties.$requests = window.RequestsManager;
 app.mount(document.body);
