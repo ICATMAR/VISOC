@@ -57,6 +57,16 @@ export default {
       return this.selectedView.component || null;
     }
   },
+  watch: {
+    '$gui.timelineDashboardId'(newId) {
+      if (!newId) return;
+      const view = this.views.find(v => v.dashboardId === newId);
+      if (view && view !== this.selectedView) {
+        this.selectedView = view;
+        this.$gui.timelineIntervalMinutes = view.defaultInterval;
+      }
+    }
+  },
   components: {
     DTAPHFR,
     DTAPBuoys,

@@ -115,13 +115,14 @@ export default {
 .station-name {
   font-size: medium;
   font-weight: bold;
-  color: black;
+  color: white;
   text-shadow: none;
 }
 
 .coordinates {
   font-size: x-small;
-  color: black;
+  color: white;
+  opacity: 0.6;
   text-shadow: none;
 }
 
