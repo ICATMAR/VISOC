@@ -28,7 +28,7 @@ export default {
   },
   data() {
     const views = [
-      { label: 'HF radars',  component: 'DTAPHFR',      defaultInterval: 60,   dashboardId: 'hfr'           },
+      { label: 'HFR currents',  component: 'DTAPHFR',      defaultInterval: 180,   dashboardId: 'hfr'           },
       { label: 'Buoys',      component: 'DTAPBuoys',     defaultInterval: 180,  dashboardId: 'buoys'         },
       { label: 'Drifters',   component: 'DTAPDrifters',  defaultInterval: 180,  dashboardId: 'drifters'      },
       { label: 'Argos',      component: 'DTAPArgos',     defaultInterval: 1440, dashboardId: 'argos'         },
