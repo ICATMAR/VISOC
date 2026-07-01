@@ -118,6 +118,7 @@ td {
 td > * {
   color: black;
   text-shadow: none;
+  text-wrap: nowrap;
 }
 
 .weekDayCell {
