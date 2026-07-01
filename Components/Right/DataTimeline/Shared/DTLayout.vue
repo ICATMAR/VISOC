@@ -227,7 +227,7 @@ export default {
 
 .variable-names-subcontainer {
   align-self: flex-start;
-  padding-top: 5px;
+  padding-top: 3px;
 }
 
 .variable-names-subcontainer > span {

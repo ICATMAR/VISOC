@@ -184,13 +184,15 @@ export default {
 <style scoped>
 .bar-cell {
   padding: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .bars-group {
   display: flex;
   flex-direction: row;
-  height: 23px;
+  height: 22px;
   width: 100%;
+  gap: 1px;
 }
 
 .dt-col {
@@ -223,10 +225,12 @@ export default {
 .wave-bar {
   width: 100%;
   background: var(--blue);
+  border-radius: 2px 2px 0 0;
 }
 
 .wind-bar {
   width: 100%;
   background: yellow;
+  border-radius: 0 0 2px 2px;
 }
 </style>
