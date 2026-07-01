@@ -55,8 +55,15 @@ export default {
   },
   methods: {
     isIconSelected(station) {
+      if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'hfr') return false;
       const id = this.$gui.selectedPlatform?.stationId;
       return id === 'TOTALS' || id === station.id;
+    },
+    updateZIndices() {
+      for (const station of this.stations) {
+        const wrapper = this.$refs[station.id]?.[0]?.parentElement;
+        if (wrapper) wrapper.style.zIndex = this.isIconSelected(station) ? '10' : '';
+      }
     },
     platformClicked: function(e, station) {
       e.stopPropagation();
@@ -72,6 +79,11 @@ export default {
     stations() {
       return this.$requests.hfrStations;
     }
+  },
+  watch: {
+    '$gui.selectedPlatform'()    { this.$nextTick(() => this.updateZIndices()); },
+    '$gui.selectedDashboard'()   { this.$nextTick(() => this.updateZIndices()); },
+    '$gui.timelineDashboardId'() { this.$nextTick(() => this.updateZIndices()); },
   },
 }
 

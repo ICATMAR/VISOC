@@ -5,7 +5,7 @@
 
     <!-- Platform icon -->
     <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id">
-      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
+      <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
       <!-- Indicator marker -->
       <div class="platform-marker-indicator"></div>
     </div>
@@ -54,7 +54,16 @@ export default {
     }
   },
   methods: {
-    //onclick: function(e){},
+    isIconSelected(buoy) {
+      if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'buoys') return false;
+      return this.$gui.selectedPlatform?.stationId === buoy.id;
+    },
+    updateZIndices() {
+      for (const buoy of this.buoys) {
+        const wrapper = this.$refs[buoy.id]?.[0]?.parentElement;
+        if (wrapper) wrapper.style.zIndex = this.isIconSelected(buoy) ? '10' : '';
+      }
+    },
     platformClicked(e, buoy) {
       e.stopPropagation();
       // Set timelineDashboardId BEFORE selectedDashboard so DTAllPlatforms can read it in created()
@@ -70,6 +79,11 @@ export default {
     buoys() {
       return this.$requests.buoyStations;
     }
+  },
+  watch: {
+    '$gui.selectedPlatform'()    { this.$nextTick(() => this.updateZIndices()); },
+    '$gui.selectedDashboard'()   { this.$nextTick(() => this.updateZIndices()); },
+    '$gui.timelineDashboardId'() { this.$nextTick(() => this.updateZIndices()); },
   },
 }
 
