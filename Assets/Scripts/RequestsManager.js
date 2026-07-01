@@ -24,11 +24,11 @@ class RequestsManager {
   };
 
   buoyStations = [
-    { id: 'CCRE', name: 'Cap de Creus', lon: 3.3495, lat: 42.3212, depth: 100, owner: 'MSM'      },
-    { id: 'TORD', name: 'Tordera',      lon: 2.7698, lat: 41.5997, depth:  86, owner: 'MSM'      },
-    { id: 'ODAS', name: 'Somorrostro',     lon: 2.2162, lat: 41.3757, depth:  40, owner: 'ICM/CSIC' },
-    { id: 'TARG', name: 'Tarragona',    lon: 1.3469, lat: 41.0763, depth:  70, owner: 'MSM'      },
-    { id: 'TORT', name: 'Cap de Tortosa', lon: 0.9852, lat: 40.7149, depth: 66, owner: 'MSM'     },
+    { id: 'CCRE', name: 'Cap de Creus',    lon: 3.3495, lat: 42.3212, depth: 100, distanceCoast: 1.24, owner: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
+    { id: 'TORD', name: 'Tordera',         lon: 2.7698, lat: 41.5997, depth:  86, distanceCoast: 2.74, owner: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
+    { id: 'ODAS', name: 'Somorrostro',     lon: 2.2162, lat: 41.3757, depth:  40, distanceCoast: 1.90, owner: 'ICM/CSIC', installed: '2026-06-18', lastCalibration: 'unknown' },
+    { id: 'TARG', name: 'Tarragona',       lon: 1.3469, lat: 41.0763, depth:  70, distanceCoast: 3.06, owner: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
+    { id: 'TORT', name: 'Cap de Tortosa',  lon: 0.9852, lat: 40.7149, depth:  66, distanceCoast: 6.09, owner: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
   ];
 
   _buoyDataCache = {};

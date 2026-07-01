@@ -89,6 +89,53 @@
       </div>
     </template>
 
+    <!-- Buoy individual station -->
+    <template v-else-if="buoyStation">
+      <div class="photo-col">
+        <img v-if="!buoyImgError"
+          :src="buoyStationPhotoURL"
+          class="station-photo"
+          :alt="buoyStation.name"
+          @error="buoyImgError = true">
+        <div v-else class="photo-fallback">
+          <img :src="buoyIconURL" class="fallback-icon" alt="">
+        </div>
+      </div>
+      <div class="info-col vertical">
+        <div class="info-header">
+          <span class="info-abbr">{{ buoyStation.id }}</span>
+          <span class="info-sep">·</span>
+          <span class="info-name">{{ buoyStation.name }}</span>
+        </div>
+        <div class="info-rows">
+          <div class="info-row">
+            <span class="info-label">Platform type</span>
+            <span class="info-value">Meteo-oceanographic moored buoy</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Institution</span>
+            <a href="https://icatmar.cat" target="_blank" rel="noopener" class="info-link">ICATMAR</a>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Depth</span>
+            <span class="info-value">{{ buoyStation.depth }} m</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Distance to coast</span>
+            <span class="info-value">{{ buoyStation.distanceCoast }} mn</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Installed</span>
+            <span class="info-value">{{ formatInstallDate(buoyStation.installed) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">License</span>
+            <a :href="network.licenseUrl" target="_blank" rel="noopener" class="info-link">{{ network.licenseLabel }}</a>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Fallback -->
     <template v-else>
       <span class="info-placeholder">Select a platform for details</span>
@@ -104,12 +151,17 @@ export default {
   data() {
     return {
       imgError: false,
+      buoyImgError: false,
       radarIconURL: './Assets/Icons/radar.svg',
+      buoyIconURL: './Assets/Icons/buoy.svg',
     }
   },
   computed: {
     stationPhotoURL() {
       return './Assets/Images/platforms/HFR/' + (this.hfrStation?.id ?? '') + '.jpg';
+    },
+    buoyStationPhotoURL() {
+      return './Assets/Images/platforms/Buoys/' + (this.buoyStation?.id ?? '') + '.jpg';
     },
     isHFRContext() {
       return this.$gui.selectedDashboard === 'hfr'
@@ -134,6 +186,16 @@ export default {
     totalStations() {
       return this.$requests.hfrStations.length;
     },
+    isBuoyContext() {
+      return this.$gui.selectedDashboard === 'buoys'
+        || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'buoys');
+    },
+    buoyStation() {
+      if (!this.isBuoyContext) return null;
+      const id = this.$gui.selectedPlatform?.stationId;
+      if (!id) return null;
+      return this.$requests.getBuoyStation(id);
+    },
   },
   methods: {
     formatInstallDate(iso) {
@@ -147,6 +209,9 @@ export default {
     hfrStation() {
       this.imgError = false;
     },
+    buoyStation() {
+      this.buoyImgError = false;
+    },
   },
 }
 </script>
@@ -154,7 +219,7 @@ export default {
 
 <style scoped>
 .info-section {
-  min-width: 400px;
+  min-width: 520px;
   background: var(--lightBlue);
   height: 100%;
   overflow: hidden;
