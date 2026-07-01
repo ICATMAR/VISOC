@@ -8,10 +8,10 @@
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
             <div class="bars-group">
               <div v-for="sub in barsPerCell" :key="sub"
-                class="sub-cell clickable"
+                class="dt-col clickable"
                 :class="{
                   'no-data': !hasData(buoy, cellIndex, sub - 1),
-                  'sub-cell-selected': isBarSelected(buoy.name, cellIndex, sub - 1)
+                  'dt-col-selected': isBarSelected(buoy.name, cellIndex, sub - 1)
                 }"
                 :title="cellTitle(buoy, cellIndex, sub - 1)"
                 @click="buoyClicked(buoy, cellIndex, sub - 1, cell)">
@@ -23,8 +23,8 @@
                 <div class="wind-half">
                   <div class="wind-bar" :style="{ height: windBarHeight(buoy, cellIndex, sub - 1) }"></div>
                 </div>
-                <!-- Hover / selected overlay -->
-                <div class="sub-cell-overlay"></div>
+                <!-- Hover / selected overlay (styled by dtShared.css) -->
+                <div class="dt-col-overlay"></div>
               </div>
             </div>
           </td>
@@ -193,7 +193,7 @@ export default {
   width: 100%;
 }
 
-.sub-cell {
+.dt-col {
   flex: 1;
   position: relative;
   display: flex;
@@ -202,24 +202,11 @@ export default {
   min-width: 0.5px;
 }
 
-.sub-cell.no-data {
+.dt-col.no-data {
   background: lightgray;
 }
 
-.sub-cell-overlay {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-.sub-cell:hover .sub-cell-overlay {
-  background: var(--darkBlue);
-  opacity: 0.6;
-}
-.sub-cell-selected .sub-cell-overlay {
-  background: var(--red);
-  opacity: 0.6;
-}
+/* hover/selected overlay rules live in dtShared.css */
 
 .wave-half {
   flex: 1;

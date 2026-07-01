@@ -1,0 +1,18 @@
+/* Shared DataTimeline grid column: full-height clickable area with hover/selected overlay */
+
+.dt-col-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dt-col:hover .dt-col-overlay {
+  background: var(--darkBlue);
+  opacity: 0.6;
+}
+
+.dt-col-selected .dt-col-overlay {
+  background: var(--red);
+  opacity: 0.6;
+}

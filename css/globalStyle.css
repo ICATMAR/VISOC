@@ -1,5 +1,6 @@
 @import "mapOverlays.css";
 @import "platformDetails.css";
+@import "dtShared.css";
 
 :root {
   --blue: rgb(20, 120, 167);

@@ -7,11 +7,12 @@
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell totals-bar-cell">
             <div class="bars-group">
               <div v-for="sub in barsPerCell" :key="sub"
-                class="bar bar-totals clickable"
-                :class="{ 'bar-selected': isBarSelected('TOTALS', cellIndex, sub - 1) }"
-                :style="{ height: (totalsValue(cellIndex, sub - 1) / (totals.maxValue || 1) * 100) + '%' }"
+                class="dt-col bar-totals clickable"
+                :class="{ 'dt-col-selected': isBarSelected('TOTALS', cellIndex, sub - 1) }"
                 :title="totalsTitle(cellIndex, sub - 1)"
                 @click="totalsClicked(cellIndex, sub - 1, cell)">
+                <div class="bar-inner" :style="{ height: (totalsValue(cellIndex, sub - 1) / (totals.maxValue || 1) * 100) + '%' }"></div>
+                <div class="dt-col-overlay"></div>
               </div>
             </div>
           </td>
@@ -23,11 +24,12 @@
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
             <div class="bars-group">
               <div v-for="sub in barsPerCell" :key="sub"
-                class="bar clickable"
-                :class="{ 'bar-selected': isBarSelected(station.name, cellIndex, sub - 1) }"
-                :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"
+                class="dt-col clickable"
+                :class="{ 'dt-col-selected': isBarSelected(station.name, cellIndex, sub - 1) }"
                 :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'"
                 @click="stationClicked(station, cellIndex, sub - 1, cell)">
+                <div class="bar-inner" :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"></div>
+                <div class="dt-col-overlay"></div>
               </div>
             </div>
           </td>
@@ -192,31 +194,27 @@ export default {
 .bars-group {
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
   height: 100%;
   width: 100%;
 }
 
-.bar {
+/* dt-col fills the full cell height; bar-inner grows from the bottom */
+.dt-col {
   flex: 1;
-  background: var(--blue);
   min-width: 0.5px;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
 }
 
-.bar:hover {
-  background: var(--darkBlue);
-}
-
-.bar-selected {
-  background: var(--red) !important;
-}
-
-.bar-totals {
-  background: var(--darkBlue);
-}
-
-.bar-totals:hover {
+.bar-inner {
+  width: 100%;
   background: var(--blue);
+}
+
+.bar-totals .bar-inner {
+  background: var(--darkBlue);
 }
 
 .totals-bar-cell {
