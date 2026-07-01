@@ -7,10 +7,16 @@
         <span>{{ day.textLong }}</span>
       </td>
     </tr>
-    <!-- Hours (hidden for daily interval) -->
-    <tr v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
+    <!-- Hours: single label per cell (sub-daily) or 0/12 anchors per day (daily) -->
+    <tr>
       <td v-for="(cell, index) in cells" :key="index" class="hourCell">
-        <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
+        <template v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
+          <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
+        </template>
+        <template v-else>
+          <span>0</span>
+          <span class="hourCell-noon">12</span>
+        </template>
       </td>
     </tr>
     <!-- Data rows provided by each DataTimeline -->
@@ -98,5 +104,9 @@ export default {
   top: 50%;
   transform: translate(-50%, -50%);
   white-space: nowrap;
+}
+
+.hourCell-noon {
+  left: 50% !important;
 }
 </style>

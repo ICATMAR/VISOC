@@ -1,6 +1,6 @@
 <template>
   <!-- Data and timeline section -->
-  <div class="horizontal">
+  <div class="horizontal data-timeline-container">
     <!-- Variables -->
     <div class="vertical variable-names-container">
       <!-- Interval picker (click to cycle) -->
@@ -169,6 +169,11 @@ export default {
 
 
 <style scoped>
+.data-timeline-container {
+  min-width: 100%;
+  background: var(--lightBlue);
+}
+
 .table-and-info-container {
   height: 100%;
   overflow: hidden;
