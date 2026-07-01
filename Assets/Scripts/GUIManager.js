@@ -16,7 +16,13 @@ class GUIManager {
   ]
 
 
-  selectedDashboard = 'hfr';
+  _selectedDashboard = 'hfr';
+  get selectedDashboard() { return this._selectedDashboard; }
+  set selectedDashboard(id) {
+    this._selectedDashboard = id;
+    this.isDataTimelineOpen = false;
+    this.isPlatformDetailOpen = false;
+  }
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Icons/allPlatforms.png', image: './Assets/Images/dashboardIcons/allPlatforms.png', isAvailable: true },
 

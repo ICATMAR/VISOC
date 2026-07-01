@@ -14,7 +14,9 @@
       <!-- Variable names and units -->
       <div class="horizontal variable-names-row">
         <div class="vertical variable-names-subcontainer">
-          <span v-for="v in variables" :key="v.name" :class="{ 'active-var': v.name === activeVar }">{{ $t(v.name) }}</span>
+          <span v-for="v in variables" :key="v.name"
+            :class="{ 'active-var': v.name === activeVar, 'var-name-clickable': true }"
+            @click="$emit('varClick', v)">{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
           <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
@@ -56,6 +58,7 @@ import DTInfoSection from './DTInfoSection.vue';
 
 export default {
   name: "DTLayout",
+  emits: ['varClick'],
   props: {
     variables: Array, // [{ name, unit }]
     activeVar: String, // name of the variable to highlight in bold
@@ -238,6 +241,13 @@ export default {
 
 .active-var {
   font-weight: bold;
+}
+
+.var-name-clickable {
+  cursor: pointer;
+}
+.var-name-clickable:hover {
+  text-decoration: underline;
 }
 
 .button-next-prev-container {

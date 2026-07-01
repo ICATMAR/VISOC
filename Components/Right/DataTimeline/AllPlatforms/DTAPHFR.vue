@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="stations" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)">
+  <DTLayout :variables="stations" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)" @var-click="stationNameClicked">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <!-- Station availability bars — barsPerCell hourly sub-bars per grid cell -->
@@ -78,7 +78,11 @@ export default {
     },
     getHourlyValue(station, cellIndex, subIndex) {
       return station.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
-    }
+    },
+    stationNameClicked(station) {
+      this.$gui.selectedPlatform = { stationId: station.name };
+      this.$gui.isPlatformDetailOpen = true;
+    },
   },
   computed: {
     barsPerCell() {

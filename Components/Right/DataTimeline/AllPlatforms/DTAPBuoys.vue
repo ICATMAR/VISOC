@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="buoys" :active-var="hoveredBuoy || (selectedBar && selectedBar.buoyName)">
+  <DTLayout :variables="buoys" :active-var="hoveredBuoy || (selectedBar && selectedBar.buoyName)" @var-click="buoyNameClicked">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <tr v-for="buoy in buoys" :key="buoy.name"
@@ -95,6 +95,10 @@ export default {
       if (vhm0 != null) parts.push(`${this.$t('Wave height')} ${vhm0.toFixed(1)} m`);
       if (wspd != null) parts.push(`${this.$t('Wind speed')} ${wspd.toFixed(0)} km/h`);
       return parts.join(' · ');
+    },
+    buoyNameClicked(buoy) {
+      this.$gui.selectedPlatform = { stationId: buoy.name };
+      this.$gui.isPlatformDetailOpen = true;
     },
     buoyClicked(buoy, cellIndex, subIndex, cellDate) {
       const i = cellIndex * this.barsPerCell + subIndex;
