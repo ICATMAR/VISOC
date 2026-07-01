@@ -19,12 +19,35 @@ class RequestsManager {
     { id: 'ODAS', name: 'Somorrostro',     lon: 2.2162, lat: 41.3757, depth:  40, owner: 'ICM/CSIC' },
   ];
 
+  _buoyDataCache = {};
+
   getHFRStation(id) {
     return this.hfrStations.find(s => s.id === id);
   }
 
   getBuoyStation(id) {
     return this.buoyStations.find(s => s.id === id);
+  }
+
+  // Generates and caches hourly mockup data for all buoy variables.
+  // WSPD/WDIR: wind km/h + °; VHM0/VMDR: wave m + °; HCSP/HCDT: current m/s + °; TEMP °C; PSAL PSU
+  generateBuoyHourlyData(id, totalHours) {
+    const key = `${id}_${totalHours}`;
+    if (this._buoyDataCache[key]) return this._buoyDataCache[key];
+    const out = { VHM0: [], VMDR: [], WSPD: [], WDIR: [], HCSP: [], HCDT: [], TEMP: [], PSAL: [] };
+    for (let i = 0; i < totalHours; i++) {
+      const ok = Math.random() > 0.15;
+      out.VHM0.push(ok ? Math.random() * 4 : null);
+      out.VMDR.push(ok ? Math.random() * 360 : null);
+      out.WSPD.push(ok ? Math.random() * 70 : null);
+      out.WDIR.push(ok ? Math.random() * 360 : null);
+      out.HCSP.push(ok ? Math.random() * 1.5 : null);
+      out.HCDT.push(ok ? Math.random() * 360 : null);
+      out.TEMP.push(ok ? 15 + Math.random() * 10 : null);
+      out.PSAL.push(ok ? 36 + Math.random() * 3 : null);
+    }
+    this._buoyDataCache[key] = out;
+    return out;
   }
 }
 

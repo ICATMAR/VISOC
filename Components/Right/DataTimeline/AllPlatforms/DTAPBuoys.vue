@@ -2,7 +2,6 @@
   <DTLayout :variables="buoys" :active-var="hoveredBuoy || (selectedBar && selectedBar.buoyName)">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
-        <!-- Buoy rows: barsPerCell hourly sub-cells per grid cell -->
         <tr v-for="buoy in buoys" :key="buoy.name"
           @mouseenter="hoveredBuoy = buoy.name"
           @mouseleave="hoveredBuoy = null">
@@ -14,6 +13,7 @@
                   'no-data': !hasData(buoy, cellIndex, sub - 1),
                   'sub-cell-selected': isBarSelected(buoy.name, cellIndex, sub - 1)
                 }"
+                :title="cellTitle(buoy, cellIndex, sub - 1)"
                 @click="buoyClicked(buoy, cellIndex, sub - 1, cell)">
                 <!-- Wave height: bar grows upward from center -->
                 <div class="wave-half">
@@ -37,49 +37,45 @@
 import DTLayout from '../Shared/DTLayout.vue';
 import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 
-const WAVE_MAX_M = 2.5;
-const WIND_MAX_KMH = 30 * 1.852; // 30 knots in km/h
+const WAVE_MAX_M   = 2.5;
+const WIND_MAX_KMH = 30 * 1.852; // 30 knots → km/h
 
 export default {
   name: "DTAPBuoys",
   created() {
-    // Always generate hourly data regardless of display interval
     const totalHours = Math.round(
       (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
     );
     for (const b of this.$requests.buoyStations) {
-      const buoy = { name: b.id, waveData: [], windData: [] };
-      for (let i = 0; i < totalHours; i++) {
-        if (Math.random() < 0.15) {
-          buoy.waveData.push(null);
-          buoy.windData.push(null);
-        } else {
-          buoy.waveData.push(Math.random() * 4);   // 0–4 m
-          buoy.windData.push(Math.random() * 70);  // 0–70 km/h
-        }
-      }
-      this.buoys.push(buoy);
+      const d = this.$requests.generateBuoyHourlyData(b.id, totalHours);
+      this.buoys.push({
+        name: b.id,
+        VHM0: d.VHM0, VMDR: d.VMDR,
+        WSPD: d.WSPD, WDIR: d.WDIR,
+        HCSP: d.HCSP, HCDT: d.HCDT,
+        TEMP: d.TEMP, PSAL: d.PSAL,
+      });
     }
   },
   data() {
     return {
       hoveredBuoy: null,
-      selectedBar: null, // { buoyName, cellIndex, subIndex }
+      selectedBar: null,
       buoys: [],
     }
   },
   methods: {
-    //onclick: function(e){},
     hasData(buoy, cellIndex, subIndex) {
-      return buoy.waveData[cellIndex * this.barsPerCell + subIndex] != null;
+      const i = cellIndex * this.barsPerCell + subIndex;
+      return buoy.VHM0[i] != null || buoy.WSPD[i] != null;
     },
     waveBarHeight(buoy, cellIndex, subIndex) {
-      const v = buoy.waveData[cellIndex * this.barsPerCell + subIndex];
+      const v = buoy.VHM0[cellIndex * this.barsPerCell + subIndex];
       if (v == null) return '0%';
       return Math.min(v / WAVE_MAX_M, 1) * 100 + '%';
     },
     windBarHeight(buoy, cellIndex, subIndex) {
-      const v = buoy.windData[cellIndex * this.barsPerCell + subIndex];
+      const v = buoy.WSPD[cellIndex * this.barsPerCell + subIndex];
       if (v == null) return '0%';
       return Math.min(v / WIND_MAX_KMH, 1) * 100 + '%';
     },
@@ -88,12 +84,25 @@ export default {
         && this.selectedBar?.cellIndex === cellIndex
         && this.selectedBar?.subIndex === subIndex;
     },
+    cellTitle(buoy, cellIndex, subIndex) {
+      const i = cellIndex * this.barsPerCell + subIndex;
+      const vhm0 = buoy.VHM0[i];
+      const wspd = buoy.WSPD[i];
+      if (vhm0 == null && wspd == null) return this.$t('No data available');
+      const parts = [];
+      if (vhm0 != null) parts.push(`${this.$t('Wave height')} ${vhm0.toFixed(1)} m`);
+      if (wspd != null) parts.push(`${this.$t('Wind speed')} ${wspd.toFixed(0)} km/h`);
+      return parts.join(' · ');
+    },
     buoyClicked(buoy, cellIndex, subIndex, cellDate) {
+      const i = cellIndex * this.barsPerCell + subIndex;
       const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
       this.$gui.selectedPlatform = {
         stationId: buoy.name,
-        wave: buoy.waveData[cellIndex * this.barsPerCell + subIndex],
-        wind: buoy.windData[cellIndex * this.barsPerCell + subIndex],
+        VHM0: buoy.VHM0[i], VMDR: buoy.VMDR[i],
+        WSPD: buoy.WSPD[i], WDIR: buoy.WDIR[i],
+        HCSP: buoy.HCSP[i], HCDT: buoy.HCDT[i],
+        TEMP: buoy.TEMP[i], PSAL: buoy.PSAL[i],
         date,
       };
       this.selectedBar = { buoyName: buoy.name, cellIndex, subIndex };
@@ -146,8 +155,12 @@ export default {
   background: lightgray;
 }
 
+.sub-cell:hover {
+  filter: brightness(1.2) saturate(1.3);
+}
+
 .sub-cell-selected {
-  box-shadow: inset 0 0 0 1px var(--red);
+  filter: saturate(2.5) brightness(0.85);
 }
 
 .wave-half {

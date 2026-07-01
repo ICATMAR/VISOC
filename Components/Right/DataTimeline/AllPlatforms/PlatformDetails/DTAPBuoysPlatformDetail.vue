@@ -5,47 +5,34 @@
 
     <!-- Map (left) -->
     <div class="map-container">
-      <!-- Overlay info -->
-      <div class="vertical map-info-overlay">
-        <span>{{ $t('Last observation') }}</span>
-        <div class="horizontal">
-          <div class="icon-last-observation"></div>
-          <span>Xh ago. 9:00</span>
-        </div>
-      </div>
-
-      <!-- Overlay arrows -->
-      <MapCircleArrows></MapCircleArrows>
-
-      <!-- Map -->
+      <MapCircleArrows :wind="wind" :waves="waves" :current="current" />
       <div ref="stationMap" class="map-placeholder"></div>
     </div>
 
-    <!-- Values (center) -->
+    <!-- Info (right) -->
     <div class="vertical info-container">
-      <span class="platform-type">Buoy</span>
       <span class="station-name">{{ station.name }}</span>
-      <span class="coordinates">{{ station.lat.toFixed(4) }}° N, {{ station.lon.toFixed(4) }}° E</span>
-      <span class="meta">{{ station.depth }} m · {{ station.owner }}</span>
+      <span class="station-meta">{{ $t('Buoy') }} · {{ station.lat.toFixed(2) }}° N, {{ station.lon.toFixed(2) }}° E</span>
+      <span class="station-depth">{{ station.depth }} m · {{ station.owner }}</span>
 
+      <!-- Temperature and Salinity from selected cell -->
       <div class="horizontal values-container">
-        <div class="vertical value-container">
+        <div class="vertical value-container" v-if="sp?.TEMP != null">
           <span>{{ $t('Temperature') }}</span>
-          <span>15° C</span>
+          <span class="value-number">{{ sp.TEMP.toFixed(1) }} °C</span>
         </div>
-        <div class="vertical value-container">
+        <div class="vertical value-container" v-if="sp?.PSAL != null">
           <span>{{ $t('Salinity') }}</span>
-          <span>38 psu</span>
+          <span class="value-number">{{ sp.PSAL.toFixed(1) }} PSU</span>
         </div>
       </div>
-    </div>
 
-    <!-- 3D DTO (right) -->
-    <div class="dto-container">
-      <img class="dto-gif" :src="mockupGifSource">
-      <i class="fa-solid fa-arrow-up-right-from-square icon-open-link clickable"></i>
+      <!-- Switch to Buoys dashboard -->
+      <button class="clickable switch-button" @click="$gui.selectedDashboard = 'buoys'">
+        <i class="fa-solid fa-water"></i>
+        <span>{{ $t('Buoys') }}</span>
+      </button>
     </div>
-
   </div>
 </template>
 
@@ -62,13 +49,7 @@ export default {
     if (!this.station) return;
     this.initMap();
   },
-  data() {
-    return {
-      mockupGifSource: './Assets/Images/mockup/buoydto.gif',
-    }
-  },
   methods: {
-    //onclick: function(e){},
     initMap() {
       this.map = new ol.Map({
         target: this.$refs.stationMap,
@@ -95,10 +76,28 @@ export default {
     station() {
       if (!this.$gui.selectedPlatform?.stationId) return null;
       return this.$requests.getBuoyStation(this.$gui.selectedPlatform.stationId);
-    }
+    },
+    sp() {
+      return this.$gui.selectedPlatform;
+    },
+    wind() {
+      const p = this.sp;
+      if (!p || p.WSPD == null) return null;
+      return { speed: p.WSPD, dir: p.WDIR ?? 0 };
+    },
+    waves() {
+      const p = this.sp;
+      if (!p || p.VHM0 == null) return null;
+      return { height: p.VHM0, dir: p.VMDR ?? 0 };
+    },
+    current() {
+      const p = this.sp;
+      if (!p || p.HCSP == null) return null;
+      return { speed: p.HCSP, dir: p.HCDT ?? 0 };
+    },
   },
   watch: {
-    '$gui.selectedPlatform'(newPlatform) {
+    '$gui.selectedPlatform'() {
       if (!this.map || !this.station) return;
       this.map.getView().animate({
         center: ol.proj.fromLonLat([this.station.lon, this.station.lat]),
@@ -116,39 +115,26 @@ export default {
 
 <style scoped>
 .platform-detail-container {
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: flex-start;
+  gap: 15px;
+  height: 180px;
+  overflow: hidden;
 }
 
 .map-container {
   position: relative;
-}
-
-.map-info-overlay {
-  position: absolute;
-  z-index: 1;
-  top: 4px;
-  right: 4px;
-  font-size: x-small;
-  background: #80808052;
-  padding: 3px;
-  border-radius: 5px;
+  flex-shrink: 0;
 }
 
 .map-placeholder {
   width: 180px;
   height: 180px;
-  background: lightblue;
 }
 
 .info-container {
-  gap: 5px;
-  padding: 10px 0;
-}
-
-.platform-type {
-  font-size: x-small;
-  opacity: 0.6;
+  gap: 4px;
+  padding: 8px 0;
 }
 
 .station-name {
@@ -158,67 +144,62 @@ export default {
   text-shadow: none;
 }
 
-.coordinates {
+.station-meta {
   font-size: x-small;
   color: white;
-  opacity: 0.6;
+  opacity: 0.7;
   text-shadow: none;
 }
 
-.meta {
+.station-depth {
   font-size: x-small;
   color: white;
+  opacity: 0.5;
   text-shadow: none;
-  opacity: 0.6;
 }
 
 .values-container {
-  gap: 5px;
-  margin-top: 5px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .value-container {
   background: lightgreen;
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 8px;
+  padding: 4px 8px;
 }
 
-.value-container span:first-child {
-  font-size: x-small;
+.value-container > span:first-child {
+  font-size: xx-small;
+  color: black;
+  text-shadow: none;
+  opacity: 0.7;
+}
+
+.value-number {
+  font-size: small;
+  font-weight: bold;
   color: black;
   text-shadow: none;
 }
 
-.value-container span:last-child {
-  color: black;
-  text-shadow: none;
-}
-
-.dto-container {
-  position: relative;
-}
-
-.dto-gif {
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  margin: 10px;
-  box-shadow: 0 0 4px black;
-}
-
-.icon-open-link {
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  width: 30px;
-  height: 30px;
+.switch-button {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 12px;
   background: var(--blue);
   color: white;
-  box-shadow: 0 0 4px black;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  border: none;
+  border-radius: 8px;
+  font-size: x-small;
+}
+
+.switch-button > span {
+  color: white;
+  text-shadow: none;
 }
 
 .close-x-position {
