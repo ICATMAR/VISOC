@@ -36,8 +36,8 @@ export default {
       { label: 'HFR currents',  component: 'DTAPHFR',      defaultInterval: 180,   dashboardId: 'hfr'           },
       { label: 'Buoys',      component: 'DTAPBuoys',     defaultInterval: 180,  dashboardId: 'buoys'         },
       { label: 'Drifters',   component: 'DTAPDrifters',  defaultInterval: 180,  dashboardId: 'drifters'      },
-      { label: 'Argos',      component: 'DTAPArgos',     defaultInterval: 1440, dashboardId: 'argos'         },
-      { label: 'Satellite',  component: null,             defaultInterval: 1440, dashboardId: 'remoteSensing' },
+      // { label: 'Argos',      component: 'DTAPArgos',     defaultInterval: 1440, dashboardId: 'argos'         },
+      // { label: 'Satellite',  component: null,             defaultInterval: 1440, dashboardId: 'remoteSensing' },
     ];
     return {
       views,
@@ -85,7 +85,7 @@ export default {
 }
 .bottom-bar > * {
   padding-left: 10px;
-  font-size: x-small;
+  font-size: small;
 }
 
 </style>

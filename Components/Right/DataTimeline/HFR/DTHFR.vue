@@ -43,7 +43,7 @@ export default {
 }
 .bottom-bar > * {
   padding-left: 10px;
-  font-size: x-small;
+  font-size: small;
 }
 
 </style>
