@@ -21,6 +21,10 @@
         </div>
         <div class="info-rows">
           <div class="info-row">
+            <span class="info-label">Platform type</span>
+            <span class="info-value">High-frequency radar station</span>
+          </div>
+          <div class="info-row">
             <span class="info-label">Institution</span>
             <a :href="hfrOwner.url" target="_blank" rel="noopener" class="info-link">{{ hfrOwner.name }}</a>
           </div>
@@ -38,10 +42,13 @@
           </div>
           <div class="info-row">
             <span class="info-label">Last calibration</span>
-            <span class="info-value">{{ hfrStation.lastCalibration }}</span>
+            <span class="info-value">{{ formatInstallDate(hfrStation.lastCalibration) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">License</span>
+            <a :href="network.licenseUrl" target="_blank" rel="noopener" class="info-link">{{ network.licenseLabel }}</a>
           </div>
         </div>
-        <a :href="network.licenseUrl" target="_blank" rel="noopener" class="info-license">{{ network.licenseLabel }}</a>
       </div>
     </template>
 
@@ -54,6 +61,10 @@
           <span class="info-name">HF Radar Network</span>
         </div>
         <div class="info-rows">
+          <div class="info-row">
+            <span class="info-label">Platform type</span>
+            <span class="info-value">High-frequency radar network</span>
+          </div>
           <div class="info-row">
             <span class="info-label">Institution</span>
             <a href="https://icatmar.cat" target="_blank" rel="noopener" class="info-link">ICATMAR</a>
@@ -70,8 +81,11 @@
             <span class="info-label">Active stations</span>
             <span class="info-value">{{ activeStations }} / {{ totalStations }}</span>
           </div>
+          <div class="info-row">
+            <span class="info-label">License</span>
+            <a :href="network.licenseUrl" target="_blank" rel="noopener" class="info-link">{{ network.licenseLabel }}</a>
+          </div>
         </div>
-        <a :href="network.licenseUrl" target="_blank" rel="noopener" class="info-license">{{ network.licenseLabel }}</a>
       </div>
     </template>
 
@@ -123,8 +137,10 @@ export default {
   },
   methods: {
     formatInstallDate(iso) {
-      if (!iso) return '—';
-      return new Date(iso).toLocaleDateString(this.$i18n.locale, { year: 'numeric', month: 'long', timeZone: 'UTC' });
+      if (!iso || iso === 'unknown') return '—';
+      const d = new Date(iso);
+      if (isNaN(d)) return '—';
+      return d.toLocaleDateString(this.$i18n.locale, { year: 'numeric', month: 'long', timeZone: 'UTC' });
     },
   },
   watch: {
@@ -233,7 +249,7 @@ export default {
   color: white;
   text-shadow: none;
   flex-shrink: 0;
-  min-width: 90px;
+  min-width: 120px;
 }
 
 .info-value {
@@ -252,15 +268,6 @@ export default {
 }
 
 
-
-/* License badge */
-.info-license {
-  font-size: small;
-  color: white;
-  text-shadow: 0 0 3px black;
-  text-decoration: underline;
-  margin-top: auto;
-}
 
 /* Fallback */
 .info-placeholder {
