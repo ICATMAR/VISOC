@@ -92,6 +92,24 @@ export default {
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.selectedBar = null;
     },
+    // Bug fix: map icon click while a cell is selected — keep same timestamp on new station
+    '$gui.selectedPlatform'(newP, oldP) {
+      if (!this.selectedBar) return;
+      const newId = newP?.stationId;
+      const oldId = oldP?.stationId;
+      if (!newId || !oldId || newId === oldId) return;
+      const newStation = this.stations.find(s => s.name === newId);
+      if (!newStation) return; // different platform type
+      const oldDate = oldP?.date;
+      if (!oldDate) return; // map click sets no date; recover from previous selectedPlatform
+      const elapsedHours = (oldDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600);
+      const absHour = Math.floor(elapsedHours);
+      const subIndex = absHour % this.barsPerCell;
+      const cellIndex = Math.floor(absHour / this.barsPerCell);
+      const value = this.getHourlyValue(newStation, cellIndex, subIndex);
+      this.$gui.selectedPlatform = { stationId: newId, value, date: oldDate };
+      this.selectedBar = { stationName: newId, cellIndex, subIndex };
+    },
   },
   components: {
     DTLayout,

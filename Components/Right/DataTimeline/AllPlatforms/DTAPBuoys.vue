@@ -121,6 +121,31 @@ export default {
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.selectedBar = null;
     },
+    // Bug fix: map icon click while a cell is selected — keep same timestamp on new buoy
+    '$gui.selectedPlatform'(newP, oldP) {
+      if (!this.selectedBar) return;
+      const newId = newP?.stationId;
+      const oldId = oldP?.stationId;
+      if (!newId || !oldId || newId === oldId) return;
+      const newBuoy = this.buoys.find(b => b.name === newId);
+      if (!newBuoy) return; // different platform type
+      const oldDate = oldP?.date;
+      if (!oldDate) return;
+      const elapsedHours = (oldDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600);
+      const absHour = Math.floor(elapsedHours);
+      const subIndex = absHour % this.barsPerCell;
+      const cellIndex = Math.floor(absHour / this.barsPerCell);
+      const i = cellIndex * this.barsPerCell + subIndex;
+      this.$gui.selectedPlatform = {
+        stationId: newId,
+        VHM0: newBuoy.VHM0[i], VMDR: newBuoy.VMDR[i],
+        WSPD: newBuoy.WSPD[i], WDIR: newBuoy.WDIR[i],
+        HCSP: newBuoy.HCSP[i], HCDT: newBuoy.HCDT[i],
+        TEMP: newBuoy.TEMP[i], PSAL: newBuoy.PSAL[i],
+        date: oldDate,
+      };
+      this.selectedBar = { buoyName: newId, cellIndex, subIndex };
+    },
   },
   components: {
     DTLayout,

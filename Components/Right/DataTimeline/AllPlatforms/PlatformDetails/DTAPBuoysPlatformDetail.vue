@@ -1,37 +1,91 @@
 <template>
-  <div class="horizontal platform-detail-container" v-if="station">
-    <!-- Close button -->
-    <i class="fa fa-xmark close-x close-x-position clickable" @click="$gui.isPlatformDetailOpen = false"></i>
+  <div class="horizontal pd-container" v-if="station">
+    <!-- Close -->
+    <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
     <!-- Map (left) -->
     <div class="map-container">
       <MapCircleArrows :wind="wind" :waves="waves" :current="current" />
-      <div ref="stationMap" class="map-placeholder"></div>
+      <div ref="stationMap" class="pd-map"></div>
     </div>
 
-    <!-- Info (right) -->
-    <div class="vertical info-container">
-      <span class="station-name">{{ station.name }}</span>
-      <span class="station-meta">{{ $t('Buoy') }} · {{ station.lat.toFixed(2) }}° N, {{ station.lon.toFixed(2) }}° E</span>
-      <span class="station-depth">{{ station.depth }} m · {{ station.owner }}</span>
+    <!-- Info (center) -->
+    <div class="pd-info">
 
-      <!-- Temperature and Salinity from selected cell -->
-      <div class="horizontal values-container">
-        <div class="vertical value-container" v-if="sp?.TEMP != null">
-          <span>{{ $t('Temperature') }}</span>
-          <span class="value-number">{{ sp.TEMP.toFixed(1) }} °C</span>
-        </div>
-        <div class="vertical value-container" v-if="sp?.PSAL != null">
-          <span>{{ $t('Salinity') }}</span>
-          <span class="value-number">{{ sp.PSAL.toFixed(1) }} PSU</span>
+      <!-- Line 1: platform type · lat/lon [copy] -->
+      <div class="pd-header">
+        <span>{{ $t('Buoy') }}</span>
+        <span>·</span>
+        <span class="pd-coords">{{ station.lat.toFixed(2) }}° N, {{ station.lon.toFixed(2) }}° E</span>
+        <button class="pd-copy-btn clickable" @click="copyCoords" :title="$t('Copy coordinates')">
+          <i class="fa fa-copy"></i>
+        </button>
+      </div>
+
+      <!-- Line 2: station name -->
+      <span class="pd-station-name">{{ station.name }}</span>
+
+      <!-- Line 2b: status + depth -->
+      <div class="pd-status">
+        <div class="pd-status-dot" :class="status"></div>
+        <span>{{ $t(statusLabel) }}</span>
+        <span>· {{ station.depth }} {{ $t('m depth') }}</span>
+      </div>
+
+      <!-- Line 3: selected date -->
+      <span class="pd-date" v-if="sp?.date">{{ formattedDate }}</span>
+
+      <!-- Line 4: all variables from selected cell -->
+      <div class="pd-values-wrapper" v-if="sp?.date">
+        <div class="pd-values-scroll">
+          <template v-if="anyData">
+            <div class="pd-value-item" v-if="sp.VHM0 != null">
+              <span class="pd-value-label">{{ $t('Wave height') }}</span>
+              <span class="pd-value-number">{{ sp.VHM0.toFixed(1) }} m</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.VMDR != null">
+              <span class="pd-value-label">{{ $t('Wave dir.') }}</span>
+              <span class="pd-value-number">{{ sp.VMDR.toFixed(0) }}°</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.WSPD != null">
+              <span class="pd-value-label">{{ $t('Wind speed') }}</span>
+              <span class="pd-value-number">{{ sp.WSPD.toFixed(0) }} km/h</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.WDIR != null">
+              <span class="pd-value-label">{{ $t('Wind dir.') }}</span>
+              <span class="pd-value-number">{{ sp.WDIR.toFixed(0) }}°</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.HCSP != null">
+              <span class="pd-value-label">{{ $t('Current') }}</span>
+              <span class="pd-value-number">{{ sp.HCSP.toFixed(2) }} m/s</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.HCDT != null">
+              <span class="pd-value-label">{{ $t('Current dir.') }}</span>
+              <span class="pd-value-number">{{ sp.HCDT.toFixed(0) }}°</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.TEMP != null">
+              <span class="pd-value-label">{{ $t('Temperature') }}</span>
+              <span class="pd-value-number">{{ sp.TEMP.toFixed(1) }} °C</span>
+            </div>
+            <div class="pd-value-item" v-if="sp.PSAL != null">
+              <span class="pd-value-label">{{ $t('Salinity') }}</span>
+              <span class="pd-value-number">{{ sp.PSAL.toFixed(1) }} PSU</span>
+            </div>
+          </template>
+          <span class="pd-no-data" v-else>{{ $t('No data available') }}</span>
         </div>
       </div>
 
       <!-- Switch to Buoys dashboard -->
-      <button class="clickable switch-button" @click="$gui.selectedDashboard = 'buoys'">
-        <i class="fa-solid fa-water"></i>
-        <span>{{ $t('Buoys') }}</span>
+      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'buoys'">
+        <img :src="buoysDashboard.icon" class="pd-switch-btn-icon" alt="">
+        <span>{{ $t('Switch to') }} {{ $t(buoysDashboard.name) }}</span>
       </button>
+    </div>
+
+    <!-- Media (right): 3D DTO gif -->
+    <div class="pd-media-container">
+      <img class="pd-circular-media" :src="buoyGIFURL" alt="Buoy 3D view">
     </div>
   </div>
 </template>
@@ -48,6 +102,11 @@ export default {
   mounted() {
     if (!this.station) return;
     this.initMap();
+  },
+  data() {
+    return {
+      buoyGIFURL: './Assets/Images/mockup/buoydto.gif',
+    }
   },
   methods: {
     initMap() {
@@ -71,6 +130,10 @@ export default {
         })
       });
     },
+    copyCoords() {
+      const text = `${this.station.lat.toFixed(2)}, ${this.station.lon.toFixed(2)}`;
+      navigator.clipboard?.writeText(text);
+    },
   },
   computed: {
     station() {
@@ -80,20 +143,38 @@ export default {
     sp() {
       return this.$gui.selectedPlatform;
     },
+    formattedDate() {
+      const date = this.sp?.date;
+      if (!date) return '';
+      const opts = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+      if (!this.$gui.timelineUseLocalTime) opts.timeZone = 'UTC';
+      return date.toLocaleString(this.$i18n.locale, opts);
+    },
+    status() {
+      if (!this.station) return 'inactive';
+      return this.$requests.getStationStatus(this.station.id, 'buoy');
+    },
+    statusLabel() {
+      return { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[this.status] ?? 'Inactive';
+    },
+    buoysDashboard() {
+      return this.$gui.dashboards.find(d => d.id === 'buoys') ?? { icon: '', name: 'Buoys' };
+    },
+    anyData() {
+      const p = this.sp;
+      return p && (p.VHM0 != null || p.WSPD != null || p.HCSP != null || p.TEMP != null);
+    },
     wind() {
       const p = this.sp;
-      if (!p || p.WSPD == null) return null;
-      return { speed: p.WSPD, dir: p.WDIR ?? 0 };
+      return (p?.WSPD != null) ? { speed: p.WSPD, dir: p.WDIR ?? 0 } : null;
     },
     waves() {
       const p = this.sp;
-      if (!p || p.VHM0 == null) return null;
-      return { height: p.VHM0, dir: p.VMDR ?? 0 };
+      return (p?.VHM0 != null) ? { height: p.VHM0, dir: p.VMDR ?? 0 } : null;
     },
     current() {
       const p = this.sp;
-      if (!p || p.HCSP == null) return null;
-      return { speed: p.HCSP, dir: p.HCDT ?? 0 };
+      return (p?.HCSP != null) ? { speed: p.HCSP, dir: p.HCDT ?? 0 } : null;
     },
   },
   watch: {
@@ -109,103 +190,12 @@ export default {
     MapCircleArrows
   }
 }
-
 </script>
 
 
 <style scoped>
-.platform-detail-container {
-  justify-content: flex-start;
-  align-items: flex-start;
-  gap: 15px;
-  height: 180px;
-  overflow: hidden;
-}
-
 .map-container {
   position: relative;
   flex-shrink: 0;
-}
-
-.map-placeholder {
-  width: 180px;
-  height: 180px;
-}
-
-.info-container {
-  gap: 4px;
-  padding: 8px 0;
-}
-
-.station-name {
-  font-size: medium;
-  font-weight: bold;
-  color: white;
-  text-shadow: none;
-}
-
-.station-meta {
-  font-size: x-small;
-  color: white;
-  opacity: 0.7;
-  text-shadow: none;
-}
-
-.station-depth {
-  font-size: x-small;
-  color: white;
-  opacity: 0.5;
-  text-shadow: none;
-}
-
-.values-container {
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.value-container {
-  background: lightgreen;
-  border-radius: 8px;
-  padding: 4px 8px;
-}
-
-.value-container > span:first-child {
-  font-size: xx-small;
-  color: black;
-  text-shadow: none;
-  opacity: 0.7;
-}
-
-.value-number {
-  font-size: small;
-  font-weight: bold;
-  color: black;
-  text-shadow: none;
-}
-
-.switch-button {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 6px 12px;
-  background: var(--blue);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: x-small;
-}
-
-.switch-button > span {
-  color: white;
-  text-shadow: none;
-}
-
-.close-x-position {
-  position: absolute;
-  z-index: 10;
-  top: -9px;
-  left: -9px;
 }
 </style>

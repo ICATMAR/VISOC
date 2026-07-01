@@ -29,6 +29,33 @@ class RequestsManager {
     return this.buoyStations.find(s => s.id === id);
   }
 
+  // Returns 'active', 'delayed', or 'inactive' status for any station.
+  // Buoys: derived from the most recent generated VHM0 values.
+  // HFR: stable hash-based mockup (data lives in the DT component).
+  getStationStatus(id, type) {
+    if (type === 'buoy') return this._getBuoyStatus(id);
+    return this._hashStatus(id);
+  }
+
+  _getBuoyStatus(id) {
+    const key = Object.keys(this._buoyDataCache).find(k => k.startsWith(id + '_'));
+    if (!key) return this._hashStatus(id);
+    const vhm0 = this._buoyDataCache[key].VHM0;
+    const n = vhm0.length;
+    for (let i = n - 1; i >= Math.max(0, n - 3); i--)
+      if (vhm0[i] != null) return 'active';
+    for (let i = Math.max(0, n - 4); i >= Math.max(0, n - 24); i--)
+      if (vhm0[i] != null) return 'delayed';
+    return 'inactive';
+  }
+
+  _hashStatus(id) {
+    const h = id.split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) & 0xffff, 0);
+    if (h % 10 < 7) return 'active';
+    if (h % 10 < 9) return 'delayed';
+    return 'inactive';
+  }
+
   // Generates and caches hourly mockup data for all buoy variables.
   // WSPD/WDIR: wind km/h + °; VHM0/VMDR: wave m + °; HCSP/HCDT: current m/s + °; TEMP °C; PSAL PSU
   generateBuoyHourlyData(id, totalHours) {

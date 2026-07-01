@@ -1,0 +1,217 @@
+/* ================================================================
+   Shared styles for Platform Detail components (HFR, Buoys, etc.)
+   Used in DTAPHFRPlatformDetail and DTAPBuoysPlatformDetail
+   ================================================================ */
+
+/* Outer 3-column container: [Map] [Info] [Media] */
+.pd-container {
+  /* horizontal utility class provides display:flex; flex-direction:row */
+  align-items: flex-start;
+  gap: 15px;
+  height: 180px;
+  overflow: hidden;
+}
+
+/* ---- Map column (left) ---- */
+.pd-map {
+  width: 180px;
+  height: 180px;
+}
+
+/* ---- Info column (center) ---- */
+.pd-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 0 0 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Line 1: platform type · lat/lon [copy] */
+.pd-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  font-size: x-small;
+  color: rgba(255, 255, 255, 0.55);
+  flex-wrap: nowrap;
+}
+
+.pd-coords {
+  user-select: text;
+  cursor: text;
+  white-space: nowrap;
+}
+
+.pd-copy-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: x-small;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pd-copy-btn:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* Line 2a: station name */
+.pd-station-name {
+  font-size: medium;
+  font-weight: bold;
+  color: white;
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Line 2b: status + optional depth */
+.pd-status {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  font-size: x-small;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: none;
+}
+
+.pd-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pd-status-dot.active   { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
+.pd-status-dot.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
+.pd-status-dot.inactive { background: #757575; }
+
+/* Line 3: selected cell date */
+.pd-date {
+  font-size: x-small;
+  color: rgba(255, 255, 255, 0.45);
+  text-shadow: none;
+}
+
+/* Line 4: values – horizontal scrolling row */
+.pd-values-wrapper {
+  max-height: 52px;
+  overflow: hidden;
+}
+
+.pd-values-scroll {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.pd-value-item {
+  display: flex;
+  flex-direction: column;
+  background: lightgreen;
+  border-radius: 7px;
+  padding: 3px 7px;
+  flex-shrink: 0;
+}
+
+.pd-value-label {
+  font-size: xx-small;
+  color: rgba(0, 0, 0, 0.6);
+  text-shadow: none;
+}
+
+.pd-value-number {
+  font-size: x-small;
+  font-weight: bold;
+  color: black;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.pd-no-data {
+  font-size: x-small;
+  color: rgba(255, 255, 255, 0.35);
+  text-shadow: none;
+  align-self: center;
+}
+
+/* Bottom: switch-to-dashboard button */
+.pd-switch-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 5px 10px;
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: x-small;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.pd-switch-btn > span {
+  color: white;
+  text-shadow: none;
+}
+
+.pd-switch-btn-icon {
+  width: 14px;
+  height: 14px;
+  filter: brightness(0) invert(1);
+}
+
+/* ---- Media column (right) – circular image / gif ---- */
+.pd-media-container {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pd-circular-media {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 4px black;
+  margin: 15px 10px;
+}
+
+.pd-circular-fallback {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: var(--darkBlue);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 15px 10px;
+  gap: 6px;
+}
+
+/* Close button – positioned by the DataTimeline overlay ancestor */
+.pd-close-btn {
+  position: absolute;
+  z-index: 10;
+  top: -9px;
+  left: -9px;
+}

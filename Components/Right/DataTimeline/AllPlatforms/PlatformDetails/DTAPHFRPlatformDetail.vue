@@ -1,38 +1,77 @@
 <template>
-  <div class="horizontal platform-detail-container" v-if="station">
-    <!-- Close button -->
-    <i class="fa fa-xmark close-x close-x-position clickable" @click="$gui.isPlatformDetailOpen = false"></i>
+  <div class="horizontal pd-container" v-if="station">
+    <!-- Close -->
+    <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
     <!-- Map (left) -->
     <div class="map-container">
-      <div ref="stationMap" class="map-placeholder"></div>
+      <div ref="stationMap" class="pd-map"></div>
     </div>
 
-    <!-- Info (right) -->
-    <div class="vertical info-container">
-      <span class="platform-type">High-frequency radar station</span>
-      <span class="station-name">{{ station.name }}</span>
-      <span class="coordinates">{{ station.lat.toFixed(4) }}° N, {{ station.lon.toFixed(4) }}° E</span>
+    <!-- Info (center) -->
+    <div class="pd-info">
 
-      <!-- Selected date + value -->
-      <div class="vertical value-container" v-if="$gui.selectedPlatform?.value != undefined">
-        <span class="value-date">{{ formattedDate }}</span>
-        <span>{{ $t('Number of valid points') }}</span>
-        <span class="value-number">{{ $gui.selectedPlatform.value }}</span>
+      <!-- Line 1: platform type · lat/lon [copy] -->
+      <div class="pd-header">
+        <span>{{ $t('HFR radar station') }}</span>
+        <span>·</span>
+        <span class="pd-coords">{{ station.lat.toFixed(4) }}° N, {{ station.lon.toFixed(4) }}° E</span>
+        <button class="pd-copy-btn clickable" @click="copyCoords" :title="$t('Copy coordinates')">
+          <i class="fa fa-copy"></i>
+        </button>
       </div>
 
-      <!-- Switch to HFR currents dashboard -->
-      <button class="clickable switch-button" @click="$gui.selectedDashboard = 'hfr'">
-        <img :src="hfrIconSrc" class="button-icon">
-        <span>HFR currents</span>
+      <!-- Line 2: station name -->
+      <span class="pd-station-name">{{ station.name }}</span>
+
+      <!-- Line 2b: status -->
+      <div class="pd-status">
+        <div class="pd-status-dot" :class="status"></div>
+        <span>{{ $t(statusLabel) }}</span>
+      </div>
+
+      <!-- Line 3: selected date -->
+      <span class="pd-date" v-if="sp?.date">{{ formattedDate }}</span>
+
+      <!-- Line 4: values -->
+      <div class="pd-values-wrapper" v-if="sp?.date">
+        <div class="pd-values-scroll">
+          <template v-if="sp.value">
+            <div class="pd-value-item">
+              <span class="pd-value-label">{{ $t('Valid points') }}</span>
+              <span class="pd-value-number">{{ sp.value }}</span>
+            </div>
+          </template>
+          <span class="pd-no-data" v-else>{{ $t('No data available') }}</span>
+        </div>
+      </div>
+
+      <!-- Switch to HFR dashboard -->
+      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'hfr'">
+        <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
+        <span>{{ $t('Switch to') }} {{ $t(hfrDashboard.name) }}</span>
       </button>
+    </div>
+
+    <!-- Media (right): HFR station photo -->
+    <div class="pd-media-container">
+      <img
+        v-if="!imgError"
+        class="pd-circular-media"
+        :src="`./Assets/Images/platforms/HFR/${station.id}.jpg`"
+        :alt="station.name"
+        @error="imgError = true"
+      >
+      <div v-else class="pd-circular-fallback">
+        <img :src="radarIconURL" style="width:45%; opacity:0.35; filter:invert(1)" alt="">
+        <span style="font-size:x-small; color:rgba(255,255,255,0.4)">{{ station.id }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 
 <script>
-
 export default {
   name: "DTAPHFRPlatformDetail",
   created() {
@@ -44,11 +83,11 @@ export default {
   },
   data() {
     return {
-      hfrIconSrc: './Assets/Icons/radar.svg',
+      radarIconURL: './Assets/Icons/radar.svg',
+      imgError: false,
     }
   },
   methods: {
-    //onclick: function(e){},
     initMap() {
       this.map = new ol.Map({
         target: this.$refs.stationMap,
@@ -70,23 +109,41 @@ export default {
         })
       });
     },
+    copyCoords() {
+      const text = `${this.station.lat.toFixed(4)}, ${this.station.lon.toFixed(4)}`;
+      navigator.clipboard?.writeText(text);
+    },
   },
   computed: {
     station() {
       if (!this.$gui.selectedPlatform?.stationId) return null;
       return this.$requests.getHFRStation(this.$gui.selectedPlatform.stationId);
     },
+    sp() {
+      return this.$gui.selectedPlatform;
+    },
     formattedDate() {
-      const date = this.$gui.selectedPlatform?.date;
+      const date = this.sp?.date;
       if (!date) return '';
       const opts = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
       if (!this.$gui.timelineUseLocalTime) opts.timeZone = 'UTC';
       return date.toLocaleString(this.$i18n.locale, opts);
     },
+    status() {
+      if (!this.station) return 'inactive';
+      return this.$requests.getStationStatus(this.station.id, 'hfr');
+    },
+    statusLabel() {
+      return { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[this.status] ?? 'Inactive';
+    },
+    hfrDashboard() {
+      return this.$gui.dashboards.find(d => d.id === 'hfr') ?? { icon: '', name: 'HFR currents' };
+    },
   },
   watch: {
-    '$gui.selectedPlatform'(newPlatform) {
+    '$gui.selectedPlatform'() {
       if (!this.map || !this.station) return;
+      this.imgError = false;
       this.map.getView().animate({
         center: ol.proj.fromLonLat([this.station.lon, this.station.lat]),
         duration: 300
@@ -94,103 +151,12 @@ export default {
     }
   }
 }
-
 </script>
 
 
 <style scoped>
-.platform-detail-container {
-  justify-content: flex-start;
-  align-items: flex-start;
-  gap: 15px;
+.map-container {
+  position: relative;
+  flex-shrink: 0;
 }
-
-.map-placeholder {
-  width: 180px;
-  height: 180px;
-}
-
-.info-container {
-  gap: 5px;
-  padding: 10px 0;
-}
-
-.platform-type {
-  font-size: x-small;
-  opacity: 0.6;
-}
-
-.station-name {
-  font-size: medium;
-  font-weight: bold;
-  color: white;
-  text-shadow: none;
-}
-
-.coordinates {
-  font-size: x-small;
-  color: white;
-  opacity: 0.6;
-  text-shadow: none;
-}
-
-.value-container {
-  background: lightgreen;
-  border-radius: 10px;
-  padding: 8px 12px;
-  margin-top: 5px;
-}
-
-.value-date {
-  font-size: x-small;
-  color: black;
-  text-shadow: none;
-  opacity: 0.6;
-}
-
-.value-container > span {
-  font-size: x-small;
-  color: black;
-  text-shadow: none;
-}
-
-.value-number {
-  font-size: medium;
-  font-weight: bold;
-  color: black;
-  text-shadow: none;
-}
-
-.switch-button {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 6px 12px;
-  background: var(--blue);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: x-small;
-}
-
-.switch-button > span {
-  color: white;
-  text-shadow: none;
-}
-
-.button-icon {
-  width: 16px;
-  height: 16px;
-  filter: brightness(0) invert(1);
-}
-
-.close-x-position {
-  position: absolute;
-  z-index: 10;
-  top: -9px;
-  left: -9px;
-}
-
 </style>
