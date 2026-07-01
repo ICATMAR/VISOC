@@ -54,7 +54,7 @@ export default {
       if (this.waves?.height != null)
         result.push({ name: 'Waves', value: `${this.waves.height.toFixed(1)} m`, angle: this.waves.dir ?? 0 });
       if (this.current?.speed != null)
-        result.push({ name: 'Currents', value: `${this.current.speed.toFixed(2)} m/s`, angle: (this.current.dir + 180) % 360 ?? 0 });
+        result.push({ name: 'Currents', value: `${this.current.speed.toFixed(1)} m/s`, angle: (this.current.dir + 180) % 360 ?? 0 });
       return result;
     }
   },
@@ -97,9 +97,9 @@ export default {
 
 .variableValue {
   position: absolute;
+  font-size: xx-small;
   transform: translateX(calc(-50% + 49px));
   background: var(--blue);
-  font-size: x-small;
   padding-right: 2px;
   padding-left: 4px;
   border-radius: 0 4px 4px 0;
