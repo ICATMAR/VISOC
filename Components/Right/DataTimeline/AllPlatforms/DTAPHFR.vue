@@ -95,6 +95,8 @@ export default {
     // Bug fix: map icon click while a cell is selected — keep same timestamp on new station
     '$gui.selectedPlatform'(newP, oldP) {
       if (!this.selectedBar) return;
+      // Direct cell click (has date) — no cross-station sync needed
+      if (newP?.date) return;
       const newId = newP?.stationId;
       const oldId = oldP?.stationId;
       // Double-click fix: same station, but map click cleared the date → restore from selectedBar
