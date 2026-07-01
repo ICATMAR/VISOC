@@ -27,17 +27,19 @@
         <span>{{ $t(statusLabel) }}</span>
       </div>
 
-      <!-- Line 3: selected date -->
-      <span class="pd-date" v-if="sp?.date">{{ formattedDate }}</span>
+      <!-- Line 3: date + local/UTC toggle -->
+      <div class="pd-date-row" v-if="sp?.date">
+        <span class="pd-date">{{ formattedDate }}</span>
+        <span class="pd-time-toggle" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">
+          {{ $gui.timelineUseLocalTime ? `Local time (${utcOffsetLabel})` : 'UTC' }}
+        </span>
+      </div>
 
       <!-- Line 4: values (drag to scroll) -->
       <div class="pd-values-wrapper" v-if="sp?.date">
         <div class="pd-values-scroll" ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
-          @mousedown="onScrollDragStart"
-          @mousemove="onScrollDragMove"
-          @mouseup="onScrollDragEnd"
-          @mouseleave="onScrollDragEnd">
+          @mousedown="onScrollDragStart">
           <template v-if="sp.value">
             <div class="pd-value-item">
               <span class="pd-value-label">{{ $t('Valid points') }}</span>
@@ -53,9 +55,7 @@
         <div class="pd-switch-btn-circle">
           <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
-        <span class="pd-switch-btn-label">
-          {{ $t('Switch to') }} {{ $t(hfrDashboard.name) }} {{ $t('dashboard') }}
-        </span>
+        <span class="pd-switch-btn-label">{{ $t('Switch to dashboard') }}</span>
       </button>
     </div>
 
@@ -80,11 +80,23 @@ export default {
   name: "DTAPHFRPlatformDetail",
   created() {
     this.map = undefined;
-    this.markerFeature = undefined;
+    this.markerOverlay = undefined;
   },
   mounted() {
     if (!this.station) return;
     this.initMap();
+    this._onDocMouseMove = (e) => {
+      if (!this.isDragging) return;
+      if (this.$refs.valuesScroll)
+        this.$refs.valuesScroll.scrollLeft = this.dragScrollLeft - (e.pageX - this.dragStartX);
+    };
+    this._onDocMouseUp = () => { this.isDragging = false; };
+    document.addEventListener('mousemove', this._onDocMouseMove);
+    document.addEventListener('mouseup', this._onDocMouseUp);
+  },
+  beforeUnmount() {
+    document.removeEventListener('mousemove', this._onDocMouseMove);
+    document.removeEventListener('mouseup', this._onDocMouseUp);
   },
   data() {
     return {
@@ -97,17 +109,6 @@ export default {
   },
   methods: {
     initMap() {
-      this.markerFeature = new ol.Feature({
-        geometry: new ol.geom.Point(ol.proj.fromLonLat([this.station.lon, this.station.lat]))
-      });
-      this.markerFeature.setStyle(new ol.style.Style({
-        image: new ol.style.Icon({
-          src: this.radarIconURL,
-          width: 24,
-          height: 24,
-          crossOrigin: 'anonymous',
-        })
-      }));
       this.map = new ol.Map({
         target: this.$refs.stationMap,
         controls: [],
@@ -121,9 +122,6 @@ export default {
               crossOrigin: 'anonymous',
             }),
           }),
-          new ol.layer.Vector({
-            source: new ol.source.Vector({ features: [this.markerFeature] })
-          })
         ],
         view: new ol.View({
           center: ol.proj.fromLonLat([this.station.lon, this.station.lat]),
@@ -141,12 +139,6 @@ export default {
       this.dragScrollLeft = this.$refs.valuesScroll?.scrollLeft ?? 0;
       e.preventDefault();
     },
-    onScrollDragMove(e) {
-      if (!this.isDragging) return;
-      if (this.$refs.valuesScroll)
-        this.$refs.valuesScroll.scrollLeft = this.dragScrollLeft - (e.pageX - this.dragStartX);
-    },
-    onScrollDragEnd() { this.isDragging = false; },
   },
   computed: {
     station() {
@@ -160,6 +152,13 @@ export default {
       const opts = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
       if (!this.$gui.timelineUseLocalTime) opts.timeZone = 'UTC';
       return date.toLocaleString(this.$i18n.locale, opts);
+    },
+    utcOffsetLabel() {
+      const offsetMins = -new Date().getTimezoneOffset();
+      const sign = offsetMins >= 0 ? '+' : '-';
+      const h = Math.floor(Math.abs(offsetMins) / 60);
+      const m = Math.abs(offsetMins) % 60;
+      return m ? `UTC${sign}${h}:${String(m).padStart(2, '0')}` : `UTC${sign}${h}`;
     },
     status() {
       return this.station ? this.$requests.getStationStatus(this.station.id, 'hfr') : 'inactive';
@@ -176,7 +175,7 @@ export default {
       if (!this.map || !this.station) return;
       this.imgError = false;
       const coords = ol.proj.fromLonLat([this.station.lon, this.station.lat]);
-      this.markerFeature?.getGeometry().setCoordinates(coords);
+      this.markerOverlay?.setPosition(coords);
       this.map.getView().animate({ center: coords, duration: 300 });
     }
   }

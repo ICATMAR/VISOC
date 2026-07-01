@@ -23,6 +23,8 @@
                 <div class="wind-half">
                   <div class="wind-bar" :style="{ height: windBarHeight(buoy, cellIndex, sub - 1) }"></div>
                 </div>
+                <!-- Hover / selected overlay -->
+                <div class="sub-cell-overlay"></div>
               </div>
             </div>
           </td>
@@ -187,6 +189,7 @@ export default {
 
 .sub-cell {
   flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   background: lightblue;
@@ -197,12 +200,19 @@ export default {
   background: lightgray;
 }
 
-.sub-cell:hover {
-  filter: brightness(1.2) saturate(1.3);
+.sub-cell-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
 }
-
-.sub-cell-selected {
-  filter: saturate(2.5) brightness(0.85);
+.sub-cell:hover .sub-cell-overlay {
+  background: var(--darkBlue);
+  opacity: 0.6;
+}
+.sub-cell-selected .sub-cell-overlay {
+  background: var(--red);
+  opacity: 0.6;
 }
 
 .wave-half {

@@ -9,13 +9,32 @@
   align-items: flex-start;
   gap: 15px;
   height: 180px;
-  overflow: hidden;
+  /* No overflow:hidden — MapCircleArrows labels must be able to overflow */
 }
 
 /* ---- Map column (left) ---- */
 .pd-map {
   width: 180px;
   height: 180px;
+  flex-shrink: 0;
+}
+
+/* Platform marker inside OL Overlay — matches Map.vue icon style */
+.pd-map-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 6px black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.pd-map-icon img {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) invert(1);
 }
 
 /* ---- Info column (center) ---- */
@@ -26,6 +45,7 @@
   padding: 8px 0 0 0;
   min-width: 0;
   flex: 1;
+  align-self: stretch;    /* take full container height so button reaches bottom */
   overflow: hidden;
 }
 
@@ -70,7 +90,7 @@
   text-overflow: ellipsis;
 }
 
-/* Line 2b: status dot + label (+ optional depth) */
+/* Line 2b: status dot + label */
 .pd-status {
   display: flex;
   flex-direction: row;
@@ -91,12 +111,29 @@
 .pd-status-dot.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
 .pd-status-dot.inactive { background: #757575; }
 
-/* Line 3: selected cell date */
+/* Line 3: selected cell date + time-reference toggle */
+.pd-date-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
 .pd-date {
   font-size: x-small;
   color: rgba(255, 255, 255, 0.45);
   text-shadow: none;
 }
+
+.pd-time-toggle {
+  font-size: x-small;
+  color: rgba(255, 255, 255, 0.45);
+  text-shadow: none;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pd-time-toggle:hover { color: rgba(255, 255, 255, 0.75); }
 
 /* Line 4: values – horizontally scrollable row */
 .pd-values-wrapper {
@@ -158,7 +195,8 @@
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-top: 6px;
+  margin-top: auto;    /* stick to bottom of pd-info */
+  margin-bottom: 10px;
   padding: 0;
   background: none;
   border: none;
@@ -171,7 +209,7 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: black;
+  background: var(--lightBlue);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -182,9 +220,8 @@
 }
 
 .pd-switch-btn-icon {
-  width: 16px;
-  height: 16px;
-  filter: brightness(0) invert(1);
+  width: 28px;
+  height: 28px;
 }
 
 .pd-switch-btn-label {
