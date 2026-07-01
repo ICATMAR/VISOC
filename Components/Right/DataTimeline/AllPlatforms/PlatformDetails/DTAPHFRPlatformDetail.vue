@@ -14,9 +14,10 @@
       <span class="station-name">{{ station.name }}</span>
       <span class="coordinates">{{ station.lat.toFixed(4) }}° N, {{ station.lon.toFixed(4) }}° E</span>
 
-      <!-- Number of valid points -->
+      <!-- Selected date + value -->
       <div class="vertical value-container" v-if="$gui.selectedPlatform?.value != undefined">
-        <span>{{$t('Number of valid points')}}</span>
+        <span class="value-date">{{ formattedDate }}</span>
+        <span>{{ $t('Number of valid points') }}</span>
         <span class="value-number">{{ $gui.selectedPlatform.value }}</span>
       </div>
 
@@ -74,7 +75,14 @@ export default {
     station() {
       if (!this.$gui.selectedPlatform?.stationId) return null;
       return this.$requests.getHFRStation(this.$gui.selectedPlatform.stationId);
-    }
+    },
+    formattedDate() {
+      const date = this.$gui.selectedPlatform?.date;
+      if (!date) return '';
+      const opts = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+      if (!this.$gui.timelineUseLocalTime) opts.timeZone = 'UTC';
+      return date.toLocaleString(this.$i18n.locale, opts);
+    },
   },
   watch: {
     '$gui.selectedPlatform'(newPlatform) {
@@ -133,7 +141,14 @@ export default {
   margin-top: 5px;
 }
 
-.value-container > span:first-child {
+.value-date {
+  font-size: x-small;
+  color: black;
+  text-shadow: none;
+  opacity: 0.6;
+}
+
+.value-container > span {
   font-size: x-small;
   color: black;
   text-shadow: none;

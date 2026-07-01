@@ -14,7 +14,7 @@
       <!-- Variable names and units -->
       <div class="horizontal variable-names-row">
         <div class="vertical variable-names-subcontainer">
-          <span v-for="v in variables" :key="v.name">{{ $t(v.name) }}</span>
+          <span v-for="v in variables" :key="v.name" :class="{ 'active-var': v.name === activeVar }">{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
           <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
@@ -58,6 +58,7 @@ export default {
   name: "DTLayout",
   props: {
     variables: Array, // [{ name, unit }]
+    activeVar: String, // name of the variable to highlight in bold
   },
   mounted() {
     this.resetScroll();
@@ -228,6 +229,10 @@ export default {
   align-items: flex-end;
   justify-content: flex-end;
   padding-left: 5px;
+}
+
+.active-var {
+  font-weight: bold;
 }
 
 .button-next-prev-container {

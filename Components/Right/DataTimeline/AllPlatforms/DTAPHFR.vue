@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="stations">
+  <DTLayout :variables="stations" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)">
     <template #grid>
       <table>
         <tbody>
@@ -16,14 +16,17 @@
             </td>
           </tr>
           <!-- Station availability bars — barsPerCell hourly sub-bars per grid cell -->
-          <tr v-for="station in stations" :key="station.name">
+          <tr v-for="station in stations" :key="station.name"
+            @mouseenter="hoveredStation = station.name"
+            @mouseleave="hoveredStation = null">
             <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
               <div class="bars-group">
                 <div v-for="sub in barsPerCell" :key="sub"
                   class="bar clickable"
+                  :class="{ 'bar-selected': isBarSelected(station.name, cellIndex, sub - 1) }"
                   :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"
                   :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'"
-                  @click="stationClicked(station, cellIndex, sub - 1)">
+                  @click="stationClicked(station, cellIndex, sub - 1, cell)">
                 </div>
               </div>
             </td>
@@ -55,6 +58,8 @@ export default {
   },
   data() {
     return {
+      hoveredStation: null,
+      selectedBar: null, // { stationName, cellIndex, subIndex }
       stations: [
         { name: 'CNET', hourlyData: [], maxValue: 0 },
         { name: 'CREU', hourlyData: [], maxValue: 0 },
@@ -69,9 +74,20 @@ export default {
   },
   methods: {
     //onclick: function(e){},
-    stationClicked(station, cellIndex, subIndex) {
-      this.$gui.selectedPlatform = { stationId: station.name, value: this.getHourlyValue(station, cellIndex, subIndex) };
+    stationClicked(station, cellIndex, subIndex, cellDate) {
+      const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
+      this.$gui.selectedPlatform = {
+        stationId: station.name,
+        value: this.getHourlyValue(station, cellIndex, subIndex),
+        date,
+      };
+      this.selectedBar = { stationName: station.name, cellIndex, subIndex };
       this.$gui.isPlatformDetailOpen = true;
+    },
+    isBarSelected(stationName, cellIndex, subIndex) {
+      return this.selectedBar?.stationName === stationName
+        && this.selectedBar?.cellIndex === cellIndex
+        && this.selectedBar?.subIndex === subIndex;
     },
     getHourlyValue(station, cellIndex, subIndex) {
       return station.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
@@ -104,6 +120,14 @@ export default {
           });
       }
       return days;
+    },
+  },
+  watch: {
+    '$gui.isPlatformDetailOpen'(isOpen) {
+      if (!isOpen) this.selectedBar = null;
+    },
+    '$gui.timelineEffectiveIntervalMinutes'() {
+      this.selectedBar = null;
     },
   },
   components: {
@@ -175,6 +199,10 @@ td > * {
 
 .bar:hover {
   background: var(--darkBlue);
+}
+
+.bar-selected {
+  background: var(--red) !important;
 }
 
 </style>
