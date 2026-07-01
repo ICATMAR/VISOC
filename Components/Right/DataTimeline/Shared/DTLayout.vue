@@ -227,12 +227,13 @@ export default {
 
 .variable-names-subcontainer {
   align-self: flex-start;
+  padding-top: 5px;
 }
 
 .variable-names-subcontainer > span {
   color: black;
   text-shadow: none;
-  height: 22px;
+  height: 23px;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;

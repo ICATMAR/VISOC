@@ -189,6 +189,9 @@ export default {
 .bar-cell {
   padding: 0;
   vertical-align: bottom;
+  height: 22px;
+  /* Style B: thin separator between station rows */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .bars-group {
@@ -198,7 +201,6 @@ export default {
   width: 100%;
 }
 
-/* dt-col fills the full cell height; bar-inner grows from the bottom */
 .dt-col {
   flex: 1;
   min-width: 0.5px;
@@ -208,13 +210,21 @@ export default {
   align-items: flex-end;
 }
 
+/* Style B (stations): minimal — bars on transparent background */
 .bar-inner {
-  width: 100%;
+  width: 90%;
+  margin-left: 5%;
   background: var(--blue);
+  border-radius: 2px 2px 0 0;
+}
+
+/* Style A (TOTALS): faint background reveals the empty space → progress-bar feel */
+.bar-totals {
+  background: rgba(var(--lightBlueRGB), 0.2);
 }
 
 .bar-totals .bar-inner {
-  background: var(--darkBlue);
+  background: var(--lightBlue);
 }
 
 .totals-bar-cell {

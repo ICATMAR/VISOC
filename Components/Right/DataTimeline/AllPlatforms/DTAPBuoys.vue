@@ -189,7 +189,7 @@ export default {
 .bars-group {
   display: flex;
   flex-direction: row;
-  height: 22px;
+  height: 23px;
   width: 100%;
 }
 
