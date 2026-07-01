@@ -1,4 +1,5 @@
 @import "mapOverlays.css";
+@import "platformDetails.css";
 
 :root {
   --blue: rgb(20, 120, 167);

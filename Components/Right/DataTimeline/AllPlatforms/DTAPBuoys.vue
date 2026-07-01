@@ -126,6 +126,23 @@ export default {
       if (!this.selectedBar) return;
       const newId = newP?.stationId;
       const oldId = oldP?.stationId;
+      // Double-click fix: same buoy, but map click cleared the date → restore from selectedBar
+      if (newId && newId === oldId && !newP.date && oldP?.date) {
+        const b = this.buoys.find(buoy => buoy.name === newId);
+        if (b) {
+          const { cellIndex, subIndex } = this.selectedBar;
+          const i = cellIndex * this.barsPerCell + subIndex;
+          this.$gui.selectedPlatform = {
+            stationId: newId,
+            VHM0: b.VHM0[i], VMDR: b.VMDR[i],
+            WSPD: b.WSPD[i], WDIR: b.WDIR[i],
+            HCSP: b.HCSP[i], HCDT: b.HCDT[i],
+            TEMP: b.TEMP[i], PSAL: b.PSAL[i],
+            date: oldP.date,
+          };
+        }
+        return;
+      }
       if (!newId || !oldId || newId === oldId) return;
       const newBuoy = this.buoys.find(b => b.name === newId);
       if (!newBuoy) return; // different platform type

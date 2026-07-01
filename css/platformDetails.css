@@ -1,11 +1,11 @@
 /* ================================================================
    Shared styles for Platform Detail components (HFR, Buoys, etc.)
-   Used in DTAPHFRPlatformDetail and DTAPBuoysPlatformDetail
+   Imported via globalStyle.css → applies globally, no scoping needed
    ================================================================ */
 
 /* Outer 3-column container: [Map] [Info] [Media] */
 .pd-container {
-  /* horizontal utility class provides display:flex; flex-direction:row */
+  /* .horizontal utility class provides display:flex; flex-direction:row */
   align-items: flex-start;
   gap: 15px;
   height: 180px;
@@ -29,7 +29,7 @@
   overflow: hidden;
 }
 
-/* Line 1: platform type · lat/lon [copy] */
+/* Line 1: platform type · depth · lat/lon [copy] */
 .pd-header {
   display: flex;
   flex-direction: row;
@@ -51,15 +51,13 @@
   background: none;
   border: none;
   padding: 0;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.3);
   font-size: x-small;
   line-height: 1;
   flex-shrink: 0;
+  transition: color 0.15s;
 }
-
-.pd-copy-btn:hover {
-  color: rgba(255, 255, 255, 0.75);
-}
+.pd-copy-btn:hover { color: rgba(255, 255, 255, 0.8); }
 
 /* Line 2a: station name */
 .pd-station-name {
@@ -72,7 +70,7 @@
   text-overflow: ellipsis;
 }
 
-/* Line 2b: status + optional depth */
+/* Line 2b: status dot + label (+ optional depth) */
 .pd-status {
   display: flex;
   flex-direction: row;
@@ -89,7 +87,6 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-
 .pd-status-dot.active   { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
 .pd-status-dot.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
 .pd-status-dot.inactive { background: #757575; }
@@ -101,7 +98,7 @@
   text-shadow: none;
 }
 
-/* Line 4: values – horizontal scrolling row */
+/* Line 4: values – horizontally scrollable row */
 .pd-values-wrapper {
   max-height: 52px;
   overflow: hidden;
@@ -116,7 +113,10 @@
   padding-bottom: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  cursor: grab;
+  user-select: none;
 }
+.pd-values-scroll.is-dragging { cursor: grabbing; }
 
 .pd-value-item {
   display: flex;
@@ -139,6 +139,9 @@
   color: black;
   text-shadow: none;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .pd-no-data {
@@ -148,33 +151,54 @@
   align-self: center;
 }
 
-/* Bottom: switch-to-dashboard button */
+/* ---- Switch-to-dashboard button ---- */
+/* Layout: [●icon circle] [blue label body] */
+/* The circle is 4px taller than the label body */
 .pd-switch-btn {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
   margin-top: 6px;
-  padding: 5px 10px;
-  background: var(--blue);
-  color: white;
+  padding: 0;
+  background: none;
   border: none;
-  border-radius: 8px;
-  font-size: x-small;
   cursor: pointer;
-  flex-shrink: 0;
   align-self: flex-start;
+  gap: 0;
 }
 
-.pd-switch-btn > span {
-  color: white;
-  text-shadow: none;
+.pd-switch-btn-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 }
 
 .pd-switch-btn-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   filter: brightness(0) invert(1);
+}
+
+.pd-switch-btn-label {
+  background: var(--blue);
+  color: white;
+  text-shadow: none;
+  border-radius: 0 8px 8px 0;
+  padding: 0 10px 0 12px;
+  font-size: x-small;
+  height: 24px;          /* 4px less than the 28px circle */
+  display: flex;
+  align-items: center;
+  margin-left: -6px;     /* slide under the circle */
+  white-space: nowrap;
 }
 
 /* ---- Media column (right) – circular image / gif ---- */
@@ -199,7 +223,7 @@
   height: 150px;
   border-radius: 50%;
   background: var(--darkBlue);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.12);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -208,7 +232,7 @@
   gap: 6px;
 }
 
-/* Close button – positioned by the DataTimeline overlay ancestor */
+/* Close button – positioned relative to an ancestor with position:relative */
 .pd-close-btn {
   position: absolute;
   z-index: 10;

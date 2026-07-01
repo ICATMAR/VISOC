@@ -97,6 +97,15 @@ export default {
       if (!this.selectedBar) return;
       const newId = newP?.stationId;
       const oldId = oldP?.stationId;
+      // Double-click fix: same station, but map click cleared the date → restore from selectedBar
+      if (newId && newId === oldId && !newP.date && oldP?.date) {
+        const s = this.stations.find(st => st.name === newId);
+        if (s) {
+          const value = this.getHourlyValue(s, this.selectedBar.cellIndex, this.selectedBar.subIndex);
+          this.$gui.selectedPlatform = { stationId: newId, value, date: oldP.date };
+        }
+        return;
+      }
       if (!newId || !oldId || newId === oldId) return;
       const newStation = this.stations.find(s => s.name === newId);
       if (!newStation) return; // different platform type

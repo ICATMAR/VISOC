@@ -62,7 +62,7 @@ class GUIManager {
       const absH = Math.floor(Math.abs(offsetMinutes) / 60);
       const absM = Math.abs(offsetMinutes) % 60;
       const str = absM > 0 ? `${absH}:${String(absM).padStart(2, '0')}` : `${absH}`;
-      return `Local (UTC${sign}${str})`;
+      return `Local time (UTC${sign}${str})`;
     }
     return 'UTC';
   }
