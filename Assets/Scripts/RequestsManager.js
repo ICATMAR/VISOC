@@ -29,30 +29,29 @@ class RequestsManager {
     return this.buoyStations.find(s => s.id === id);
   }
 
+  _mockStatus = {
+    CNET: 'active', CREU: 'active',   BEGU: 'active',   TOSS: 'delayed',
+    AREN: 'active', PBCN: 'inactive', GNST: 'active',   SCAL: 'active',
+    CCRE: 'active', TORD: 'active',   TARG: 'delayed',  TORT: 'active',  ODAS: 'inactive',
+  };
+
   // Returns 'active', 'delayed', or 'inactive' status for any station.
   // Buoys: derived from the most recent generated VHM0 values.
-  // HFR: stable hash-based mockup (data lives in the DT component).
+  // HFR: hardcoded mockup (data lives in the DT component).
   getStationStatus(id, type) {
     if (type === 'buoy') return this._getBuoyStatus(id);
-    return this._hashStatus(id);
+    return this._mockStatus[id] ?? 'active';
   }
 
   _getBuoyStatus(id) {
     const key = Object.keys(this._buoyDataCache).find(k => k.startsWith(id + '_'));
-    if (!key) return this._hashStatus(id);
+    if (!key) return this._mockStatus[id] ?? 'active';
     const vhm0 = this._buoyDataCache[key].VHM0;
     const n = vhm0.length;
     for (let i = n - 1; i >= Math.max(0, n - 3); i--)
       if (vhm0[i] != null) return 'active';
     for (let i = Math.max(0, n - 4); i >= Math.max(0, n - 24); i--)
       if (vhm0[i] != null) return 'delayed';
-    return 'inactive';
-  }
-
-  _hashStatus(id) {
-    const h = id.split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) & 0xffff, 0);
-    if (h % 10 < 7) return 'active';
-    if (h % 10 < 9) return 'delayed';
     return 'inactive';
   }
 
