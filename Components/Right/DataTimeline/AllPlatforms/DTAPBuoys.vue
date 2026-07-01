@@ -1,47 +1,33 @@
 <template>
   <DTLayout :variables="buoys" :active-var="hoveredBuoy || (selectedBar && selectedBar.buoyName)">
     <template #grid>
-      <table>
-        <tbody>
-          <!-- Days of week -->
-          <tr>
-            <td v-for="day in days" :key="day.date" :colspan="day.span" class="weekDayCell">
-              <span>{{ day.textLong }}</span>
-            </td>
-          </tr>
-          <!-- Hours (hidden for daily interval) -->
-          <tr v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
-            <td v-for="(cell, index) in cells" :key="index" class="hourCell">
-              <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
-            </td>
-          </tr>
-          <!-- Buoy rows: barsPerCell hourly sub-cells per grid cell -->
-          <tr v-for="buoy in buoys" :key="buoy.name"
-            @mouseenter="hoveredBuoy = buoy.name"
-            @mouseleave="hoveredBuoy = null">
-            <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
-              <div class="bars-group">
-                <div v-for="sub in barsPerCell" :key="sub"
-                  class="sub-cell clickable"
-                  :class="{
-                    'no-data': !hasData(buoy, cellIndex, sub - 1),
-                    'sub-cell-selected': isBarSelected(buoy.name, cellIndex, sub - 1)
-                  }"
-                  @click="buoyClicked(buoy, cellIndex, sub - 1, cell)">
-                  <!-- Wave height: bar grows upward from center -->
-                  <div class="wave-half">
-                    <div class="wave-bar" :style="{ height: waveBarHeight(buoy, cellIndex, sub - 1) }"></div>
-                  </div>
-                  <!-- Wind speed: bar grows downward from center -->
-                  <div class="wind-half">
-                    <div class="wind-bar" :style="{ height: windBarHeight(buoy, cellIndex, sub - 1) }"></div>
-                  </div>
+      <DTTimelineGrid v-slot="{ cells }">
+        <!-- Buoy rows: barsPerCell hourly sub-cells per grid cell -->
+        <tr v-for="buoy in buoys" :key="buoy.name"
+          @mouseenter="hoveredBuoy = buoy.name"
+          @mouseleave="hoveredBuoy = null">
+          <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
+            <div class="bars-group">
+              <div v-for="sub in barsPerCell" :key="sub"
+                class="sub-cell clickable"
+                :class="{
+                  'no-data': !hasData(buoy, cellIndex, sub - 1),
+                  'sub-cell-selected': isBarSelected(buoy.name, cellIndex, sub - 1)
+                }"
+                @click="buoyClicked(buoy, cellIndex, sub - 1, cell)">
+                <!-- Wave height: bar grows upward from center -->
+                <div class="wave-half">
+                  <div class="wave-bar" :style="{ height: waveBarHeight(buoy, cellIndex, sub - 1) }"></div>
+                </div>
+                <!-- Wind speed: bar grows downward from center -->
+                <div class="wind-half">
+                  <div class="wind-bar" :style="{ height: windBarHeight(buoy, cellIndex, sub - 1) }"></div>
                 </div>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </td>
+        </tr>
+      </DTTimelineGrid>
     </template>
   </DTLayout>
 </template>
@@ -49,6 +35,7 @@
 
 <script>
 import DTLayout from '../Shared/DTLayout.vue';
+import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 
 const WAVE_MAX_M = 2.5;
 const WIND_MAX_KMH = 30 * 1.852; // 30 knots in km/h
@@ -117,30 +104,6 @@ export default {
     barsPerCell() {
       return Math.round(this.$gui.timelineEffectiveIntervalMinutes / 60);
     },
-    cells() {
-      const startTime = this.$gui.timelineStartDate.getTime();
-      const endTime = this.$gui.timelineEndDate.getTime();
-      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
-      let cells = [];
-      for (let t = startTime; t < endTime; t += stepMs)
-        cells.push(new Date(t));
-      return cells;
-    },
-    days() {
-      let days = [];
-      for (const cell of this.cells) {
-        const last = days[days.length - 1];
-        if (last && this.$gui.timelineDate(last.date) === this.$gui.timelineDate(cell))
-          last.span++;
-        else
-          days.push({
-            date: cell,
-            span: 1,
-            textLong: this.$gui.timelineFormatDay(cell, this.$i18n.locale),
-          });
-      }
-      return days;
-    },
   },
   watch: {
     '$gui.isPlatformDetailOpen'(isOpen) {
@@ -151,7 +114,8 @@ export default {
     },
   },
   components: {
-    DTLayout
+    DTLayout,
+    DTTimelineGrid,
   }
 }
 
@@ -159,46 +123,6 @@ export default {
 
 
 <style scoped>
-table {
-  border-collapse: collapse;
-  border-spacing: 0;
-  align-self: flex-start;
-}
-
-td {
-  width: 30px;
-  height: 22px;
-  text-align: center;
-}
-
-td > * {
-  color: black;
-  text-shadow: none;
-  text-wrap: nowrap;
-}
-
-.weekDayCell {
-  text-align: left;
-  padding-left: 15px;
-  border-left: 1px solid gray;
-  border-bottom: 1px solid gray;
-}
-
-.hourCell {
-  font-size: x-small;
-  border-bottom: 1px solid #0000002e;
-  position: relative;
-  overflow: visible;
-}
-
-.hourCell > span {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  white-space: nowrap;
-}
-
 .bar-cell {
   padding: 0;
 }

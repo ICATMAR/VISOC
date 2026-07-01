@@ -1,7 +1,5 @@
 <template>
-
-<!-- Timetable -->
-<table>
+<table class="dt-table">
   <tbody>
     <!-- Days of week -->
     <tr>
@@ -9,22 +7,16 @@
         <span>{{ day.textLong }}</span>
       </td>
     </tr>
-    <!-- Time of day (hidden for daily interval) -->
+    <!-- Hours (hidden for daily interval) -->
     <tr v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
       <td v-for="(cell, index) in cells" :key="index" class="hourCell">
         <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
       </td>
     </tr>
-    <!-- Data points -->
-    <tr v-for="(varDataPoints, varIndex) in data" :key="varIndex">
-      <td v-for="(dataPoint, index) in varDataPoints" :key="index"
-        :style="getGradientStyle(index, varDataPoints)" style="font-size: small">
-        <span>{{ dataPoint }}º</span>
-      </td>
-    </tr>
+    <!-- Data rows provided by each DataTimeline -->
+    <slot :cells="cells" :barsPerCell="barsPerCell"></slot>
   </tbody>
 </table>
-
 </template>
 
 
@@ -32,35 +24,10 @@
 
 export default {
   name: "DTTimelineGrid",
-  props: {
-    variables: Array,
-  },
-  methods: {
-    //onclick: function(e){},
-    // LEGEND COLORS
-    // Helper to map value to a color (example logic)
-    getColorFromValue(value) {
-      if (value < 3) return 'white';
-      if (value < 6) return 'yellow';
-      if (value < 9) return 'orange';
-      return 'red';
-    },
-    getGradientStyle(index, dataArray) {
-      const currentVal = dataArray[index];
-      // Use the current value as fallback if neighbor doesn't exist
-      const prevVal = index > 0 ? dataArray[index - 1] : currentVal;
-      const nextVal = index < dataArray.length - 1 ? dataArray[index + 1] : currentVal;
-
-      const prevColor = this.getColorFromValue((prevVal + currentVal) / 2);
-      const currColor = this.getColorFromValue(currentVal);
-      const nextColor = this.getColorFromValue((nextVal + currentVal) / 2);
-
-      return {
-        background: `linear-gradient(to right, ${prevColor}, ${currColor}, ${nextColor})`
-      };
-    },
-  },
   computed: {
+    barsPerCell() {
+      return Math.round(this.$gui.timelineEffectiveIntervalMinutes / 60);
+    },
     cells() {
       const startTime = this.$gui.timelineStartDate.getTime();
       const endTime = this.$gui.timelineEndDate.getTime();
@@ -85,37 +52,27 @@ export default {
       }
       return days;
     },
-    data() {
-      let variablesDataPoints = [];
-      for (let vI = 0; vI < this.variables.length; vI++) {
-        variablesDataPoints[vI] = [];
-        for (let i = 0; i < this.cells.length; i++) {
-          // Generate random data points for now
-          variablesDataPoints[vI][i] = Math.floor(Math.random() * 10);
-        }
-      }
-      return variablesDataPoints;
-    },
   }
 }
 
 </script>
 
 
-<style scoped>
-table {
+<!-- Non-scoped: applies to slot content rendered by child DT components -->
+<style>
+.dt-table {
   border-collapse: collapse;
   border-spacing: 0;
   align-self: flex-start;
 }
 
-td {
+.dt-table td {
   width: 30px;
   height: 22px;
   text-align: center;
 }
 
-td > * {
+.dt-table td > * {
   color: black;
   text-shadow: none;
   text-wrap: nowrap;
@@ -142,5 +99,4 @@ td > * {
   transform: translate(-50%, -50%);
   white-space: nowrap;
 }
-
 </style>
