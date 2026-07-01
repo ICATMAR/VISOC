@@ -5,7 +5,7 @@
 
     <!-- Platform icon -->
     <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
-      <img class="platform-icon clickable" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
+      <img class="platform-icon clickable" :class="{ selected: isIconSelected(station) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
       <!-- Indicator marker -->
       <div class="platform-marker-indicator"></div>
     </div>
@@ -54,7 +54,10 @@ export default {
     }
   },
   methods: {
-    //onclick: function(e){},
+    isIconSelected(station) {
+      const id = this.$gui.selectedPlatform?.stationId;
+      return id === 'TOTALS' || id === station.id;
+    },
     platformClicked: function(e, station) {
       e.stopPropagation();
       this.$gui.timelineDashboardId = 'hfr';

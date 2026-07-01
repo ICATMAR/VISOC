@@ -1,8 +1,22 @@
 <template>
-  <DTLayout :variables="stations" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)" @var-click="stationNameClicked">
+  <DTLayout :variables="allVariables" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)" @var-click="stationNameClicked">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
-        <!-- Station availability bars — barsPerCell hourly sub-bars per grid cell -->
+        <!-- TOTALS row at top, separated from station rows by border -->
+        <tr @mouseenter="hoveredStation = 'TOTALS'" @mouseleave="hoveredStation = null">
+          <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell totals-bar-cell">
+            <div class="bars-group">
+              <div v-for="sub in barsPerCell" :key="sub"
+                class="bar bar-totals clickable"
+                :class="{ 'bar-selected': isBarSelected('TOTALS', cellIndex, sub - 1) }"
+                :style="{ height: (totalsValue(cellIndex, sub - 1) / (totals.maxValue || 1) * 100) + '%' }"
+                :title="totalsTitle(cellIndex, sub - 1)"
+                @click="totalsClicked(cellIndex, sub - 1, cell)">
+              </div>
+            </div>
+          </td>
+        </tr>
+        <!-- Individual station availability bars -->
         <tr v-for="station in stations" :key="station.name"
           @mouseenter="hoveredStation = station.name"
           @mouseleave="hoveredStation = null">
@@ -31,7 +45,6 @@ import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 export default {
   name: "DTAPHFR",
   created() {
-    // Always generate hourly data regardless of display interval
     const totalHours = Math.round(
       (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
     );
@@ -42,11 +55,21 @@ export default {
           station.maxValue = station.hourlyData[i];
       }
     }
+    // Independent mockup data for the TOTALS network product
+    for (let i = 0; i < totalHours; i++) {
+      const ok = Math.random() > 0.08;
+      const validPts = ok ? 300 + Math.round(Math.random() * 500) : 0;
+      const activeStations = ok ? 4 + Math.round(Math.random() * 4) : Math.round(Math.random() * 2);
+      this.totals.hourlyData.push(validPts);
+      this.totals.activeStations.push(activeStations);
+      if (validPts > this.totals.maxValue) this.totals.maxValue = validPts;
+    }
   },
   data() {
     return {
       hoveredStation: null,
-      selectedBar: null, // { stationName, cellIndex, subIndex }
+      selectedBar: null,
+      totals: { name: 'TOTALS', hourlyData: [], activeStations: [], maxValue: 0 },
       stations: [
         { name: 'CNET', hourlyData: [], maxValue: 0 },
         { name: 'CREU', hourlyData: [], maxValue: 0 },
@@ -60,7 +83,29 @@ export default {
     }
   },
   methods: {
-    //onclick: function(e){},
+    totalsValue(cellIndex, subIndex) {
+      return this.totals.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
+    },
+    totalsActiveStations(cellIndex, subIndex) {
+      return this.totals.activeStations[cellIndex * this.barsPerCell + subIndex] ?? 0;
+    },
+    totalsTitle(cellIndex, subIndex) {
+      const pts = this.totalsValue(cellIndex, subIndex);
+      const active = this.totalsActiveStations(cellIndex, subIndex);
+      if (!pts) return this.$t('No data available');
+      return `${pts} valid points · ${active} active stations`;
+    },
+    totalsClicked(cellIndex, subIndex, cellDate) {
+      const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
+      this.$gui.selectedPlatform = {
+        stationId: 'TOTALS',
+        value: this.totalsValue(cellIndex, subIndex),
+        activeStations: this.totalsActiveStations(cellIndex, subIndex),
+        date,
+      };
+      this.selectedBar = { stationName: 'TOTALS', cellIndex, subIndex };
+      this.$gui.isPlatformDetailOpen = true;
+    },
     stationClicked(station, cellIndex, subIndex, cellDate) {
       const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
       this.$gui.selectedPlatform = {
@@ -79,14 +124,17 @@ export default {
     getHourlyValue(station, cellIndex, subIndex) {
       return station.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
     },
-    stationNameClicked(station) {
-      this.$gui.selectedPlatform = { stationId: station.name };
+    stationNameClicked(v) {
+      this.$gui.selectedPlatform = { stationId: v.name };
       this.$gui.isPlatformDetailOpen = true;
     },
   },
   computed: {
     barsPerCell() {
       return Math.round(this.$gui.timelineEffectiveIntervalMinutes / 60);
+    },
+    allVariables() {
+      return [this.totals, ...this.stations];
     },
   },
   watch: {
@@ -96,14 +144,14 @@ export default {
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.selectedBar = null;
     },
-    // Bug fix: map icon click while a cell is selected — keep same timestamp on new station
     '$gui.selectedPlatform'(newP, oldP) {
       if (!this.selectedBar) return;
-      // Direct cell click (has date) — no cross-station sync needed
       if (newP?.date) return;
       const newId = newP?.stationId;
       const oldId = oldP?.stationId;
-      // Double-click fix: same station, but map click cleared the date → restore from selectedBar
+      // Never cross-sync when TOTALS is involved
+      if (newId === 'TOTALS' || oldId === 'TOTALS') return;
+      // Double-click fix: same station, map click cleared the date → restore from selectedBar
       if (newId && newId === oldId && !newP.date && oldP?.date) {
         const s = this.stations.find(st => st.name === newId);
         if (s) {
@@ -114,9 +162,9 @@ export default {
       }
       if (!newId || !oldId || newId === oldId) return;
       const newStation = this.stations.find(s => s.name === newId);
-      if (!newStation) return; // different platform type
+      if (!newStation) return;
       const oldDate = oldP?.date;
-      if (!oldDate) return; // map click sets no date; recover from previous selectedPlatform
+      if (!oldDate) return;
       const elapsedHours = (oldDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600);
       const absHour = Math.floor(elapsedHours);
       const subIndex = absHour % this.barsPerCell;
@@ -161,5 +209,17 @@ export default {
 
 .bar-selected {
   background: var(--red) !important;
+}
+
+.bar-totals {
+  background: var(--darkBlue);
+}
+
+.bar-totals:hover {
+  background: var(--blue);
+}
+
+.totals-bar-cell {
+  border-bottom: 2px solid var(--blue);
 }
 </style>

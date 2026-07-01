@@ -21,10 +21,10 @@
 
 /* Platform marker inside OL Overlay — matches Map.vue icon style */
 .pd-map-icon {
-  width: 30px;
-  height: 30px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: var(--blue);
+  background: var(--red);
   box-shadow: 0 0 6px black;
   display: flex;
   align-items: center;
@@ -34,7 +34,6 @@
 .pd-map-icon img {
   width: 16px;
   height: 16px;
-  filter: brightness(0) invert(1);
 }
 
 /* ---- Info column (center) ---- */
