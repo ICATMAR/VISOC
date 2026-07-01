@@ -173,4 +173,8 @@ td > * {
   min-width: 0.5px;
 }
 
+.bar:hover {
+  background: var(--darkBlue);
+}
+
 </style>

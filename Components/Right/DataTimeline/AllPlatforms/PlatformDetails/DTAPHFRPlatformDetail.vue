@@ -16,7 +16,7 @@
 
       <!-- Number of valid points -->
       <div class="vertical value-container" v-if="$gui.selectedPlatform?.value != undefined">
-        <span>Number of points</span>
+        <span>{{$t('Number of valid points')}}</span>
         <span class="value-number">{{ $gui.selectedPlatform.value }}</span>
       </div>
 
