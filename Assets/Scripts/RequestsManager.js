@@ -1,15 +1,27 @@
 class RequestsManager {
 
   hfrStations = [
-    { id: 'CNET', name: 'Canet del Rosselló',  lon: 3.03805, lat: 42.7019, range: 'R24', owner: 'CEFREM'  },
-    { id: 'CREU', name: 'Cap de Creus',         lon: 3.3160,  lat: 42.3189, range: 'R22', owner: 'ICATMAR' },
-    { id: 'BEGU', name: 'Begur',                lon: 3.2305,  lat: 41.9672, range: 'R22', owner: 'ICATMAR' },
-    { id: 'TOSS', name: 'Tossa de Mar',         lon: 2.9345,  lat: 41.7155, range: 'R24', owner: 'ICATMAR' },
-    { id: 'AREN', name: 'Arenys de Mar',        lon: 2.5575,  lat: 41.5775, range: 'R23', owner: 'ICATMAR' },
-    { id: 'PBCN', name: 'Port de Barcelona',    lon: 2.1711,  lat: 41.3344, range: 'R23', owner: 'ICATMAR' },
-    { id: 'GNST', name: 'Port Ginesta',         lon: 1.9221,  lat: 41.2560, range: 'R23', owner: 'ICATMAR' },
-    { id: 'SCAL', name: 'Segur de Calafell',    lon: 1.6073,  lat: 41.1862, range: 'R24', owner: 'ICATMAR' },
+    { id: 'CNET', name: 'Canet del Rosselló',  lon: 3.03805, lat: 42.7019, range: 'R24', owner: 'CEFREM',  installed: '2012-03-01', lastCalibration: 'unknown' },
+    { id: 'CREU', name: 'Cap de Creus',         lon: 3.3160,  lat: 42.3189, range: 'R22', owner: 'ICATMAR', installed: '2009-11-01', lastCalibration: 'unknown' },
+    { id: 'BEGU', name: 'Begur',                lon: 3.2305,  lat: 41.9672, range: 'R22', owner: 'ICATMAR', installed: '2011-06-01', lastCalibration: 'unknown' },
+    { id: 'TOSS', name: 'Tossa de Mar',         lon: 2.9345,  lat: 41.7155, range: 'R24', owner: 'ICATMAR', installed: '2012-09-01', lastCalibration: 'unknown' },
+    { id: 'AREN', name: 'Arenys de Mar',        lon: 2.5575,  lat: 41.5775, range: 'R23', owner: 'ICATMAR', installed: '2014-04-01', lastCalibration: 'unknown' },
+    { id: 'PBCN', name: 'Port de Barcelona',    lon: 2.1711,  lat: 41.3344, range: 'R23', owner: 'ICATMAR', installed: '2015-10-01', lastCalibration: 'unknown' },
+    { id: 'GNST', name: 'Port Ginesta',         lon: 1.9221,  lat: 41.2560, range: 'R23', owner: 'ICATMAR', installed: '2017-03-01', lastCalibration: 'unknown' },
+    { id: 'SCAL', name: 'Segur de Calafell',    lon: 1.6073,  lat: 41.1862, range: 'R24', owner: 'ICATMAR', installed: '2019-07-01', lastCalibration: 'unknown' },
   ];
+
+  hfrOwners = {
+    ICATMAR: { name: 'ICATMAR', url: 'https://icatmar.cat' },
+    CEFREM:  { name: 'CEFREM',  url: 'https://cefrem.univ-perp.fr/' },
+  };
+
+  hfrNetwork = {
+    manufacturer: 'CODAR SeaSonde',
+    frequency: '13.5 MHz',
+    licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
+    licenseLabel: 'CC BY 4.0',
+  };
 
   buoyStations = [
     { id: 'CCRE', name: 'Cap de Creus', lon: 3.3495, lat: 42.3212, depth: 100, owner: 'MSM'      },
