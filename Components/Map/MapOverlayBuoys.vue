@@ -7,7 +7,9 @@
     <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id">
       <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
       <!-- Indicator marker -->
-      <div class="platform-marker-indicator"></div>
+      <div class="platform-marker-indicator">
+        <img :src="icatmarLogoURL" alt="">
+      </div>
     </div>
 
   </div>
@@ -51,6 +53,7 @@ export default {
   data() {
     return {
       iconURL: './Assets/Icons/buoy.svg',
+      icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
     }
   },
   methods: {

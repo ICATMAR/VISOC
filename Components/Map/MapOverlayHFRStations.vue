@@ -7,7 +7,9 @@
     <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
       <img class="platform-icon clickable" :class="{ selected: isIconSelected(station) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
       <!-- Indicator marker -->
-      <div class="platform-marker-indicator"></div>
+      <div class="platform-marker-indicator">
+        <img :src="icatmarLogoURL" alt="">
+      </div>
     </div>
 
   </div>
@@ -51,6 +53,7 @@ export default {
   data (){
     return {
       iconURL: './Assets/Icons/radar.svg',
+      icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
     }
   },
   methods: {
