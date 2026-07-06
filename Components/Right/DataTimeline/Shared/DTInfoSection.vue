@@ -4,14 +4,8 @@
     <!-- HFR individual station -->
     <template v-if="hfrStation">
       <div class="photo-col">
-        <img v-if="!imgError"
-          :src="stationPhotoURL"
-          class="station-photo"
-          :alt="hfrStation.name"
-          @error="imgError = true">
-        <div v-else class="photo-fallback">
-          <img :src="radarIconURL" class="fallback-icon" alt="">
-        </div>
+        <div class="photo-fallback"><img :src="radarIconURL" class="fallback-icon" alt=""></div>
+        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + stationPhotoURL + '\')' }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -92,14 +86,8 @@
     <!-- Buoy individual station -->
     <template v-else-if="buoyStation">
       <div class="photo-col">
-        <img v-if="!buoyImgError"
-          :src="buoyStationPhotoURL"
-          class="station-photo"
-          :alt="buoyStation.name"
-          @error="buoyImgError = true">
-        <div v-else class="photo-fallback">
-          <img :src="buoyIconURL" class="fallback-icon" alt="">
-        </div>
+        <div class="photo-fallback"><img :src="buoyIconURL" class="fallback-icon" alt=""></div>
+        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + buoyStationPhotoURL + '\')' }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -143,14 +131,8 @@
     <!-- Drifter -->
     <template v-else-if="drifterStation">
       <div class="photo-col">
-        <img v-if="!drifterImgError"
-          :src="drifterStationPhotoURL"
-          class="station-photo"
-          :alt="drifterStation.type"
-          @error="drifterImgError = true">
-        <div v-else class="photo-fallback">
-          <img :src="drifterIconURL" class="fallback-icon" alt="">
-        </div>
+        <div class="photo-fallback"><img :src="drifterIconURL" class="fallback-icon" alt=""></div>
+        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + drifterStationPhotoURL + '\')' }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -213,9 +195,6 @@ export default {
   name: "DTInfoSection",
   data() {
     return {
-      imgError: false,
-      buoyImgError: false,
-      drifterImgError: false,
       radarIconURL: './Assets/Icons/radar.svg',
       buoyIconURL: './Assets/Icons/buoy.svg',
       driftIconURL: './Assets/Icons/drifter.svg',
@@ -300,48 +279,46 @@ export default {
       return d.toLocaleDateString(this.$i18n.locale, { year: 'numeric', month: 'long', timeZone: 'UTC' });
     },
   },
-  watch: {
-    hfrStation() {
-      this.imgError = false;
-    },
-    buoyStation() {
-      this.buoyImgError = false;
-    },
-    drifterStation() {
-      this.drifterImgError = false;
-    },
-  },
 }
 </script>
 
 
 <style scoped>
 .info-section {
-  min-width: 520px;
+  min-width: 620px;
   background: var(--lightBlue);
   height: 100%;
   overflow: hidden;
   align-items: stretch;
 }
 
-/* Photo column */
+/* Photo column.
+   Fixed width; height follows the panel (align-self: stretch). Both the photo
+   and the fallback are absolutely positioned so neither contributes any
+   intrinsic size — the info rows alone determine the panel height, and the
+   photo can never make the container taller than the datatimeline. */
 .photo-col {
-  width: 120px;
+  position: relative;
+  width: 200px;
   min-width: 120px;
   overflow: hidden;
   flex-shrink: 0;
+  align-self: stretch;
 }
 
+/* Photo shown as a cover background (no intrinsic size). If the image is
+   missing the div is transparent and the fallback below shows through. */
 .station-photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .photo-fallback {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
