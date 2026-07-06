@@ -33,6 +33,20 @@ class RequestsManager {
 
   _buoyDataCache = {};
 
+  // Hours since last valid data point per HFR station (used for status + time-ago display).
+  // active ≤ 3h, delayed 3–24h, inactive > 24h
+  _mockLastUpdateHours = {
+    CNET: 1,   CREU: 0.5, BEGU: 2,   TOSS: 8,
+    AREN: 1.5, PBCN: 72,  GNST: 1,   SCAL: 2,
+  };
+
+  // Force a trailing gap (hours of null) at the end of generated buoy data to simulate inactivity.
+  // active ≤ 2h, delayed 2–24h, inactive > 24h
+  _buoyDataGaps = {
+    ODAS: 48,
+    TARG: 12,
+  };
+
   getHFRStation(id) {
     return this.hfrStations.find(s => s.id === id);
   }
@@ -41,29 +55,30 @@ class RequestsManager {
     return this.buoyStations.find(s => s.id === id);
   }
 
-  _mockStatus = {
-    CNET: 'active', CREU: 'active',   BEGU: 'active',   TOSS: 'delayed',
-    AREN: 'active', PBCN: 'inactive', GNST: 'active',   SCAL: 'active',
-    CCRE: 'active', TORD: 'active',   TARG: 'delayed',  TORT: 'active',  ODAS: 'inactive',
-  };
-
-  // Returns 'active', 'delayed', or 'inactive' status for any station.
-  // Buoys: derived from the most recent generated VHM0 values.
-  // HFR: hardcoded mockup (data lives in the DT component).
-  getStationStatus(id, type) {
-    if (type === 'buoy') return this._getBuoyStatus(id);
-    return this._mockStatus[id] ?? 'active';
+  // Returns hours since last valid data point for a station.
+  getLastUpdateHoursAgo(id, type) {
+    if (type === 'buoy') {
+      const key = Object.keys(this._buoyDataCache).find(k => k.startsWith(id + '_'));
+      if (key) {
+        const vhm0 = this._buoyDataCache[key].VHM0;
+        for (let i = vhm0.length - 1; i >= 0; i--) {
+          if (vhm0[i] != null) return vhm0.length - 1 - i;
+        }
+        return vhm0.length;
+      }
+      return this._buoyDataGaps[id] ?? 1;
+    }
+    return this._mockLastUpdateHours[id] ?? 1;
   }
 
-  _getBuoyStatus(id) {
-    const key = Object.keys(this._buoyDataCache).find(k => k.startsWith(id + '_'));
-    if (!key) return this._mockStatus[id] ?? 'active';
-    const vhm0 = this._buoyDataCache[key].VHM0;
-    const n = vhm0.length;
-    for (let i = n - 1; i >= Math.max(0, n - 3); i--)
-      if (vhm0[i] != null) return 'active';
-    for (let i = Math.max(0, n - 4); i >= Math.max(0, n - 24); i--)
-      if (vhm0[i] != null) return 'delayed';
+  // Returns 'active', 'delayed', or 'inactive' based on hours since last update.
+  // Buoys:  active ≤ 2h, delayed 2–24h, inactive > 24h
+  // HFR:    active ≤ 3h, delayed 3–24h, inactive > 24h
+  getStationStatus(id, type) {
+    const hours = this.getLastUpdateHoursAgo(id, type);
+    const delayThreshold = type === 'buoy' ? 2 : 3;
+    if (hours <= delayThreshold) return 'active';
+    if (hours <= 24) return 'delayed';
     return 'inactive';
   }
 
@@ -73,8 +88,10 @@ class RequestsManager {
     const key = `${id}_${totalHours}`;
     if (this._buoyDataCache[key]) return this._buoyDataCache[key];
     const out = { VHM0: [], VMDR: [], WSPD: [], WDIR: [], HCSP: [], HCDT: [], TEMP: [], PSAL: [] };
+    const gapHours = this._buoyDataGaps[id] ?? 0;
     for (let i = 0; i < totalHours; i++) {
-      const ok = Math.random() > 0.15;
+      const inGap = i >= totalHours - gapHours;
+      const ok = !inGap && Math.random() > 0.15;
       out.VHM0.push(ok ? Math.random() * 4 : null);
       out.VMDR.push(ok ? Math.random() * 360 : null);
       out.WSPD.push(ok ? Math.random() * 70 : null);

@@ -25,6 +25,7 @@
       <div class="pd-status">
         <div class="pd-status-dot" :class="status"></div>
         <span>{{ $t(statusLabel) }}</span>
+        <span class="pd-last-update">· {{ lastUpdateText }}</span>
       </div>
 
       <!-- Line 3: date + local/UTC toggle -->
@@ -166,6 +167,16 @@ export default {
       this.dragScrollLeft = this.$refs.valuesScroll?.scrollLeft ?? 0;
       e.preventDefault();
     },
+    formatTimeAgo(hours) {
+      if (hours == null) return '';
+      if (hours < 1) return 'Less than 1h ago';
+      if (hours < 2) return '1h ago';
+      if (hours < 24) return Math.floor(hours) + 'h ago';
+      const days = Math.floor(hours / 24);
+      if (days === 1) return '1 day ago';
+      if (days <= 7) return days + ' days ago';
+      return 'More than 7 days ago';
+    },
   },
   computed: {
     station() {
@@ -192,6 +203,10 @@ export default {
     },
     statusLabel() {
       return { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[this.status] ?? 'Inactive';
+    },
+    lastUpdateText() {
+      if (!this.station) return '';
+      return this.formatTimeAgo(this.$requests.getLastUpdateHoursAgo(this.station.id, 'hfr'));
     },
     hfrDashboard() {
       return this.$gui.dashboards.find(d => d.id === 'hfr') ?? { icon: '', name: 'HFR currents' };
