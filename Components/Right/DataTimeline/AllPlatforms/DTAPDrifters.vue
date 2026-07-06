@@ -339,7 +339,10 @@ export default {
 <style scoped>
 .dt-drifters {
   background: var(--lightBlue);
-  min-width: 100%;
+  /* Explicit bounded width (like the other timelines' calc(100vw - 125px))
+     so the wide table overflows the scroll area instead of expanding the pane. */
+  width: 100vw;
+  max-width: 100vw;
 }
 
 /* ---- Legend ---- */
@@ -369,6 +372,7 @@ export default {
 /* ---- Scroll area (both axes) ---- */
 .drifter-scroll {
   flex: 1;
+  min-width: 0; /* allow shrinking below content so the wide table scrolls inside */
   max-height: 376px;
   overflow: auto;
   background: rgba(255, 255, 255, 0.9);
