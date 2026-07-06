@@ -140,6 +140,60 @@
       </div>
     </template>
 
+    <!-- Drifter -->
+    <template v-else-if="drifterStation">
+      <div class="photo-col">
+        <div class="photo-fallback">
+          <img :src="drifterIconURL" class="fallback-icon" alt="">
+        </div>
+      </div>
+      <div class="info-col vertical" :style="institutionBgStyle">
+        <div class="info-header">
+          <span class="info-abbr">{{ drifterStation.id }}</span>
+          <span class="info-sep">·</span>
+          <span class="info-name">{{ drifterStation.exercise }}</span>
+        </div>
+        <div class="info-rows">
+          <div class="info-row">
+            <span class="info-label">Platform type</span>
+            <span class="info-value">Lagrangian drifter</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Type</span>
+            <span class="info-value">{{ drifterStation.type }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Deployment ID</span>
+            <span class="info-value">{{ drifterStation.deploymentId }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Drifter ID</span>
+            <span class="info-value">{{ drifterStation.id }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Project</span>
+            <span class="info-value">{{ drifterStation.project }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Exercise</span>
+            <span class="info-value">{{ drifterStation.exercise }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Institution</span>
+            <a href="https://icatmar.cat" target="_blank" rel="noopener" class="info-link">ICATMAR</a>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Depth</span>
+            <span class="info-value">{{ drifterStation.depth > 0 ? drifterStation.depth + ' m' : 'Surface' }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Date deployment</span>
+            <span class="info-value">{{ formatInstallDate(drifterStation.deployDate) }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Fallback -->
     <template v-else>
       <span class="info-placeholder">Select a platform for details</span>
@@ -158,6 +212,9 @@ export default {
       buoyImgError: false,
       radarIconURL: './Assets/Icons/radar.svg',
       buoyIconURL: './Assets/Icons/buoy.svg',
+      driftIconURL: './Assets/Icons/drifter.svg',
+      codeIconURL: './Assets/Icons/code.svg',
+      svpIconURL: './Assets/Icons/svp.svg',
     }
   },
   computed: {
@@ -200,11 +257,27 @@ export default {
       if (!id) return null;
       return this.$requests.getBuoyStation(id);
     },
+    isDrifterContext() {
+      return this.$gui.selectedDashboard === 'drifters'
+        || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'drifters');
+    },
+    drifterStation() {
+      if (!this.isDrifterContext) return null;
+      const id = this.$gui.selectedPlatform?.stationId;
+      if (!id) return null;
+      return this.$requests.getDrifterStation(id);
+    },
+    drifterIconURL() {
+      if (this.drifterStation?.type === 'CODE') return this.codeIconURL;
+      if (this.drifterStation?.type === 'SVP')  return this.svpIconURL;
+      return this.driftIconURL;
+    },
     institutionBgStyle() {
       let name = null;
-      if (this.hfrStation)        name = this.hfrStation.owner;
-      else if (this.isHFRContext) name = 'ICATMAR';
-      else if (this.buoyStation)  name = this.buoyStation.institution;
+      if (this.hfrStation)          name = this.hfrStation.owner;
+      else if (this.isHFRContext)   name = 'ICATMAR';
+      else if (this.buoyStation)    name = this.buoyStation.institution;
+      else if (this.drifterStation) name = this.drifterStation.institution;
       if (!name) return {};
       const url = './Assets/Images/institutions/' + name.replace(/[\/\\]/g, '-') + '.png';
       return { '--inst-logo': 'url(\'' + url + '\')' };

@@ -36,6 +36,17 @@
   height: 16px;
 }
 
+/* Small dot marking the selected / latest point on a trajectory map */
+.pd-map-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+  border: 1px solid white;
+  box-shadow: 0 0 4px black;
+  pointer-events: none;
+}
+
 /* ---- Info column (center) ---- */
 .pd-info {
   display: flex;

@@ -1,3 +1,5 @@
+import { generateDrifterTrajectory, resampleDrifterHourly } from './DriftersMockData.js';
+
 class RequestsManager {
 
   hfrStations = [
@@ -31,7 +33,28 @@ class RequestsManager {
     { id: 'TORT', name: 'Cap de Tortosa',  lon: 0.9852, lat: 40.7149, depth:  66, distanceCoast: 6.09, institution: 'ICATMAR', manufacturer: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
   ];
 
+  // DRIFTERS (DERIVA-1 exercise) — 4 CODE, 4 SVP, 4 Stokes.
+  // type: CODE (1 m) / SVP (15 m) / Stokes (surface). depth in metres.
+  // startLon/startLat: deployment location. lastHoursAgo drives both the
+  // trailing data gap (status/last-update) and the trajectory end.
+  drifterStations = [
+    { id: 'CODE1', deploymentId: 1,  type: 'CODE',   depth: 1,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-14', startLon: 3.2200, startLat: 42.2900, seed: 101, lastHoursAgo: 1  },
+    { id: 'CODE2', deploymentId: 2,  type: 'CODE',   depth: 1,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-16', startLon: 2.9000, startLat: 41.7500, seed: 102, lastHoursAgo: 1  },
+    { id: 'CODE3', deploymentId: 3,  type: 'CODE',   depth: 1,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-18', startLon: 2.4000, startLat: 41.5000, seed: 103, lastHoursAgo: 8  },
+    { id: 'CODE4', deploymentId: 4,  type: 'CODE',   depth: 1,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-20', startLon: 1.9500, startLat: 41.2000, seed: 104, lastHoursAgo: 2  },
+    { id: 'SVP1',  deploymentId: 5,  type: 'SVP',    depth: 15, project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-14', startLon: 3.3000, startLat: 42.1500, seed: 201, lastHoursAgo: 1  },
+    { id: 'SVP2',  deploymentId: 6,  type: 'SVP',    depth: 15, project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-15', startLon: 2.7000, startLat: 41.6000, seed: 202, lastHoursAgo: 1  },
+    { id: 'SVP3',  deploymentId: 7,  type: 'SVP',    depth: 15, project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-17', startLon: 2.2000, startLat: 41.3500, seed: 203, lastHoursAgo: 40 },
+    { id: 'SVP4',  deploymentId: 8,  type: 'SVP',    depth: 15, project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-19', startLon: 1.3000, startLat: 41.0500, seed: 204, lastHoursAgo: 1  },
+    { id: 'STK1',  deploymentId: 9,  type: 'Stokes', depth: 0,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-14', startLon: 3.1000, startLat: 42.0500, seed: 301, lastHoursAgo: 1  },
+    { id: 'STK2',  deploymentId: 10, type: 'Stokes', depth: 0,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-16', startLon: 2.6000, startLat: 41.5500, seed: 302, lastHoursAgo: 6  },
+    { id: 'STK3',  deploymentId: 11, type: 'Stokes', depth: 0,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-18', startLon: 2.0500, startLat: 41.2500, seed: 303, lastHoursAgo: 1  },
+    { id: 'STK4',  deploymentId: 12, type: 'Stokes', depth: 0,  project: 'ICATMAR', exercise: 'DERIVA-1', institution: 'ICATMAR', piName: 'ICATMAR', deployDate: '2025-09-20', startLon: 1.0500, startLat: 40.8000, seed: 304, lastHoursAgo: 1  },
+  ];
+
   _buoyDataCache = {};
+  _drifterTrajCache = {};   // id → native-cadence trajectory (for maps)
+  _drifterHourlyCache = {}; // `id_totalHours` → hourly resample (for timeline)
 
   // Hours since last valid data point per HFR station (used for status + time-ago display).
   // active ≤ 3h, delayed 3–24h, inactive > 24h
@@ -55,8 +78,54 @@ class RequestsManager {
     return this.buoyStations.find(s => s.id === id);
   }
 
+  getDrifterStation(id) {
+    return this.drifterStations.find(s => s.id === id);
+  }
+
+  // Time window drifter data is generated for. Anchored to the drifter
+  // dashboard's own range (not whatever dashboard is active when first
+  // requested), so a trajectory requested early (e.g. by the map overlay
+  // while another dashboard is open) still covers the full drifter window.
+  _drifterWindow() {
+    const gui = typeof window !== 'undefined' ? window.GUIManager : null;
+    const rangeDays = gui?.dashboards?.find(d => d.id === 'drifters')?.latestDaysRange ?? 15;
+    const end = new Date();
+    end.setMinutes(0, 0, 0);
+    end.setHours(end.getHours() + 1);
+    const start = new Date(end.getTime());
+    start.setDate(start.getDate() - rangeDays);
+    start.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+
+  // Native-cadence trajectory for a drifter (used by the maps). Cached per id.
+  // The window is always the full drifter range (see _drifterWindow).
+  getDrifterTrajectory(id) {
+    if (!this._drifterTrajCache[id]) {
+      const d = this.getDrifterStation(id);
+      if (!d) return [];
+      const { start, end } = this._drifterWindow();
+      this._drifterTrajCache[id] = generateDrifterTrajectory(d, start, end);
+    }
+    return this._drifterTrajCache[id];
+  }
+
+  // Hourly resample of a drifter trajectory (used by the DataTimeline).
+  getDrifterHourly(id, startDate, totalHours) {
+    const key = `${id}_${totalHours}`;
+    if (!this._drifterHourlyCache[key]) {
+      const traj = this.getDrifterTrajectory(id);
+      this._drifterHourlyCache[key] = resampleDrifterHourly(traj, startDate, totalHours);
+    }
+    return this._drifterHourlyCache[key];
+  }
+
   // Returns hours since last valid data point for a station.
   getLastUpdateHoursAgo(id, type) {
+    if (type === 'drifter') {
+      const d = this.getDrifterStation(id);
+      return d?.lastHoursAgo ?? 1;
+    }
     if (type === 'buoy') {
       const key = Object.keys(this._buoyDataCache).find(k => k.startsWith(id + '_'));
       if (key) {

@@ -204,15 +204,80 @@ How to show previous campaigns?
 
 Add button on buttom-right panel with Show decomissioned. When toggled, these stations should appear in the map with a gray background instead of var(--lightBlue)
 
-DRIFTERS:
-Info panel:
+________________________
+
+
+All platforms > DRIFTERS:
+Datatimeline > Info panel:
   Type: CODE / SVP / Stokes / Dummy
-  Deployment ID:
-  Drifter ID:
+  Deployment ID: <a number, starting at 1>
+  Drifter ID: e.g. SVP1
   Project: ICATMAR
-  Exercise: DERIVA I
-  Institution
-  Depth
-  Date deployment
+  Exercise: DERIVA-1
+  Institution: ICATMAR for all
+  Depth: CODEs at 1m, SVP at 15 meters, Stokes at surface, Dummy at surface
+  Date deployment: make a random past date
+
+Platform info > Map:
+  Show the whole trajectory. When this panel opens, a request needs to be made to get the trajectory data. Once loaded, show it in the map and zoom to fit. When user clicks on PD map, main map zooms and centers to fit the whole trajectory.
+Platform info > Central info:
+  First line: Drifter · Depth · X days active
+  Second line: Drifter ID as in SVP1
+  Third line: active/delayed/inactive · X time ago
+  Data variables (date and variables temperature and current) as in buoys PD
+  Button to switch to dashboard.
+Platform info > Image on the right:
+  Use the gif of buoys.
+
+Datatimeline:
+  Each drifter will show either one or two variables in two rows (current and water temperature). The datatimeline works a bit different in the drifters. The background color of the cell indicates the intensity of the current. The top row will show an arrow with direction towards. The bottom row (with transparent background) will show temperature. The variables section on the left changes: each drifter has two rows (current and temperature). On the left of these two rows there is the drifter ID.
+  When clicking on a data cell, open the PlatformDetail panel with the information: center the PD map on the current data point location, show a circle (MapCircleArrwos) with the current direction and speed on the PD map.
+  Here are some technical challenges you will have to solve:
+    - The drifter names and variables need to be aligned with the data rows.
+    - The datatimeline cannot take more than 400px height. This might happen when there are a lot of active drifters. If so, you need to add a vertical scroll bar. The vertical overflow should be connected with the variables and the data rows, e.g., if the user scrolls vertically the data rows, the variables (left) should follow accordingly. The dates (day and hour) should not scroll and be always at the top. 
+    - Data cells: SVP drifter data is hourly. CODE data is every 15 min. There should be cells every data point for the color. But when showing the temperature number and showing the direction of the current with an arrow, these two elements should be centered on the hour that is shown at the timeline on the top, e.g. if the time interval is 3 hours, there should be an arrow and a temp. text every 3 hours, but the color gradient should change hourly. In the daily time interval, show data every 12 hours. You can consider to not use subcells and just use the same cells as the timeline.
+    - Color grading and legend: use this color legend (linear-gradient(to right, white, cyan, green, yellow, red);), from 0 to 1.
+    - Water temperature variable  has units (ºC) that must be shown in the variable row on the left. Make the text clickable, but only for looks (it must have the proper text style - underlined).
+
+Main map:
+  Show the drifter icon on the map (show the latest available location). The drifter should have its markers (icatmar marker and status). The icon of the drifter should change depending on the type. Use by default drifter.svg, but use code.svg and svp.svg for those drifter types.
+  When a drifter is selected, show its trajectory. The trajectory style should be a var(--darkBlue) line of thickness of 1px and should show the last timestamps GUIManager.dashboards.latestDaysRange.
+  
+
+Mockup data:
+  You can generate mockup data that follows this model: https://erddap.icatmar.cat/erddap/tabledap/socat_data_drifters_ICATMAR.html. You can get some data here and change the dates: https://erddap.icatmar.cat/erddap/tabledap/socat_data_drifters_ICATMAR.htmlTable?deployment_id%2Cbuoy_name%2Cdrifter_type%2Ctime%2Cinstitution%2Cproject%2Cpi_name%2Cexercise%2Clatitude%2Clongitude%2Ctemperature&time%3E=2025-09-14T00%3A00%3A00Z&time%3C=2025-09-29T00%3A00%3A00Z&exercise=%22DERIVA-1%22
+
+  Make 4 CODEs, 4 SVPs and 4 Stokes. You can keep the mockup data in a separate file. Only the last X days are requested (GUIManager.dashboards.latestDaysRange), so only generate data for those dates.
+
+CORRECTIONS:
+Almost got it!
+DATATIMELINE:
+- When switching time interval, the cell width should adapt too.
+- Move the legend of current speed (drifter-legend) at the bottom of the timeline.
+- Map click on drifter > datatimeline should center scroll to make the selected drifter visible.
+- Follow the same style of the other datatimelines for the top timeline (days, hours): white background, black text...
+
+PLATFORM DETAIL:
+- Map> The mapcirlcearrows is not exactly centered on the red dot. the center of the white circle should be the same as the red dot. Please correct
+- Center info > second line: drifter id · drifter type
 
 
+CORRECTIONS 2:
+
+
+________________
+
+
+____________________________
+
+ALL PLATFORMS > buoys
+Change Datatimeline buoys. Instead of the columns, show the data with color gradients?
+
+_________________
+
+DRIFTERS DASHBOARD
+  Show the drifter icon on the map (show the latest available location). The drifter should have its markers (icatmar marker and status). The trajectory should have this style:
+    - line: color: var(--darkBlue), thickness: 1px
+    - data point: it should be a white arrow (fa-icon) showing the direction with a var(--darkBlue) background rectangle with border-radius 50%. The :title of the arrow should indicate the current speed and direction in degrees.
+    - The last 4 data points should have a decreasing opacity from 0.8 to 0.4. Also scale them from 0.9 to 0.7.
+    - When clicking on a data point, the platform detail and the datatimeline should open with the appriate data cell selected.

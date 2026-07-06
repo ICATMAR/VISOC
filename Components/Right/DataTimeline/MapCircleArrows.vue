@@ -70,8 +70,10 @@ export default {
   height: 100px;
   border-radius: 50%;
   border: 1px solid #ffffff6b;
-  top: 25%;
-  right: 25%;
+  /* Center the circle on the map center (where the marker dot sits) */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 
   display: flex;
   align-items: center;

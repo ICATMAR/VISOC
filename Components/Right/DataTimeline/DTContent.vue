@@ -11,6 +11,10 @@
   <template v-else-if="$gui.selectedDashboard == 'buoys'">
     <DTBuoys></DTBuoys>
   </template>
+  <!-- Drifters -->
+  <template v-else-if="$gui.selectedDashboard == 'drifters'">
+    <DTAPDrifters></DTAPDrifters>
+  </template>
 </template>
 
 
@@ -18,13 +22,15 @@
 import DTAllPlatforms from './AllPlatforms/DTAllPlatforms.vue';
 import DTHFR from './HFR/DTHFR.vue';
 import DTBuoys from './Buoys/DTBuoys.vue';
+import DTAPDrifters from './AllPlatforms/DTAPDrifters.vue';
 
 export default {
   name: "DTContent",
   components: {
     DTAllPlatforms,
     DTHFR,
-    DTBuoys
+    DTBuoys,
+    DTAPDrifters
   }
 }
 
