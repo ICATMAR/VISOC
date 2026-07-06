@@ -39,6 +39,7 @@ export default {
         zoom: 8
       })
     });
+    this.$gui.olMap = this.map;
   },
   methods: {
     onDragOver(e) {

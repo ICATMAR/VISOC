@@ -155,7 +155,27 @@ Correction: it works for HFR but not for buoys (it is kind of behind the data co
 
 ______________________
 
+DataTimeline: instead of 3 hours, 1 hour, Daily, put a + - buttons that switch from Daily to 3 hours to 1 day. Use the fa-icon magnifying glass.
+
+Correction: just put plus and minus aligned to the right.
+
+
+_____________
+
+
+in platform detail, the map on the left, keep the zoom level on the HFR platform detail but zoom out in the buoys: the coast is not visible so make a zoom out for the buoys
+
+in platform detail, the map on the left, if user clicks the map, center the main map on the platform, only zoom in if the zoom out is very far.
+
+keep in mind when centering the map, that half of the screen is taken by the platform detail and the data timeline. so it should be centered from 0 (top) to datatimeline height + 180px(platform detail height). The centering point should be closer to the top
+_______________________
+
 All platforms > Drifters
 - No drifters case - user clicks on DT bottom options (HFR, buoys, drifters). DT shows "No current active drifters".
-How to show previous campains?
+How to show previous campaigns?
+- Should I show previous campaigns? or just the last 10 days?
+- In the info panel: Deployment date and location, Experiment name
+
+
+
 

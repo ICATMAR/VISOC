@@ -3,7 +3,7 @@
     <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
     <!-- Map (left) — shows all HFR stations -->
-    <div class="map-container">
+    <div class="map-container map-clickable" @click="centerMainMap" title="Click to center main map">
       <div ref="stationMap" class="pd-map"></div>
     </div>
 
@@ -139,6 +139,19 @@ export default {
         this.map.getView().fit(ext, { padding: [25, 25, 25, 25], maxZoom: 9 });
       });
     },
+    centerMainMap() {
+      const mainMap = this.$gui.olMap;
+      if (!mainMap) return;
+      const view = mainMap.getView();
+      const ext = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const s of this.$requests.hfrStations) {
+        const [x, y] = ol.proj.fromLonLat([s.lon, s.lat]);
+        if (x < ext[0]) ext[0] = x; if (y < ext[1]) ext[1] = y;
+        if (x > ext[2]) ext[2] = x; if (y > ext[3]) ext[3] = y;
+      }
+      // Large bottom padding pushes the network into the visible area above the UI
+      view.fit(ext, { padding: [40, 60, 420, 60], maxZoom: 9, duration: 600 });
+    },
     onScrollDragStart(e) {
       this.isDragging = true;
       this.dragStartX = e.pageX;
@@ -177,5 +190,9 @@ export default {
 .map-container {
   position: relative;
   flex-shrink: 0;
+}
+
+.map-clickable {
+  cursor: pointer;
 }
 </style>

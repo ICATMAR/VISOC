@@ -3,7 +3,7 @@
     <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
     <!-- Map (left) -->
-    <div class="map-container">
+    <div class="map-container map-clickable" @click="centerMainMap" title="Click to center main map">
       <div ref="stationMap" class="pd-map"></div>
     </div>
 
@@ -141,6 +141,21 @@ export default {
         })
       });
     },
+    centerMainMap() {
+      const mainMap = this.$gui.olMap;
+      if (!mainMap || !this.station) return;
+      const view = mainMap.getView();
+      const coords = ol.proj.fromLonLat([this.station.lon, this.station.lat]);
+      const targetZoom = view.getZoom() < 7 ? 11 : view.getZoom();
+      const mapSize = mainMap.getSize(); // [width, height]
+      const bottomCovered = 380; // data timeline + platform detail
+      const visibleHeight = mapSize[1] - bottomCovered;
+      const targetY = Math.max(50, visibleHeight * 0.66); // 35% from top of visible area
+      // Shift center so coords appear at targetY instead of canvas center
+      const resolution = view.getResolutionForZoom(targetZoom);
+      const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
+      view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
+    },
     copyCoords() {
       const text = `${this.station.lat.toFixed(4)}, ${this.station.lon.toFixed(4)}`;
       navigator.clipboard?.writeText(text);
@@ -199,5 +214,9 @@ export default {
 .map-container {
   position: relative;
   flex-shrink: 0;
+}
+
+.map-clickable {
+  cursor: pointer;
 }
 </style>
