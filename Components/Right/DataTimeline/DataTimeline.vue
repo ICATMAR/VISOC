@@ -54,6 +54,9 @@ export default {
   padding: 0;
   margin-left: 0;
   left: calc((100vw - 600px) / 2);
+  /* Above the timeline content (drifter sticky cells use z-index up to 6) so
+     overflowing MapCircleArrows labels are not covered by the timeline. */
+  z-index: 10;
   background: var(--gray);
   border-radius: 10px 10px 0px 0px;
 
@@ -67,6 +70,8 @@ export default {
   position: absolute;
   top: -15px;
   left: 25px;
+  /* Above the timeline content (drifter sticky cells use z-index up to 6). */
+  z-index: 12;
 }
 
 </style>

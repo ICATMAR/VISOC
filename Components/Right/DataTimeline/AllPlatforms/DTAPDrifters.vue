@@ -49,7 +49,8 @@
               <tr class="drifter-row current-row" :ref="'row_' + drifter.id" :class="{ 'row-selected': isDrifterSelected(drifter) }"
                 @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
                 <td class="drifter-id-cell" rowspan="2"
-                  :class="{ 'id-active': hoveredDrifter === drifter.id || isDrifterSelected(drifter) }">
+                  :class="{ 'id-active': hoveredDrifter === drifter.id || isDrifterSelected(drifter) }"
+                  @click="drifterNameClicked(drifter)">
                   <span>{{ drifter.id }}</span>
                 </td>
                 <td class="var-label-cell">{{ $t('Current') }}</td>
@@ -70,7 +71,7 @@
               <!-- Temperature row (transparent background) -->
               <tr class="drifter-row temp-row" :class="{ 'row-selected': isDrifterSelected(drifter) }"
                 @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
-                <td class="var-label-cell temp-label clickable">{{ $t('Temperature') }} <u>°C</u></td>
+                <td class="var-label-cell temp-label">{{ $t('Temperature') }} <span class="temp-unit clickable"><u>°C</u></span></td>
                 <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
                   class="data-cell temp-cell clickable"
                   :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
@@ -204,6 +205,12 @@ export default {
       return out;
     },
     // ---- selection ----
+    // Clicking a drifter ID opens its platform detail (whole trajectory, no data point).
+    drifterNameClicked(drifter) {
+      this.selectedCell = null;
+      this.$gui.selectedPlatform = { stationId: drifter.id };
+      this.$gui.isPlatformDetailOpen = true;
+    },
     cellClicked(drifter, cellIndex) {
       const a = this.anchors(drifter, cellIndex)[0];
       const i = a ? a.hourIndex : cellIndex * this.barsPerCell;
@@ -373,7 +380,7 @@ export default {
 .legend-num { color: white; text-shadow: none; }
 .legend-gradient {
   width: 120px;
-  height: 15px;
+  height: 10px;
   border-radius: 10px;
   box-shadow: 0 0 2px black;
   background: linear-gradient(to right, white, cyan, green, yellow, red);
@@ -391,6 +398,7 @@ export default {
   min-width: 0; /* allow shrinking below content so the wide table scrolls inside */
   max-height: 376px;
   overflow: auto;
+  scroll-behavior: auto; /* instant drag scroll (override any global smooth) */
   background: rgba(255, 255, 255, 0.9);
   cursor: grab;
   user-select: none;
@@ -466,6 +474,7 @@ export default {
   min-width: 42px;
   font-weight: bold;
   border-top: 1px solid rgba(255, 255, 255, 0.4);
+  cursor: pointer;
 }
 .drifter-id-cell span { color: black; text-shadow: none; }
 .drifter-id-cell.id-active span { color: var(--darkBlue); font-weight: bold; }
@@ -478,7 +487,11 @@ export default {
   padding-right: 8px !important;
   color: black;
 }
-.temp-label { cursor: pointer; }
+.temp-unit { 
+  cursor: pointer;
+  color: black;
+  text-shadow: none;
+}
 
 /* Sticky corner (controls) — above both header and left columns */
 .corner {
