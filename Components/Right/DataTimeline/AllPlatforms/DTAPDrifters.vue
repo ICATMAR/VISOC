@@ -129,6 +129,8 @@ export default {
     }
   },
   mounted() {
+    // Start scrolled to the end (most recent data).
+    this.resetScroll();
     // If a drifter is already selected (opened from a map icon), scroll to it.
     const id = this.$gui.selectedPlatform?.stationId;
     if (id && this.drifters.some(d => d.id === id)) {
@@ -263,6 +265,13 @@ export default {
       window.removeEventListener('mouseup', this.stopDragging);
       window.removeEventListener('touchend', this.stopDragging);
     },
+    // Horizontally scroll to the end so the most recent data is visible.
+    resetScroll() {
+      this.$nextTick(() => {
+        const scroll = this.$refs.scroll;
+        if (scroll) scroll.scrollLeft = scroll.scrollWidth;
+      });
+    },
     // Vertically scroll the selected drifter's two rows into the middle of the view.
     scrollToDrifter(id) {
       this.$nextTick(() => {
@@ -312,6 +321,9 @@ export default {
     canZoomOut() {
       return this.currentIntervalIdx() > 0;
     },
+    isComponentVisible() {
+      return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
+    },
   },
   watch: {
     '$gui.isPlatformDetailOpen'(isOpen) {
@@ -319,6 +331,10 @@ export default {
     },
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.selectedCell = null;
+      this.resetScroll(); // cell count changed → keep the latest data in view
+    },
+    isComponentVisible(isVisible) {
+      if (isVisible) this.resetScroll(); // reopening the pane → scroll to most recent
     },
     // When a drifter is selected (e.g. from a map icon), scroll it into view.
     '$gui.selectedPlatform'(newP) {
@@ -357,9 +373,9 @@ export default {
 .legend-num { color: white; text-shadow: none; }
 .legend-gradient {
   width: 120px;
-  height: 10px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.3);
+  height: 15px;
+  border-radius: 10px;
+  box-shadow: 0 0 2px black;
   background: linear-gradient(to right, white, cyan, green, yellow, red);
 }
 
@@ -403,7 +419,9 @@ export default {
   position: sticky;
   background: white;
 }
-.hdr-row td.corner { background: var(--lightBlue); }
+/* Keep the sticky corner (zoom + timezone) above the day/hour cells, which
+   would otherwise win on specificity (.hdr-weekday td) and paint over it. */
+.hdr-row td.corner { background: var(--lightBlue); z-index: 6; }
 .hdr-weekday td { top: 0; z-index: 3; }
 .hdr-hours td { top: 22px; z-index: 3; }
 

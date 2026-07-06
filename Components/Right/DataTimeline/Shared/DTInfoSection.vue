@@ -143,7 +143,12 @@
     <!-- Drifter -->
     <template v-else-if="drifterStation">
       <div class="photo-col">
-        <div class="photo-fallback">
+        <img v-if="!drifterImgError"
+          :src="drifterStationPhotoURL"
+          class="station-photo"
+          :alt="drifterStation.type"
+          @error="drifterImgError = true">
+        <div v-else class="photo-fallback">
           <img :src="drifterIconURL" class="fallback-icon" alt="">
         </div>
       </div>
@@ -210,6 +215,7 @@ export default {
     return {
       imgError: false,
       buoyImgError: false,
+      drifterImgError: false,
       radarIconURL: './Assets/Icons/radar.svg',
       buoyIconURL: './Assets/Icons/buoy.svg',
       driftIconURL: './Assets/Icons/drifter.svg',
@@ -223,6 +229,9 @@ export default {
     },
     buoyStationPhotoURL() {
       return './Assets/Images/platforms/Buoys/' + (this.buoyStation?.id ?? '') + '.jpg';
+    },
+    drifterStationPhotoURL() {
+      return './Assets/Images/platforms/Drifters/' + (this.drifterStation?.type ?? '') + '.jpg';
     },
     isHFRContext() {
       return this.$gui.selectedDashboard === 'hfr'
@@ -297,6 +306,9 @@ export default {
     },
     buoyStation() {
       this.buoyImgError = false;
+    },
+    drifterStation() {
+      this.drifterImgError = false;
     },
   },
 }
