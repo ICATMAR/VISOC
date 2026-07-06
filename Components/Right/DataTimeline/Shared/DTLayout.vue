@@ -3,9 +3,14 @@
   <div class="horizontal data-timeline-container">
     <!-- Variables -->
     <div class="vertical variable-names-container">
-      <!-- Interval picker (click to cycle) -->
+      <!-- Interval zoom buttons -->
       <div class="horizontal interval-picker">
-        <span class="clickable" style="text-decoration: underline;" @click="cycleInterval" :title="$t('Time interval')">{{ currentIntervalLabel }}</span>
+        <button class="zoom-btn clickable" :disabled="!canZoomOut" @click="zoomOut" title="Zoom out">
+          <i class="fa-solid fa-magnifying-glass-minus"></i>
+        </button>
+        <button class="zoom-btn clickable" :disabled="!canZoomIn" @click="zoomIn" title="Zoom in">
+          <i class="fa-solid fa-magnifying-glass-plus"></i>
+        </button>
       </div>
       <!-- Timezone toggle -->
       <div class="horizontal interval-picker">
@@ -76,26 +81,32 @@ export default {
       isDragging: false,
       startX: 0,
       scrollLeft: 0,
-      // Interval options
+      // Interval options ordered coarse → fine (zoom out → zoom in)
       intervalOptions: [
-        { label: 'Daily', minutes: 1440 },
-        { label: '3 hours', minutes: 180 },
-        { label: 'Hourly', minutes: 60 },
-        { label: '3 hours', minutes: 180 },
+        { label: 'Daily',   minutes: 1440 },
+        { label: '3 hours', minutes: 180  },
+        { label: 'Hourly',  minutes: 60   },
       ],
     }
   },
   methods: {
-    //onclick: function(e){},
-    cycleInterval() {
-      if (this.intervalIdx == undefined){
-        // Find intervalOptions index
-        const minutesArray = this.intervalOptions.map(o => o.minutes);
-        this.intervalIdx = minutesArray.indexOf(this.$gui.timelineEffectiveIntervalMinutes);
-        this.intervalIdx++;
+    currentIntervalIdx() {
+      const idx = this.intervalOptions.findIndex(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
+      return idx >= 0 ? idx : 0;
+    },
+    zoomIn() {
+      const idx = this.currentIntervalIdx();
+      if (idx < this.intervalOptions.length - 1) {
+        this.$gui.timelineIntervalMinutes = this.intervalOptions[idx + 1].minutes;
+        this.resetScroll();
       }
-      this.$gui.timelineIntervalMinutes = this.intervalOptions[this.intervalIdx++ % this.intervalOptions.length].minutes;
-      this.resetScroll();
+    },
+    zoomOut() {
+      const idx = this.currentIntervalIdx();
+      if (idx > 0) {
+        this.$gui.timelineIntervalMinutes = this.intervalOptions[idx - 1].minutes;
+        this.resetScroll();
+      }
     },
     resetScroll() {
       // Reset scroll position so the latest time is visible
@@ -152,6 +163,12 @@ export default {
     currentIntervalLabel() {
       const opt = this.intervalOptions.find(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
       return opt ? opt.label : '3 hours';
+    },
+    canZoomIn() {
+      return this.intervalOptions.findIndex(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes) < this.intervalOptions.length - 1;
+    },
+    canZoomOut() {
+      return this.intervalOptions.findIndex(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes) > 0;
     },
     isComponentVisible() {
       return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
@@ -211,12 +228,31 @@ export default {
   justify-content: flex-end;
   align-items: center;
   padding-right: 10px;
-  gap: 5px;
 }
 
-.interval-picker > span {
-  color: black;
+.zoom-btn {
+  background: none;
+  border: none;
+  padding: 2px 3px;
+  font-size: small;
+  color: white;
+  text-shadow: 0 0 4px black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.zoom-btn:disabled {
+  color: rgba(255, 255, 255, 0.8);
   text-shadow: none;
+  cursor: default;
+  transform: none;
+}
+
+.zoom-btn:not(:disabled):hover {
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .variable-names-row {
