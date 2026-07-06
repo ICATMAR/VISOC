@@ -170,6 +170,30 @@ in platform detail, the map on the left, if user clicks the map, center the main
 keep in mind when centering the map, that half of the screen is taken by the platform detail and the data timeline. so it should be centered from 0 (top) to datatimeline height + 180px(platform detail height). The centering point should be closer to the top
 _______________________
 
+
+Let's change the icons on the map. I want that the icatmar marker is placed at the bottom of the circle - same distance to the center of the circle but at the bottom -. Instead of a var(--red) marker, I want you to use the icatmar log svg. Keep the black border.
+
+
+I moved the icatmar-marker to the bttom right. now please add a marker with the same style (width, height, border, and translate 22px) that changes its color depending on the data availability (green active, yellow delayed, gray inactive)
+
+when closing the datatimeline by clicking the X button please deselct the platform icon on the map (it should not have a red background)
+_____________
+
+
+in platform detail, central part > active/delayed/inactive: add text with time since last update from now, e.g. X time ago, More than X time... Also connect the mockup data to the map icon marker and platform detail
+
+for a buoy to be inactive, the delay is more than 24 hours. delayed is from more than 2 to 24 hours. For the HFR, a delay is more than 3 hours and inactive is more than 24 hours.
+
+___________
+
+DT right side info panel:
+Put a background image of the logo of the institution with a very light opacity (try 0.1). The logo will be a .png with the name of the institution. If no image is present, do not show anything.
+
+in the data mockup, differentiate between manufacturer and institution. Add manufacturer in the info panel, but use the institution for the logo.
+
+great, but I would like that the background icon fills almost the whole background of this section and that it is centered vertically and horizontally. Maybe you can use the background css property of the div container? I dont know, use what you consider best.  Keep the filter and opacity style, I like it
+_______________
+
 All platforms > Drifters
 - No drifters case - user clicks on DT bottom options (HFR, buoys, drifters). DT shows "No current active drifters".
 How to show previous campaigns?
@@ -177,5 +201,18 @@ How to show previous campaigns?
 - In the info panel: Deployment date and location, Experiment name
 
 
+
+Add button on buttom-right panel with Show decomissioned. When toggled, these stations should appear in the map with a gray background instead of var(--lightBlue)
+
+DRIFTERS:
+Info panel:
+  Type: CODE / SVP / Stokes / Dummy
+  Deployment ID:
+  Drifter ID:
+  Project: ICATMAR
+  Exercise: DERIVA I
+  Institution
+  Depth
+  Date deployment
 
 

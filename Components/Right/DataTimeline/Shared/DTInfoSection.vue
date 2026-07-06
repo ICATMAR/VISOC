@@ -13,7 +13,7 @@
           <img :src="radarIconURL" class="fallback-icon" alt="">
         </div>
       </div>
-      <div class="info-col vertical">
+      <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
           <span class="info-abbr">{{ hfrStation.id }}</span>
           <span class="info-sep">·</span>
@@ -54,7 +54,7 @@
 
     <!-- HFR totals / network (no specific station selected) -->
     <template v-else-if="isHFRContext">
-      <div class="info-col vertical" style="padding-left: 12px;">
+      <div class="info-col vertical" :style="[{ paddingLeft: '12px' }, institutionBgStyle]">
         <div class="info-header">
           <span class="info-abbr">TOTALS</span>
           <span class="info-sep">·</span>
@@ -101,7 +101,7 @@
           <img :src="buoyIconURL" class="fallback-icon" alt="">
         </div>
       </div>
-      <div class="info-col vertical">
+      <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
           <span class="info-abbr">{{ buoyStation.id }}</span>
           <span class="info-sep">·</span>
@@ -115,6 +115,10 @@
           <div class="info-row">
             <span class="info-label">Institution</span>
             <a href="https://icatmar.cat" target="_blank" rel="noopener" class="info-link">ICATMAR</a>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Manufacturer</span>
+            <span class="info-value">{{ buoyStation.manufacturer }}</span>
           </div>
           <div class="info-row">
             <span class="info-label">Depth</span>
@@ -196,6 +200,15 @@ export default {
       if (!id) return null;
       return this.$requests.getBuoyStation(id);
     },
+    institutionBgStyle() {
+      let name = null;
+      if (this.hfrStation)        name = this.hfrStation.owner;
+      else if (this.isHFRContext) name = 'ICATMAR';
+      else if (this.buoyStation)  name = this.buoyStation.institution;
+      if (!name) return {};
+      const url = './Assets/Images/institutions/' + name.replace(/[\/\\]/g, '-') + '.png';
+      return { '--inst-logo': 'url(\'' + url + '\')' };
+    },
   },
   methods: {
     formatInstallDate(iso) {
@@ -264,6 +277,20 @@ export default {
   gap: 4px;
   align-items: flex-start;
   min-width: 0;
+  position: relative;
+}
+
+.info-col::before {
+  content: '';
+  position: absolute;
+  inset: 10%;
+  background-image: var(--inst-logo, none);
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.07;
+  filter: invert(1);
+  pointer-events: none;
 }
 
 .info-header {
