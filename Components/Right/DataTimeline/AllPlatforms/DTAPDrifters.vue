@@ -405,7 +405,7 @@ export default {
 .drifter-scroll {
   flex: 1;
   min-width: 0; /* allow shrinking below content so the wide table scrolls inside */
-  max-height: 376px;
+  max-height: 280px;
   overflow: auto;
   scroll-behavior: auto; /* instant drag scroll (override any global smooth) */
   background: rgba(255, 255, 255, 0.9);
