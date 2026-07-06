@@ -20,7 +20,7 @@
       <div class="horizontal variable-names-row">
         <div class="vertical variable-names-subcontainer">
           <span v-for="v in variables" :key="v.name"
-            :class="{ 'active-var': v.name === activeVar, 'var-name-clickable': true }"
+            :class="{ 'active-var': v.name === activeVar || v.name === selectedVar, 'var-name-clickable': true }"
             @click="$emit('varClick', v)">{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
@@ -66,7 +66,8 @@ export default {
   emits: ['varClick'],
   props: {
     variables: Array, // [{ name, unit }]
-    activeVar: String, // name of the variable to highlight in bold
+    activeVar: String,   // name of the variable to highlight in bold (hover)
+    selectedVar: String, // name of the selected station — kept bold while selected
   },
   mounted() {
     this.resetScroll();

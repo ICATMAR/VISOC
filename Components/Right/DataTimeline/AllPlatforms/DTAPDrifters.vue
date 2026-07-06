@@ -49,7 +49,7 @@
               <tr class="drifter-row current-row" :ref="'row_' + drifter.id" :class="{ 'row-selected': isDrifterSelected(drifter) }"
                 @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
                 <td class="drifter-id-cell" rowspan="2"
-                  :class="{ 'id-active': hoveredDrifter === drifter.id || isDrifterSelected(drifter) }"
+                  :class="{ 'id-hover': hoveredDrifter === drifter.id, 'id-selected': isDrifterSelected(drifter) }"
                   @click="drifterNameClicked(drifter)">
                   <span>{{ drifter.id }}</span>
                 </td>
@@ -481,12 +481,14 @@ export default {
   left: 0;
   width: 42px;
   min-width: 42px;
-  font-weight: bold;
+  font-weight: normal;
   border-top: 1px solid rgba(255, 255, 255, 0.4);
   cursor: pointer;
 }
 .drifter-id-cell span { color: black; text-shadow: none; }
-.drifter-id-cell.id-active span { color: var(--darkBlue); font-weight: bold; }
+/* Hover → underlined (not bold); selected → bold */
+.drifter-id-cell.id-hover span { text-decoration: underline; }
+.drifter-id-cell.id-selected span { font-weight: bold; }
 
 .drifter-table td.var-label-cell {
   left: 42px;
@@ -494,11 +496,13 @@ export default {
   min-width: 83px;
   text-align: right;
   padding-right: 8px !important;
-  color: black;
+  /* xx-small + 0.7 look, via text alpha so the sticky background stays opaque */
+  font-size: xx-small;
+  color: rgba(0, 0, 0, 0.7);
 }
-.temp-unit { 
+.temp-unit {
   cursor: pointer;
-  color: black;
+  color: inherit;
   text-shadow: none;
 }
 

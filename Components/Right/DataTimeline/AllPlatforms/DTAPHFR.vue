@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="allVariables" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)" @var-click="stationNameClicked">
+  <DTLayout :variables="allVariables" :active-var="hoveredStation || (selectedBar && selectedBar.stationName)" :selected-var="$gui.isPlatformDetailOpen ? $gui.selectedPlatform?.stationId : null" @var-click="stationNameClicked">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <!-- TOTALS row at top, separated from station rows by border -->

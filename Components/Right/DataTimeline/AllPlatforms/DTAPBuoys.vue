@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="buoys" :active-var="hoveredBuoy || (selectedBar && selectedBar.buoyName)" @var-click="buoyNameClicked">
+  <DTLayout :variables="buoys" :active-var="hoveredBuoy || (selectedBar && selectedBar.buoyName)" :selected-var="$gui.isPlatformDetailOpen ? $gui.selectedPlatform?.stationId : null" @var-click="buoyNameClicked">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <tr v-for="buoy in buoys" :key="buoy.name"
