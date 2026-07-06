@@ -4,7 +4,7 @@
     <div class="vertical datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
 
       <!-- Cross and top-left icons -->
-      <div><i class="clickable close-x close-x-position fa fa-xmark" v-on:click="() => { $gui.isDataTimelineOpen = false }"></i></div>
+      <div><i class="clickable close-x close-x-position fa fa-xmark" v-on:click="() => { $gui.isDataTimelineOpen = false; $gui.isPlatformDetailOpen = false; $gui.selectedPlatform = null; }"></i></div>
 
       <!-- Data, timeline and bottom options (per dashboard) -->
       <DTContent></DTContent>
