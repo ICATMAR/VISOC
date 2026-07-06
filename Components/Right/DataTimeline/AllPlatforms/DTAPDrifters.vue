@@ -146,8 +146,6 @@ export default {
       hoveredDrifter: null,
       selectedCell: null, // { id, cellIndex }
       isDragging: false,
-      startX: 0,
-      scrollLeft: 0,
       intervalOptions: [
         { label: 'Daily',   minutes: 1440 },
         { label: '3 hours', minutes: 180  },
@@ -244,14 +242,16 @@ export default {
       if (idx > 0) this.$gui.timelineIntervalMinutes = this.intervalOptions[idx - 1].minutes;
     },
     // ---- horizontal drag scroll ----
+    // Uses only pageX deltas (no per-move offsetLeft reads → no layout thrash)
+    // and applies scrollLeft once per animation frame (batched) so a heavy
+    // sticky table scrolls smoothly instead of jittering.
     startDragging(e) {
       // Ignore drags starting on the sticky controls
       if (e.target.closest('.corner')) return;
       this.isDragging = true;
-      const pageX = e.type === 'touchstart' ? e.touches[0].pageX : e.pageX;
-      const c = this.$refs.scroll;
-      this.startX = pageX - c.offsetLeft;
-      this.scrollLeft = c.scrollLeft;
+      this._dragStartPageX = e.type === 'touchstart' ? e.touches[0].pageX : e.pageX;
+      this._dragStartScrollLeft = this.$refs.scroll.scrollLeft;
+      this._dragTargetScrollLeft = this._dragStartScrollLeft;
       window.addEventListener('mousemove', this.onDragging);
       window.addEventListener('touchmove', this.onDragging, { passive: false });
       window.addEventListener('mouseup', this.stopDragging);
@@ -261,12 +261,21 @@ export default {
       if (!this.isDragging) return;
       if (e.cancelable) e.preventDefault();
       const pageX = e.type === 'touchmove' ? e.touches[0].pageX : e.pageX;
-      const c = this.$refs.scroll;
-      const walk = ((pageX - c.offsetLeft) - this.startX) * 1.5;
-      c.scrollLeft = this.scrollLeft - walk;
+      this._dragTargetScrollLeft = this._dragStartScrollLeft - (pageX - this._dragStartPageX) * 1.5;
+      if (this._dragRaf == null) {
+        this._dragRaf = requestAnimationFrame(() => {
+          this._dragRaf = null;
+          const s = this.$refs.scroll;
+          if (s) s.scrollLeft = this._dragTargetScrollLeft;
+        });
+      }
     },
     stopDragging() {
       this.isDragging = false;
+      if (this._dragRaf != null) {
+        cancelAnimationFrame(this._dragRaf);
+        this._dragRaf = null;
+      }
       window.removeEventListener('mousemove', this.onDragging);
       window.removeEventListener('touchmove', this.onDragging);
       window.removeEventListener('mouseup', this.stopDragging);
