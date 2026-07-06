@@ -20,18 +20,20 @@
             <span class="tz-toggle clickable" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">{{ $gui.timelineTimezoneLabel }}</span>
           </div>
         </div>
-        <!-- Scrollable names (synced with the data rows) -->
-        <div class="names-body" ref="namesBody" @wheel.prevent="onNamesWheel">
-          <div class="name-group" v-for="drifter in drifters" :key="drifter.id"
-            @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
-            <div class="name-id clickable"
-              :class="{ 'id-hover': hoveredDrifter === drifter.id, 'id-selected': isDrifterSelected(drifter) }"
-              @click="drifterNameClicked(drifter)">
-              <span>{{ drifter.id }}</span>
-            </div>
-            <div class="name-vars">
-              <div class="name-var">{{ $t('Current') }}</div>
-              <div class="name-var">{{ $t('Temperature') }} <span class="temp-unit clickable"><u>°C</u></span></div>
+        <!-- Scrollable names (synced with the data rows via GPU transform) -->
+        <div class="names-body" @wheel.prevent="onNamesWheel">
+          <div class="names-inner" ref="namesInner">
+            <div class="name-group" v-for="drifter in drifters" :key="drifter.id"
+              @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
+              <div class="name-id clickable"
+                :class="{ 'id-hover': hoveredDrifter === drifter.id, 'id-selected': isDrifterSelected(drifter) }"
+                @click="drifterNameClicked(drifter)">
+                <span>{{ drifter.id }}</span>
+              </div>
+              <div class="name-vars">
+                <div class="name-var">{{ $t('Current') }}</div>
+                <div class="name-var">{{ $t('Temperature') }} <span class="temp-unit clickable"><u>°C</u></span></div>
+              </div>
             </div>
           </div>
         </div>
@@ -71,30 +73,33 @@
                   <tr class="drifter-row current-row" :ref="'row_' + drifter.id"
                     :class="{ 'row-selected': isDrifterSelected(drifter) }"
                     @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
-                    <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
-                      class="data-cell current-cell clickable"
-                      :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
-                      @click="cellClicked(drifter, cellIndex)">
+                    <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="data-cell current-cell">
                       <div class="color-strip">
                         <div v-for="(seg, si) in segments(drifter, cellIndex)" :key="si"
                           class="color-seg" :style="{ background: seg }"></div>
                       </div>
-                      <template v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai">
+                      <!-- One clickable hit area per data point (whole cell, or each half when daily) -->
+                      <div v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai"
+                        class="anchor-hit clickable"
+                        :class="{ 'point-selected': isPointSelected(drifter, a.hourIndex) }"
+                        :style="{ left: (a.leftPct - 50 / anchorsPerCell) + '%', width: (100 / anchorsPerCell) + '%' }"
+                        @click="pointClicked(drifter, a.hourIndex)">
                         <i v-if="a.HCDT != null" class="fa fa-location-arrow current-arrow"
-                          :style="{ left: a.leftPct + '%', transform: `translate(-50%,-50%) rotate(${a.HCDT - 45}deg)` }"></i>
-                      </template>
+                          :style="{ transform: `translate(-50%,-50%) rotate(${a.HCDT - 45}deg)` }"></i>
+                      </div>
                     </td>
                   </tr>
                   <tr class="drifter-row temp-row"
                     :class="{ 'row-selected': isDrifterSelected(drifter) }"
                     @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
-                    <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
-                      class="data-cell temp-cell clickable"
-                      :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
-                      @click="cellClicked(drifter, cellIndex)">
-                      <template v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai">
-                        <span v-if="a.TEMP != null" class="temp-text" :style="{ left: a.leftPct + '%' }">{{ a.TEMP.toFixed(1) }}</span>
-                      </template>
+                    <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="data-cell temp-cell">
+                      <div v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai"
+                        class="anchor-hit clickable"
+                        :class="{ 'point-selected': isPointSelected(drifter, a.hourIndex) }"
+                        :style="{ left: (a.leftPct - 50 / anchorsPerCell) + '%', width: (100 / anchorsPerCell) + '%' }"
+                        @click="pointClicked(drifter, a.hourIndex)">
+                        <span v-if="a.TEMP != null" class="temp-text">{{ a.TEMP.toFixed(1) }}</span>
+                      </div>
                     </td>
                   </tr>
                 </template>
@@ -167,7 +172,7 @@ export default {
       drifters: [],
       totalHours: 0,
       hoveredDrifter: null,
-      selectedCell: null, // { id, cellIndex }
+      selectedPoint: null, // { id, hourIndex }
       isDragging: false,
       intervalOptions: [
         { label: 'Daily',   minutes: 1440 },
@@ -228,13 +233,14 @@ export default {
     // ---- selection ----
     // Clicking a drifter ID opens its platform detail (whole trajectory, no data point).
     drifterNameClicked(drifter) {
-      this.selectedCell = null;
+      this.selectedPoint = null;
       this.$gui.selectedPlatform = { stationId: drifter.id };
       this.$gui.isPlatformDetailOpen = true;
     },
-    cellClicked(drifter, cellIndex) {
-      const a = this.anchors(drifter, cellIndex)[0];
-      const i = a ? a.hourIndex : cellIndex * this.barsPerCell;
+    // Select a single data point (hour). In daily view a cell holds two points
+    // (every 12 h), so selection is per-point — only the clicked one highlights.
+    pointClicked(drifter, hourIndex) {
+      const i = hourIndex;
       const date = new Date(this.$gui.timelineStartDate.getTime() + i * 3600 * 1000);
       this.$gui.selectedPlatform = {
         stationId: drifter.id,
@@ -242,11 +248,11 @@ export default {
         lat: drifter.lat[i], lon: drifter.lon[i],
         HCSP: drifter.HCSP[i], HCDT: drifter.HCDT[i], TEMP: drifter.TEMP[i],
       };
-      this.selectedCell = { id: drifter.id, cellIndex };
+      this.selectedPoint = { id: drifter.id, hourIndex: i };
       this.$gui.isPlatformDetailOpen = true;
     },
-    isCellSelected(drifter, cellIndex) {
-      return this.selectedCell?.id === drifter.id && this.selectedCell?.cellIndex === cellIndex;
+    isPointSelected(drifter, hourIndex) {
+      return this.selectedPoint?.id === drifter.id && this.selectedPoint?.hourIndex === hourIndex;
     },
     isDrifterSelected(drifter) {
       return this.$gui.isPlatformDetailOpen && this.$gui.selectedPlatform?.stationId === drifter.id;
@@ -266,9 +272,9 @@ export default {
     },
     // ---- vertical scroll sync (data rows → names column) ----
     syncNamesScroll() {
-      const n = this.$refs.namesBody;
+      const inner = this.$refs.namesInner;
       const v = this.$refs.vbody;
-      if (n && v) n.scrollTop = v.scrollTop;
+      if (inner && v) inner.style.transform = `translateY(${-v.scrollTop}px)`;
     },
     onNamesWheel(e) {
       const v = this.$refs.vbody;
@@ -293,7 +299,8 @@ export default {
       if (!this.isDragging) return;
       if (e.cancelable) e.preventDefault();
       const pageX = e.type === 'touchmove' ? e.touches[0].pageX : e.pageX;
-      this._dragTargetScrollLeft = this._dragStartScrollLeft - (pageX - this._dragStartPageX) * 1.5;
+      // 1:1 tracking (content follows the cursor exactly) feels smoother.
+      this._dragTargetScrollLeft = this._dragStartScrollLeft - (pageX - this._dragStartPageX);
       if (this._dragRaf == null) {
         this._dragRaf = requestAnimationFrame(() => {
           this._dragRaf = null;
@@ -374,10 +381,10 @@ export default {
   },
   watch: {
     '$gui.isPlatformDetailOpen'(isOpen) {
-      if (!isOpen) this.selectedCell = null;
+      if (!isOpen) this.selectedPoint = null;
     },
     '$gui.timelineEffectiveIntervalMinutes'() {
-      this.selectedCell = null;
+      this.selectedPoint = null;
       this.resetScroll(); // cell count changed → keep the latest data in view
     },
     isComponentVisible(isVisible) {
@@ -482,8 +489,10 @@ export default {
 
 .names-body {
   max-height: 236px;   /* = vscroll max-height (280) − header (44) */
-  overflow: hidden;    /* scroll is driven by the data table (synced) */
-  scroll-behavior: auto;
+  overflow: hidden;    /* content is translated to match the data table */
+}
+.names-inner {
+  will-change: transform; /* GPU-accelerated vertical sync */
 }
 .name-group {
   height: 44px;
@@ -615,9 +624,25 @@ export default {
 }
 .color-seg { flex: 1; height: 100%; }
 
+/* One clickable hit area per data point; in daily view a cell has two
+   (each covers half the cell), so only the clicked point highlights. */
+.anchor-hit {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  cursor: pointer;
+}
+.anchor-hit:hover {
+  box-shadow: inset 0 0 0 9999px rgba(var(--darkBlueRGB), 0.15);
+}
+.anchor-hit.point-selected {
+  box-shadow: inset 0 0 0 9999px rgba(var(--redRGB), 0.4);
+}
+
 .current-arrow {
   position: absolute;
   top: 50%;
+  left: 50%;
   font-size: 11px;
   color: rgba(0, 0, 0, 0.75);
   pointer-events: none;
@@ -626,6 +651,7 @@ export default {
 .temp-text {
   position: absolute;
   top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
   font-size: x-small;
   color: black;
@@ -634,17 +660,8 @@ export default {
   pointer-events: none;
 }
 
-/* ---- Selection / hover ---- */
-.data-cell.cell-selected {
-  box-shadow: inset 0 0 0 9999px rgba(var(--redRGB), 0.35);
-}
+/* Faint tint across the selected drifter's rows */
 .drifter-row.row-selected .data-cell {
-  box-shadow: inset 0 0 0 9999px rgba(var(--redRGB), 0.18);
-}
-.drifter-row.row-selected .data-cell.cell-selected {
-  box-shadow: inset 0 0 0 9999px rgba(var(--redRGB), 0.4);
-}
-.data-cell:hover {
-  box-shadow: inset 0 0 0 9999px rgba(var(--darkBlueRGB), 0.15);
+  box-shadow: inset 0 0 0 9999px rgba(var(--redRGB), 0.15);
 }
 </style>
