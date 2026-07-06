@@ -3,92 +3,109 @@
 
     <div class="drifter-main">
 
-      <!-- Scrollable timeline: horizontal (days) + vertical (drifters).
-           Header row and the two left columns are position:sticky. -->
-      <div class="drifter-scroll" ref="scroll"
-        @mousedown="startDragging" @touchstart="startDragging">
-        <table class="drifter-table">
-          <tbody>
-
-            <!-- Weekday header -->
-            <tr class="hdr-row hdr-weekday">
-              <td class="corner corner-controls" colspan="2">
-                <div class="horizontal zoom-group">
-                  <button class="zoom-btn clickable" :disabled="!canZoomOut" @click="zoomOut" title="Zoom out">
-                    <i class="fa-solid fa-magnifying-glass-minus"></i>
-                  </button>
-                  <button class="zoom-btn clickable" :disabled="!canZoomIn" @click="zoomIn" title="Zoom in">
-                    <i class="fa-solid fa-magnifying-glass-plus"></i>
-                  </button>
-                </div>
-              </td>
-              <td v-for="day in days" :key="day.date.getTime()" :colspan="day.span" class="weekDayCell">
-                <span>{{ day.textLong }}</span>
-              </td>
-            </tr>
-
-            <!-- Hours header -->
-            <tr class="hdr-row hdr-hours">
-              <td class="corner corner-tz" colspan="2">
-                <span class="tz-toggle clickable" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">{{ $gui.timelineTimezoneLabel }}</span>
-              </td>
-              <td v-for="(cell, index) in cells" :key="index" class="hourCell">
-                <template v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
-                  <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
-                </template>
-                <template v-else>
-                  <span>0</span>
-                  <span class="hourCell-noon">12</span>
-                </template>
-              </td>
-            </tr>
-
-            <!-- Two rows per drifter: current (coloured) + temperature -->
-            <template v-for="drifter in drifters" :key="drifter.id">
-              <!-- Current row -->
-              <tr class="drifter-row current-row" :ref="'row_' + drifter.id" :class="{ 'row-selected': isDrifterSelected(drifter) }"
-                @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
-                <td class="drifter-id-cell" rowspan="2"
-                  :class="{ 'id-hover': hoveredDrifter === drifter.id, 'id-selected': isDrifterSelected(drifter) }"
-                  @click="drifterNameClicked(drifter)">
-                  <span>{{ drifter.id }}</span>
-                </td>
-                <td class="var-label-cell">{{ $t('Current') }}</td>
-                <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
-                  class="data-cell current-cell clickable"
-                  :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
-                  @click="cellClicked(drifter, cellIndex)">
-                  <div class="color-strip">
-                    <div v-for="(seg, si) in segments(drifter, cellIndex)" :key="si"
-                      class="color-seg" :style="{ background: seg }"></div>
-                  </div>
-                  <template v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai">
-                    <i v-if="a.HCDT != null" class="fa fa-location-arrow current-arrow"
-                      :style="{ left: a.leftPct + '%', transform: `translate(-50%,-50%) rotate(${a.HCDT - 45}deg)` }"></i>
-                  </template>
-                </td>
-              </tr>
-              <!-- Temperature row (transparent background) -->
-              <tr class="drifter-row temp-row" :class="{ 'row-selected': isDrifterSelected(drifter) }"
-                @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
-                <td class="var-label-cell temp-label">{{ $t('Temperature') }} <span class="temp-unit clickable"><u>°C</u></span></td>
-                <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
-                  class="data-cell temp-cell clickable"
-                  :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
-                  @click="cellClicked(drifter, cellIndex)">
-                  <template v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai">
-                    <span v-if="a.TEMP != null" class="temp-text" :style="{ left: a.leftPct + '%' }">{{ a.TEMP.toFixed(1) }}</span>
-                  </template>
-                </td>
-              </tr>
-            </template>
-
-          </tbody>
-        </table>
+      <!-- LEFT: fixed names column (drifter IDs + variable labels).
+           Its body scrolls vertically in sync with the data table. -->
+      <div class="drifter-names">
+        <!-- Controls (align with the weekday + hours header rows) -->
+        <div class="names-header">
+          <div class="horizontal zoom-group">
+            <button class="zoom-btn clickable" :disabled="!canZoomOut" @click="zoomOut" title="Zoom out">
+              <i class="fa-solid fa-magnifying-glass-minus"></i>
+            </button>
+            <button class="zoom-btn clickable" :disabled="!canZoomIn" @click="zoomIn" title="Zoom in">
+              <i class="fa-solid fa-magnifying-glass-plus"></i>
+            </button>
+          </div>
+          <div class="tz-row">
+            <span class="tz-toggle clickable" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">{{ $gui.timelineTimezoneLabel }}</span>
+          </div>
+        </div>
+        <!-- Scrollable names (synced with the data rows) -->
+        <div class="names-body" ref="namesBody" @wheel.prevent="onNamesWheel">
+          <div class="name-group" v-for="drifter in drifters" :key="drifter.id"
+            @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
+            <div class="name-id clickable"
+              :class="{ 'id-hover': hoveredDrifter === drifter.id, 'id-selected': isDrifterSelected(drifter) }"
+              @click="drifterNameClicked(drifter)">
+              <span>{{ drifter.id }}</span>
+            </div>
+            <div class="name-vars">
+              <div class="name-var">{{ $t('Current') }}</div>
+              <div class="name-var">{{ $t('Temperature') }} <span class="temp-unit clickable"><u>°C</u></span></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Info section (fixed on the right) -->
-      <DTInfoSection></DTInfoSection>
+      <!-- RIGHT: horizontal scroll wrapping the data table AND the info.
+           Dragging scrolls from the first date all the way to the DTInfo. -->
+      <div class="drifter-hscroll" ref="scroll"
+        @mousedown="startDragging" @touchstart="startDragging">
+        <div class="drifter-hrow">
+
+          <!-- Data table (vertical scroll; date header sticky on top) -->
+          <div class="drifter-vscroll" ref="vbody">
+            <table class="drifter-table">
+              <tbody>
+                <!-- Weekday header -->
+                <tr class="hdr-row hdr-weekday">
+                  <td v-for="day in days" :key="day.date.getTime()" :colspan="day.span" class="weekDayCell">
+                    <span>{{ day.textLong }}</span>
+                  </td>
+                </tr>
+                <!-- Hours header -->
+                <tr class="hdr-row hdr-hours">
+                  <td v-for="(cell, index) in cells" :key="index" class="hourCell">
+                    <template v-if="$gui.timelineEffectiveIntervalMinutes < 1440">
+                      <span :style="{ opacity: ($gui.timelineHours(cell) < 6 || $gui.timelineHours(cell) >= 21) ? '0.4' : '1' }">{{ $gui.timelineHours(cell) }}</span>
+                    </template>
+                    <template v-else>
+                      <span>0</span>
+                      <span class="hourCell-noon">12</span>
+                    </template>
+                  </td>
+                </tr>
+
+                <!-- Two rows per drifter: current (coloured) + temperature -->
+                <template v-for="drifter in drifters" :key="drifter.id">
+                  <tr class="drifter-row current-row" :ref="'row_' + drifter.id"
+                    :class="{ 'row-selected': isDrifterSelected(drifter) }"
+                    @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
+                    <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
+                      class="data-cell current-cell clickable"
+                      :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
+                      @click="cellClicked(drifter, cellIndex)">
+                      <div class="color-strip">
+                        <div v-for="(seg, si) in segments(drifter, cellIndex)" :key="si"
+                          class="color-seg" :style="{ background: seg }"></div>
+                      </div>
+                      <template v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai">
+                        <i v-if="a.HCDT != null" class="fa fa-location-arrow current-arrow"
+                          :style="{ left: a.leftPct + '%', transform: `translate(-50%,-50%) rotate(${a.HCDT - 45}deg)` }"></i>
+                      </template>
+                    </td>
+                  </tr>
+                  <tr class="drifter-row temp-row"
+                    :class="{ 'row-selected': isDrifterSelected(drifter) }"
+                    @mouseenter="hoveredDrifter = drifter.id" @mouseleave="hoveredDrifter = null">
+                    <td v-for="(cell, cellIndex) in cells" :key="cellIndex"
+                      class="data-cell temp-cell clickable"
+                      :class="{ 'cell-selected': isCellSelected(drifter, cellIndex) }"
+                      @click="cellClicked(drifter, cellIndex)">
+                      <template v-for="(a, ai) in anchors(drifter, cellIndex)" :key="ai">
+                        <span v-if="a.TEMP != null" class="temp-text" :style="{ left: a.leftPct + '%' }">{{ a.TEMP.toFixed(1) }}</span>
+                      </template>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Info section (at the end of the horizontal scroll) -->
+          <DTInfoSection></DTInfoSection>
+        </div>
+      </div>
     </div>
 
     <!-- Current-speed colour legend (bottom) -->
@@ -130,6 +147,8 @@ export default {
     }
   },
   mounted() {
+    // Keep the left names column vertically in sync with the data rows.
+    if (this.$refs.vbody) this.$refs.vbody.addEventListener('scroll', this.syncNamesScroll, { passive: true });
     // Start scrolled to the end (most recent data).
     this.resetScroll();
     // If a drifter is already selected (opened from a map icon), scroll to it.
@@ -138,6 +157,10 @@ export default {
       this._lastScrolledId = id;
       this.scrollToDrifter(id);
     }
+  },
+  beforeUnmount() {
+    this.stopDragging();
+    if (this.$refs.vbody) this.$refs.vbody.removeEventListener('scroll', this.syncNamesScroll);
   },
   data() {
     return {
@@ -241,13 +264,22 @@ export default {
       const idx = this.currentIntervalIdx();
       if (idx > 0) this.$gui.timelineIntervalMinutes = this.intervalOptions[idx - 1].minutes;
     },
+    // ---- vertical scroll sync (data rows → names column) ----
+    syncNamesScroll() {
+      const n = this.$refs.namesBody;
+      const v = this.$refs.vbody;
+      if (n && v) n.scrollTop = v.scrollTop;
+    },
+    onNamesWheel(e) {
+      const v = this.$refs.vbody;
+      if (v) v.scrollTop += e.deltaY; // triggers vbody scroll → syncNamesScroll
+    },
     // ---- horizontal drag scroll ----
     // Uses only pageX deltas (no per-move offsetLeft reads → no layout thrash)
-    // and applies scrollLeft once per animation frame (batched) so a heavy
-    // sticky table scrolls smoothly instead of jittering.
+    // and applies scrollLeft once per animation frame (batched) for smoothness.
     startDragging(e) {
-      // Ignore drags starting on the sticky controls
-      if (e.target.closest('.corner')) return;
+      // Don't hijack clicks on interactive info controls / links
+      if (e.target.closest('a, button, input')) return;
       this.isDragging = true;
       this._dragStartPageX = e.type === 'touchstart' ? e.touches[0].pageX : e.pageX;
       this._dragStartScrollLeft = this.$refs.scroll.scrollLeft;
@@ -281,31 +313,30 @@ export default {
       window.removeEventListener('mouseup', this.stopDragging);
       window.removeEventListener('touchend', this.stopDragging);
     },
-    // Horizontally scroll to the end so the most recent data is visible.
+    // Horizontally scroll so the most recent date sits at the right edge of the
+    // view (the info panel is just beyond it, reached by scrolling further).
     resetScroll() {
       this.$nextTick(() => {
         const scroll = this.$refs.scroll;
-        if (scroll) scroll.scrollLeft = scroll.scrollWidth;
+        const table = this.$refs.vbody;
+        if (!scroll || !table) return;
+        scroll.scrollLeft = Math.max(0, table.offsetWidth - scroll.clientWidth);
       });
     },
     // Vertically scroll the selected drifter's two rows into the middle of the view.
     scrollToDrifter(id) {
       this.$nextTick(() => {
-        const scroll = this.$refs.scroll;
+        const v = this.$refs.vbody;
         const rowRef = this.$refs['row_' + id];
         const row = Array.isArray(rowRef) ? rowRef[0] : rowRef;
-        if (!scroll || !row) return;
-        const groupHeight = 44; // current + temperature rows
+        if (!v || !row) return;
         const rowRect = row.getBoundingClientRect();
-        const scrollRect = scroll.getBoundingClientRect();
-        const centerWithinView = (rowRect.top - scrollRect.top) + groupHeight / 2;
-        const target = scroll.scrollTop + centerWithinView - scroll.clientHeight / 2;
-        scroll.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        const vRect = v.getBoundingClientRect();
+        const centerWithinView = (rowRect.top - vRect.top) + 22; // centre of the 44px group
+        const target = v.scrollTop + centerWithinView - v.clientHeight / 2;
+        v.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
       });
     },
-  },
-  beforeUnmount() {
-    this.stopDragging();
   },
   computed: {
     barsPerCell() {
@@ -371,8 +402,8 @@ export default {
 <style scoped>
 .dt-drifters {
   background: var(--lightBlue);
-  /* Explicit bounded width (like the other timelines' calc(100vw - 125px))
-     so the wide table overflows the scroll area instead of expanding the pane. */
+  /* Explicit bounded width (like the other timelines) so the wide content
+     overflows the horizontal scroll area instead of expanding the pane. */
   width: 100vw;
   max-width: 100vw;
 }
@@ -389,7 +420,7 @@ export default {
 .legend-num { color: white; text-shadow: none; }
 .legend-gradient {
   width: 120px;
-  height: 10px;
+  height: 15px;
   border-radius: 10px;
   box-shadow: 0 0 2px black;
   background: linear-gradient(to right, white, cyan, green, yellow, red);
@@ -398,31 +429,134 @@ export default {
 .drifter-main {
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: flex-start;
 }
 
-/* ---- Scroll area (both axes) ---- */
-.drifter-scroll {
+/* ---- Left names column (fixed) ---- */
+.drifter-names {
+  width: 125px;
+  min-width: 125px;
+  flex-shrink: 0;
+  background: var(--lightBlue);
+  display: flex;
+  flex-direction: column;
+}
+.names-header {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+.zoom-group {
+  height: 22px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 8px;
+  gap: 2px;
+}
+.tz-row {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+.tz-toggle {
+  font-size: x-small;
+  color: white;
+  text-decoration: underline;
+  text-align: right;
+}
+.zoom-btn {
+  background: none;
+  border: none;
+  padding: 2px 3px;
+  font-size: small;
+  color: white;
+  text-shadow: 0 0 4px black;
+  line-height: 1;
+  border-radius: 4px;
+}
+.zoom-btn:disabled { color: rgba(255, 255, 255, 0.8); text-shadow: none; cursor: default; }
+.zoom-btn:not(:disabled):hover { background: rgba(0, 0, 0, 0.1); }
+
+.names-body {
+  max-height: 236px;   /* = vscroll max-height (280) − header (44) */
+  overflow: hidden;    /* scroll is driven by the data table (synced) */
+  scroll-behavior: auto;
+}
+.name-group {
+  height: 44px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+.name-id {
+  width: 42px;
+  min-width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: x-small;
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+}
+.name-id span { color: black; text-shadow: none; }
+.name-id.id-hover span { text-decoration: underline; }
+.name-id.id-selected span { font-weight: bold; }
+
+.name-vars {
   flex: 1;
-  min-width: 0; /* allow shrinking below content so the wide table scrolls inside */
-  max-height: 280px;
-  overflow: auto;
-  scroll-behavior: auto; /* instant drag scroll (override any global smooth) */
-  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+}
+.name-var {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  text-align: right;
+  /* xx-small + 0.7 look via text alpha */
+  font-size: xx-small;
+  color: rgba(0, 0, 0, 0.7);
+}
+.temp-unit { cursor: pointer; color: inherit; text-shadow: none; }
+
+/* ---- Horizontal scroll (data table + info) ---- */
+.drifter-hscroll {
+  flex: 1;
+  min-width: 0;              /* allow shrinking so content overflows and scrolls */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: auto;     /* instant drag scroll */
   cursor: grab;
   user-select: none;
 }
-.drifter-scroll:active { cursor: grabbing; }
+.drifter-hscroll:active { cursor: grabbing; }
+
+.drifter-hrow {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  width: max-content;
+}
+
+/* ---- Data table (vertical scroll) ---- */
+.drifter-vscroll {
+  max-height: 280px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: auto;   /* instant → names column stays locked in sync */
+  background: rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
 
 .drifter-table {
   border-collapse: separate;
   border-spacing: 0;
-  /* Take natural width (auto layout) so the table overflows the scroll
-     container horizontally instead of being squeezed to fit. */
   width: max-content;
 }
-/* Every timeline cell is a fixed 30px (like the other timelines); the
-   hourly colour segments pack inside each cell. */
 .drifter-table td {
   width: 30px;
   height: 22px;
@@ -431,14 +565,11 @@ export default {
   padding: 0;
 }
 
-/* ---- Header (sticky top) — white background / black text like other timelines ---- */
+/* Header (sticky top) — white background / black text like other timelines */
 .hdr-row td {
   position: sticky;
   background: white;
 }
-/* Keep the sticky corner (zoom + timezone) above the day/hour cells, which
-   would otherwise win on specificity (.hdr-weekday td) and paint over it. */
-.hdr-row td.corner { background: var(--lightBlue); z-index: 6; }
 .hdr-weekday td { top: 0; z-index: 3; }
 .hdr-hours td { top: 22px; z-index: 3; }
 
@@ -467,75 +598,6 @@ export default {
   white-space: nowrap;
 }
 .hourCell-noon { left: 50% !important; }
-
-/* ---- Left sticky columns ---- */
-.drifter-id-cell,
-.var-label-cell {
-  position: sticky;
-  z-index: 2;
-  background: var(--lightBlue);
-  font-size: x-small;
-  color: black;
-}
-.drifter-table td.drifter-id-cell {
-  left: 0;
-  width: 42px;
-  min-width: 42px;
-  font-weight: normal;
-  border-top: 1px solid rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-}
-.drifter-id-cell span { color: black; text-shadow: none; }
-/* Hover → underlined (not bold); selected → bold */
-.drifter-id-cell.id-hover span { text-decoration: underline; }
-.drifter-id-cell.id-selected span { font-weight: bold; }
-
-.drifter-table td.var-label-cell {
-  left: 42px;
-  width: 83px;
-  min-width: 83px;
-  text-align: right;
-  padding-right: 8px !important;
-  /* xx-small + 0.7 look, via text alpha so the sticky background stays opaque */
-  font-size: xx-small;
-  color: rgba(0, 0, 0, 0.7);
-}
-.temp-unit {
-  cursor: pointer;
-  color: inherit;
-  text-shadow: none;
-}
-
-/* Sticky corner (controls) — above both header and left columns */
-.corner {
-  position: sticky;
-  left: 0;
-  z-index: 5;
-  background: var(--lightBlue);
-}
-.corner-controls { top: 0; }
-.corner-tz { top: 22px; }
-.zoom-group { justify-content: flex-end; padding-right: 8px; gap: 2px; }
-.tz-toggle {
-  font-size: x-small;
-  color: white;
-  text-decoration: underline;
-  padding-right: 8px;
-  display: block;
-  text-align: right;
-}
-.zoom-btn {
-  background: none;
-  border: none;
-  padding: 2px 3px;
-  font-size: small;
-  color: white;
-  text-shadow: 0 0 4px black;
-  line-height: 1;
-  border-radius: 4px;
-}
-.zoom-btn:disabled { color: rgba(255, 255, 255, 0.8); text-shadow: none; cursor: default; }
-.zoom-btn:not(:disabled):hover { background: rgba(0, 0, 0, 0.1); }
 
 /* ---- Data cells ---- */
 .data-cell {
