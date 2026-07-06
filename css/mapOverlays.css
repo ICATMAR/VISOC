@@ -42,3 +42,16 @@
   display: block;
   object-fit: cover;
 }
+
+.platform-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: solid 1px black;
+  translate: 22px;
+  position: absolute;
+}
+
+.platform-status-indicator.active   { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
+.platform-status-indicator.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
+.platform-status-indicator.inactive { background: #757575; }

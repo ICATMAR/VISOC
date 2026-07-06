@@ -6,7 +6,9 @@
     <!-- Platform icon -->
     <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id">
       <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
-      <!-- Indicator marker -->
+      <!-- Status indicator -->
+      <div class="platform-status-indicator" :class="buoyStatus(buoy)"></div>
+      <!-- ICATMAR marker -->
       <div class="platform-marker-indicator">
         <img :src="icatmarLogoURL" alt="">
       </div>
@@ -57,6 +59,9 @@ export default {
     }
   },
   methods: {
+    buoyStatus(buoy) {
+      return this.$requests.getStationStatus(buoy.id, 'buoy');
+    },
     isIconSelected(buoy) {
       if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'buoys') return false;
       return this.$gui.selectedPlatform?.stationId === buoy.id;

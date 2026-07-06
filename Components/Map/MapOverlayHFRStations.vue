@@ -6,7 +6,9 @@
     <!-- Platform icon -->
     <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
       <img class="platform-icon clickable" :class="{ selected: isIconSelected(station) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
-      <!-- Indicator marker -->
+      <!-- Status indicator -->
+      <div class="platform-status-indicator" :class="stationStatus(station)"></div>
+      <!-- ICATMAR marker -->
       <div class="platform-marker-indicator">
         <img :src="icatmarLogoURL" alt="">
       </div>
@@ -57,6 +59,9 @@ export default {
     }
   },
   methods: {
+    stationStatus(station) {
+      return this.$requests.getStationStatus(station.id, 'hfr');
+    },
     isIconSelected(station) {
       if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'hfr') return false;
       const id = this.$gui.selectedPlatform?.stationId;
