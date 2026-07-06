@@ -3,6 +3,7 @@
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <tr v-for="buoy in buoys" :key="buoy.name"
+          :class="{ 'row-selected': isRowSelected(buoy.name) }"
           @mouseenter="hoveredBuoy = buoy.name"
           @mouseleave="hoveredBuoy = null">
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
@@ -95,6 +96,10 @@ export default {
       if (vhm0 != null) parts.push(`${this.$t('Wave height')} ${vhm0.toFixed(1)} m`);
       if (wspd != null) parts.push(`${this.$t('Wind speed')} ${wspd.toFixed(0)} km/h`);
       return parts.join(' · ');
+    },
+    isRowSelected(buoyName) {
+      return this.$gui.isPlatformDetailOpen
+        && this.$gui.selectedPlatform?.stationId === buoyName;
     },
     buoyNameClicked(buoy) {
       this.$gui.selectedPlatform = { stationId: buoy.name };

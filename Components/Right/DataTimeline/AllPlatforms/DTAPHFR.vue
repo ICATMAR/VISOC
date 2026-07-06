@@ -3,7 +3,8 @@
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <!-- TOTALS row at top, separated from station rows by border -->
-        <tr @mouseenter="hoveredStation = 'TOTALS'" @mouseleave="hoveredStation = null">
+        <tr :class="{ 'row-selected': isRowSelected('TOTALS') }"
+          @mouseenter="hoveredStation = 'TOTALS'" @mouseleave="hoveredStation = null">
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell totals-bar-cell">
             <div class="bars-group">
               <div v-for="sub in barsPerCell" :key="sub"
@@ -19,6 +20,7 @@
         </tr>
         <!-- Individual station availability bars -->
         <tr v-for="station in stations" :key="station.name"
+          :class="{ 'row-selected': isRowSelected(station.name) }"
           @mouseenter="hoveredStation = station.name"
           @mouseleave="hoveredStation = null">
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
@@ -125,6 +127,10 @@ export default {
     },
     getHourlyValue(station, cellIndex, subIndex) {
       return station.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
+    },
+    isRowSelected(stationName) {
+      return this.$gui.isPlatformDetailOpen
+        && this.$gui.selectedPlatform?.stationId === stationName;
     },
     stationNameClicked(v) {
       this.$gui.selectedPlatform = { stationId: v.name };

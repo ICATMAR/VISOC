@@ -145,3 +145,17 @@ License: https://creativecommons.org/licenses/by/4.0/. (put an icon or something
 Also add a picture of the station (only if available)
 
 You can put this information and data structures in the requests manager. We will organize it better later.
+
+_______________________________
+
+
+When the platform is selected or clicked upon, please highlight the row in the data timeline. you will probably have to create an overlay for the row with no pointer events. make it var(--red) with opacity of 0.2
+
+Correction: it works for HFR but not for buoys (it is kind of behind the data columns of each cell)
+
+______________________
+
+All platforms > Drifters
+- No drifters case - user clicks on DT bottom options (HFR, buoys, drifters). DT shows "No current active drifters".
+How to show previous campains?
+
