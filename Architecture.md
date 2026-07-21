@@ -30,10 +30,13 @@ Data product: anything that contains data. An HFR station is a data product, HFR
 ### Files
 #### StatusProvider.js
 Is there a way to make a ping? instead of requesting a whole html website. Maybe each source should have a testing system, as in request a little bit of data.
+  - Are you online?
   - Request proxy
+  - Request ERDDAPS (ICATMAR, ifremer-Argo, NOAA-AOML OSMC)
   - Request dataset from ERDDAP list and store bbox (lat-long) and time (min-max)
   - Request custom check with MSM
   - Request custom check to ICATMAR's AIS
+  - Request Puertos del Estado?
 
 Iterate through data sources base urls for ERDDAP and fill data for ERDDAP's datasets present in data sources (time range). Also double check that all ERDDAP's urls were checked in StatusProvider.
 
