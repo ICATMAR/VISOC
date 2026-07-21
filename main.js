@@ -19,9 +19,12 @@ window.location.removeHash = removeHash;
 // Load scripts
 import GUIManager from './Assets/Scripts/GUIManager.js';
 import RequestsManager from './Assets/Scripts/RequestsManager.js';
+import FetchManager from './Assets/Scripts/data/FetchManager.js';
+import ServiceStatus from './Assets/Scripts/data/ServiceStatus.js';
 
 window.GUIManager = Vue.reactive(new GUIManager());
 window.RequestsManager = new RequestsManager();
+window.ServiceStatus = new ServiceStatus(FetchManager); // TODO: refactor through DataService.js later
 
 
 // Declare translations
@@ -91,4 +94,5 @@ app.use(i18n);
 // Global properties
 app.config.globalProperties.$gui = window.GUIManager;
 app.config.globalProperties.$requests = window.RequestsManager;
+app.config.globalProperties.$serviceStatus = window.ServiceStatus;
 app.mount(document.body);

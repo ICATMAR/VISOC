@@ -1,6 +1,6 @@
 
 
-class StatusProvider {
+class ServiceStatus {
 
   constructor(fetchManager) {
     this.fetchManager = fetchManager;
@@ -59,4 +59,4 @@ class StatusProvider {
 }
 
 
-export default StatusProvider;
+export default ServiceStatus;
