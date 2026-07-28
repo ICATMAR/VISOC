@@ -14,7 +14,7 @@ Data product: anything that contains data. An HFR station is a data product, HFR
 
 ### Status
 - Source/API/Proxy status. First proxy, then ERDDAPs, APIs... Maybe on startup? Or create a separate website or view inside VISOC?
-- Data product stats (active, delayed, inactive). Check what is the latest data, how many active etc...
+- Data product stats (active, delayed, inactive). Check what is the latest data, how many active etc... This one needs to check all sources.
 
 ### Functionalities
 - Parser: Parse raw data from source -> in DataSource
@@ -42,4 +42,11 @@ Iterate through data sources base urls for ERDDAP and fill data for ERDDAP's dat
 
 #### DataService.js
 Creates a data service that initializes all systems and provides functions, such as getStatusDataServices.
+
+#### Source.js
+Super-class that defines the functions a source must have. A source is an entry (dataset) in ERDDAP. A source is an API such as MSM. A source is a WMS/WMTS service. A source is a static file. Some data products will have just one source, but some will have more than one: HFR network has data from ERDDAPs ICATMAR and EU HFR Node; Drifters have data from static files (historic) and ERDDAPs ICATMAR and NOAA-AOML; Buoys have static files, ERDDAP ICATMAR and MSM API... Types of sources: file, ERDDAP, API.
+ - Start-end
+ - Origin / Service source
+ - Update rate
+
 
