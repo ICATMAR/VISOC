@@ -12,6 +12,7 @@ class ServiceStatus {
       ais: 'https://api.icatmar.cat/ais',
       ifremerErddap: 'https://erddap.ifremer.fr/erddap/index.html',
       noaaErddap: 'https://erddap.aoml.noaa.gov/gdp/erddap/index.html',
+      eunodeErddap: 'https://erddap.hfrnode.eu/erddap/index.html',
     };
   }
 
@@ -29,15 +30,16 @@ class ServiceStatus {
     if (!isProxyOn)
       return { hasInternet: true, isProxyOn: false };
 
-    const [icatmarErddap, msm, ais, ifremerErddap, noaaErddap] = await Promise.all([
+    const [icatmarErddap, msm, ais, ifremerErddap, noaaErddap, eunodeErddap] = await Promise.all([
       this.checkProxied(this.services.icatmarErddap, ttl, text => !text.includes('Service Unavailable')),
-      this.checkProxied(this.services.msm, ttl, text => JSON.parse(text).buoys != undefined),
-      this.checkProxied(this.services.ais, ttl),
+      this.fetchURL(this.services.msm, ttl, text => JSON.parse(text).buoys != undefined),
+      this.checkProxied(this.services.ais, ttl, text => !text.includes('Service Unavailable')),
       this.checkProxied(this.services.ifremerErddap, ttl, text => !text.includes('Service Unavailable')),
       this.checkProxied(this.services.noaaErddap, ttl, text => !text.includes('Service Unavailable')),
+      this.checkProxied(this.services.eunodeErddap, ttl, text => !text.includes('Service Unavailable')),
     ]);
 
-    return { hasInternet: true, isProxyOn: true, icatmarErddap, msm, ais, ifremerErddap, noaaErddap };
+    return { hasInternet: true, isProxyOn: true, icatmarErddap, msm, ais, ifremerErddap, noaaErddap, eunodeErddap };
   }
 
   // Requests a URL through the proxy. Defaults to checking the response is ok.
