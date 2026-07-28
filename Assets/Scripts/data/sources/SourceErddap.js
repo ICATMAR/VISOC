@@ -11,8 +11,11 @@ class SourceErddap extends Source {
     // Remove index.html from src
     const baseUrl = src.replace(/\/index\.html$/, '');
     const allDatasetsUrl = `${baseUrl}/tabledap/allDatasets.csv`;
-    this.fetchManager.fetch(allDatasetsUrl).then(res => {
-      debugger;
+    // Proxy
+    const proxyURL = 'https://api.icatmar.cat/proxy/';
+    const proxiedUrl = proxyURL + '?url=' + encodeURIComponent(allDatasetsUrl);
+
+    this.loadingPromise = this.fetchManager.fetch(proxiedUrl).then(res => res.text()).then(text => {
       // Parse ERDDAP's CSV response
       const lines = text.trim().split('\n');
       const names = lines[0].split(',').map(h => h.trim());
@@ -21,7 +24,7 @@ class SourceErddap extends Source {
       const datasets = lines.slice(2).map(line => {
         const cells = line.split(',');
         const dataset = {};
-        names.forEach((name, i) => dataset[name] = cells[i]);
+        names.forEach((name, i) => dataset[name] = cells[i] == '' ? undefined : cells[i] == 'NaN' ? undefined : cells[i]?.trim());
         return dataset;
       });
 
@@ -32,7 +35,6 @@ class SourceErddap extends Source {
       }
 
       // Find start and end dates
-      debugger;
       const startDateStr = datasetInfo['min_time'];
       const endDateStr = datasetInfo['max_time'];
       if (!startDateStr || !endDateStr) {

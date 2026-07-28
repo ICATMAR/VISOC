@@ -97,7 +97,7 @@ export default {
   methods: {
     refresh(ttl) {
       this.isLoading = true;
-      this.$serviceStatus.requestAllStatus(ttl).then(status => {
+      this.$dataService.serviceStatus.requestAllStatus(ttl).then(status => {
         this.status = status;
         this.isLoading = false;
       });
@@ -112,7 +112,7 @@ export default {
         services: inst.services.map(s => ({
           label: s.label,
           description: s.description,
-          url: this.$serviceStatus.services[s.key],
+          url: this.$dataService.serviceStatus.services[s.key],
           state: !this.status.isProxyOn ? 'unknown' : (this.status[s.key] ? 'on' : 'off'),
         })),
       }));

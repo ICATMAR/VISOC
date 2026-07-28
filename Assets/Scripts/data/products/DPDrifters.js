@@ -1,9 +1,12 @@
+import SourceErddap from '../sources/SourceErddap.js';
+import SourceFileDrifters from '../sources/SourceFileDrifters.js';
+
 class DPDrifters {
 
-  constructor() {
+  constructor(fetchManager) {
     this.sources = [
-      new SourceErddap({ fetchManager: this.fetchManager, src: 'https://erddap.icatmar.cat/erddap/index.html', dataset: 'socat_data_drifters_ICATMAR' }),
-      new SourceFile({ fetchManager: this.fetchManager, path: './Data/drifters_deriva1.csv', timeColumn: 'time' }),
+      new SourceErddap({ fetchManager, src: 'https://erddap.icatmar.cat/erddap/index.html', dataset: 'socat_data_drifters_ICATMAR' }),
+      new SourceFileDrifters({ fetchManager, path: './Data/drifters_deriva1.csv'}),
     ];
   }
 

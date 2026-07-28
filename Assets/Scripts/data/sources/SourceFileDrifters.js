@@ -1,0 +1,72 @@
+import Source from './Source.js';
+
+class SourceFileDrifters extends Source {
+
+  constructor({ fetchManager, path}) {
+    super({ fetchManager });
+    this.path = path;
+    // Load data
+    this.loadingPromise = this.load();
+  }
+
+
+  async load(){
+    // Fetch data
+    this.fetchManager.fetch(this.path).then(res => res.text()).then((r) => {
+      // Fetch metadata
+      this.fetchManager.fetch(this.path.replace('.csv', '_meta.csv')).then(res => res.text()).then((m) => {
+        // Parse data
+        const lines = r.trim().split('\n');
+        const names = lines[0].split(',').map(h => h.trim());
+        const units = lines[1].split(',').map(u => u.trim());
+        
+        // Parse metadata
+        const metaLines = m.trim().split('\n');
+        const metaNames = metaLines[0].split(',').map(h => h.trim());
+        
+        // Find (the only) common name (id) between data and metadata
+        const id = names.find(name => metaNames.includes(name));
+
+        // Create a map of metadata by id
+        const metadataMap = {};
+        metaLines.slice(1).forEach(line => {
+          // Split line by commas, but ignore commas inside quotes
+          const cells = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+                            .map(s => s.replace(/^"(.*)"$/, '$1'));
+          const metaRow = {};
+          metaNames.forEach((name, i) => metaRow[name] = cells[i]?.trim());
+          metadataMap[metaRow[id]] = metaRow;
+        });
+      
+        // Iterate data
+        const rows = lines.slice(2).map(line => {
+          const cells = line.split(',');
+          const row = {};
+          names.forEach((name, i) => row[name] = cells[i]?.trim());
+          // Add metadata to row
+          row.metadata = metadataMap[row[id]];
+          // Normalize time and timestamp
+          row.timestamp = row.time;
+          row.time = new Date(row.time);
+          return row;
+        });
+        // Variables and units (later to extend with metadata? CF...)
+        const variables = {};
+        names.forEach((name, i) => variables[name] = { unit: units[i] || undefined });
+
+        // Store source data, variables, and start/end dates
+        this.data = rows;
+        this.variables = variables;
+        this.start = rows.reduce((min, row) => row.time < min ? row.time : min, rows[0].time);
+        this.end = rows.reduce((max, row) => row.time > max ? row.time : max, rows[0].time);
+      
+      }).catch(console.error);
+      
+
+
+
+    }).catch(console.error);
+  }
+}
+
+export default SourceFileDrifters;

@@ -1,0 +1,10 @@
+deployment_id,buoy_name,drifter_type,institution,project,pi_name,exercise
+,,,,,,
+4,SVP1,SVP,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+5,SVP2,SVP,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+6,SVP3,SVP,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+7,SVP4,SVP,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+8,CODE1,CODE/DAVIS,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+9,CODE2,CODE/DAVIS,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+10,CODE3,CODE/DAVIS,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
+11,CODE4,CODE/DAVIS,Generalitat de Catalunya,ICATMAR,"Jordi Isern Fontanet, J.B. Company",DERIVA-1
