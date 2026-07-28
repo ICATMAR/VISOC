@@ -1,5 +1,13 @@
 import Source from './Source.js';
 
+// Data Deriva-1
+// https://erddap.icatmar.cat/erddap/tabledap/socat_data_drifters_ICATMAR.htmlTable?buoy_name%2Ctime%2Clatitude%2Clongitude%2Ctemperature&exercise=%22DERIVA-1%22&distinct()
+// --> ./Data/drifters/drifters_deriva1.csv
+// Metadata Deriva-1
+// https://erddap.icatmar.cat/erddap/tabledap/socat_data_drifters_ICATMAR.htmlTable?deployment_id%2Cbuoy_name%2Cdrifter_type%2Cinstitution%2Cproject%2Cpi_name%2Cexercise&exercise=%22DERIVA-1%22&distinct()
+// --> ./Data/drifters_deriva1_meta.csv
+
+
 class SourceFileDrifters extends Source {
 
   constructor({ fetchManager, path}) {
