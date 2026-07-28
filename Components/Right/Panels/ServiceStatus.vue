@@ -65,30 +65,30 @@ export default {
           name: 'ICATMAR',
           logoSrc: './Assets/Images/logos/logo-icatmar-icon.svg',
           services: [
-            { key: 'icatmarErddap', label: 'ERDDAP', description: 'Sample description of this data service. Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
-            { key: 'msm', label: 'MSM API', description: 'Sample description of this data service. Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
-            { key: 'ais', label: 'AIS API', description: 'Sample description of this data service. Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
+            { key: 'icatmarErddap', label: 'ERDDAP', description: 'Data provider for HFR network (currents), drifters, buoys and forecast models.' },
+            { key: 'msm', label: 'MSM API', description: 'Data service for buoys.' },
+            { key: 'ais', label: 'AIS API', description: 'Data service for AIS (vessel locations) around the buoys for the 3D digital twins.' },
           ],
         },
         {
           name: 'Ifremer',
           logoSrc: './Assets/Images/logos/logo-ifremer-icon.svg',
           services: [
-            { key: 'ifremerErddap', label: 'ERDDAP', description: 'Sample description of this data service. Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
+            { key: 'ifremerErddap', label: 'ERDDAP', description: 'Data provider for Argo floats (ICATMAR and external).' },
           ],
         },
         {
           name: 'NOAA-AOML',
           logoSrc: './Assets/Images/logos/logo-NOAA.svg',
           services: [
-            { key: 'noaaErddap', label: 'ERDDAP', description: 'Sample description of this data service. Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
+            { key: 'noaaErddap', label: 'ERDDAP', description: 'Data provider for drifters from different sources.' },
           ],
         },
         {
           name: 'EU HFR Node',
           logoSrc: './Assets/Images/logos/logo-EUHFR.png',
           services: [
-            { key: 'eunodeErddap', 'label': 'ERDDAP', description: 'Sample description of this data service. Lorem ipsum dolor sit amet, consectetur adipiscing elit.' },
+            { key: 'eunodeErddap', 'label': 'ERDDAP', description: 'Data provider for HFR networks (currents).' },
           ],
         }
       ],
