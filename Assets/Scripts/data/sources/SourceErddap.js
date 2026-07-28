@@ -15,7 +15,7 @@ class SourceErddap extends Source {
     const proxyURL = 'https://api.icatmar.cat/proxy/';
     const proxiedUrl = proxyURL + '?url=' + encodeURIComponent(allDatasetsUrl);
 
-    this.loadingPromise = this.fetchManager.fetch(proxiedUrl).then(res => res.text()).then(text => {
+    this.loadingPromise = this.fetchManager.fetch(proxiedUrl, 1).then(res => res.text()).then(text => {
       // Parse ERDDAP's CSV response
       const lines = text.trim().split('\n');
       const names = lines[0].split(',').map(h => h.trim());
@@ -38,11 +38,24 @@ class SourceErddap extends Source {
       const startDateStr = datasetInfo['min_time'];
       const endDateStr = datasetInfo['max_time'];
       if (!startDateStr || !endDateStr) {
-        throw new Error(`Dataset '${this.dataset}' does not have valid start and end dates`);
+        console.log("Start or end date not found in dataset info, fetching max-min times from ERDDAP " + this.dataset);
+        // Load max-min times of the dataset
+        const maxMinUrl = `${baseUrl}/tabledap/${this.dataset}.csv?time&orderBy("time")`;
+        // Proxy
+        const proxiedMaxMinUrl = proxyURL + '?url=' + encodeURIComponent(maxMinUrl);
+        // Request
+        return this.fetchManager.fetch(proxiedMaxMinUrl, 1).then(res => res.text()).then(text => {
+          // Parse the response to extract start and end dates
+          const lines = text.trim().split('\n');
+          const times = lines.slice(2).map(line => line.split(',')[0]);
+          this.start = new Date(times[0]);
+          this.end = new Date(times[times.length - 1]);
+        }).catch(console.error);
+      } else {
+        this.start = new Date(startDateStr);
+        this.end = new Date(endDateStr);
       }
-      this.start = new Date(startDateStr);
-      this.end = new Date(endDateStr);
-    });    
+    }).catch(console.error);    
   }
 }
 
