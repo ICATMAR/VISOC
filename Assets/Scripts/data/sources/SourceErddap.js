@@ -2,12 +2,13 @@ import Source from './Source.js';
 
 class SourceErddap extends Source {
 
-  constructor({ fetchManager, src, dataset }) {
+  constructor({ fetchManager, src, dataset, bbox }) {
     super({ fetchManager });
     this.src = src;
     this.dataset = dataset;
     this.baseUrl = src.replace(/\/index\.html$/, ''); // remove index.html from src
     this.proxyUrl = 'https://api.icatmar.cat/proxy/';
+    this.bbox = bbox;
 
     this.metadata = undefined;             // NC_GLOBAL attributes (dataset-level)
     this.recentWindowHours = 48;           // how far back getEndTimestamp() checks for recent data
@@ -19,6 +20,15 @@ class SourceErddap extends Source {
 
   proxied(url) {
     return this.proxyUrl + '?url=' + encodeURIComponent(url);
+  }
+
+  // ERDDAP constraint string for this.bbox ({minLat, minLon, maxLat, maxLon}),
+  // or '' if no bbox is set. A variable can be constrained without being
+  // included in the requested columns, so this works alongside e.g. `?time`.
+  bboxConstraint() {
+    if (!this.bbox) return '';
+    const { minLat, minLon, maxLat, maxLon } = this.bbox;
+    return `&latitude>=${minLat}&latitude<=${maxLat}&longitude>=${minLon}&longitude<=${maxLon}`;
   }
 
   async load() {
@@ -76,7 +86,7 @@ class SourceErddap extends Source {
 
     if (this._endTimestampPromise == undefined) {
       const since = new Date(Date.now() - this.recentWindowHours * 3600 * 1000).toISOString();
-      const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}&orderBy("time")`;
+      const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}${this.bboxConstraint()}&orderBy("time")`;
       this._endTimestampPromise = this.fetchManager.fetch(this.proxied(url)).then(res => res.text()).then(text => {
         const lines = text.trim().split('\n').filter(line => line);
         const dataLines = lines.slice(2);
