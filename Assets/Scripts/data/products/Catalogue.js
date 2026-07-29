@@ -64,7 +64,13 @@ const dataProducts = [
       // Static file
       {
         type: 'SourceFileHFRNetwork',
-        path: './Data/hfr/totals/'
+        paths: './Data/hfr/totals/',
+        mapping: {
+          LOND: {code: 'longitude'},
+          LATD: {code: 'latitude'},
+          VELU: {code: 'EWCT'},
+          VELV: {code: 'NSCT'},
+        }
       }
     ]
   },
