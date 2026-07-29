@@ -7,16 +7,16 @@ class SourceFile extends Source {
     this.path = path;
     this.timeColumn = timeColumn;
     this.format = path.split('.').pop().toLowerCase(); // 'json' | 'csv', from the file extension
-    this.load().then(() => console.log(this.start, this.end)).catch(console.error);
+    this.load().then(() => console.log(this.startDate, this.endDate)).catch(console.error);
   }
 
-  async getRange(start, end) {
+  async getRange(startDate, endDate) {
     if (!this.data) await this.load();
-    return this.data.filter(row => row.time >= start && row.time <= end);
+    return this.data.filter(row => row.time >= startDate && row.time <= endDate);
   }
 
-  // Fetches + parses the file once. Discovers variables and start/end from the
-  // data itself - nothing about the file's content is assumed beforehand.
+  // Fetches + parses the file once. Discovers variables and startDate/endDate
+  // from the data itself - nothing about the file's content is assumed beforehand.
   async load() {
     const res = await this.fetchManager.fetch(this.path);
     const { rows, variables } = await this.parseRows(res);
@@ -27,8 +27,8 @@ class SourceFile extends Source {
 
     this.data = rows;
     this.variables = variables;
-    this.start = rows.reduce((min, row) => row.time < min ? row.time : min, rows[0].time);
-    this.end = rows.reduce((max, row) => row.time > max ? row.time : max, rows[0].time);
+    this.startDate = rows.reduce((min, row) => row.time < min ? row.time : min, rows[0].time);
+    this.endDate = rows.reduce((max, row) => row.time > max ? row.time : max, rows[0].time);
   }
 
   async parseRows(res) {

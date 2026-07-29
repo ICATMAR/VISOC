@@ -44,18 +44,18 @@ class SourceErddap extends Source {
         // Proxy
         const proxiedMaxMinUrl = proxyURL + '?url=' + encodeURIComponent(maxMinUrl);
         // Request
-        return this.fetchManager.fetch(proxiedMaxMinUrl, 1).then(res => res.text()).then(text => {
+        return this.fetchManager.fetch(proxiedMaxMinUrl).then(res => res.text()).then(text => {
           // Parse the response to extract start and end dates
           const lines = text.trim().split('\n');
           const times = lines.slice(2).map(line => line.split(',')[0]);
-          this.start = new Date(times[0]);
-          this.end = new Date(times[times.length - 1]);
+          this.startDate = new Date(times[0]);
+          this.endDate = new Date(times[times.length - 1]);
         }).catch(console.error);
       } else {
-        this.start = new Date(startDateStr);
-        this.end = new Date(endDateStr);
+        this.startDate = new Date(startDateStr);
+        this.endDate = new Date(endDateStr);
       }
-    }).catch(console.error);    
+    }).catch(console.error);
   }
 }
 

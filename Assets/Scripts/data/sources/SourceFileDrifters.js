@@ -27,11 +27,11 @@ class SourceFileDrifters extends Source {
         const lines = r.trim().split('\n');
         const names = lines[0].split(',').map(h => h.trim());
         const units = lines[1].split(',').map(u => u.trim());
-        
+
         // Parse metadata
         const metaLines = m.trim().split('\n');
         const metaNames = metaLines[0].split(',').map(h => h.trim());
-        
+
         // Find (the only) common name (id) between data and metadata
         const id = names.find(name => metaNames.includes(name));
 
@@ -45,14 +45,16 @@ class SourceFileDrifters extends Source {
           metaNames.forEach((name, i) => metaRow[name] = cells[i]?.trim());
           metadataMap[metaRow[id]] = metaRow;
         });
-      
+
         // Iterate data
         const rows = lines.slice(2).map(line => {
           const cells = line.split(',');
           const row = {};
           names.forEach((name, i) => row[name] = cells[i]?.trim());
-          // Add metadata to row
-          row.metadata = metadataMap[row[id]];
+          // Merge metadata fields directly onto the row (flat - not nested under
+          // row.metadata - so every field, measured or descriptive, is reached
+          // the same way: row[name]).
+          Object.assign(row, metadataMap[row[id]]);
           // Normalize time and timestamp
           row.timestamp = row.time;
           row.time = new Date(row.time);
@@ -62,14 +64,14 @@ class SourceFileDrifters extends Source {
         const variables = {};
         names.forEach((name, i) => variables[name] = { unit: units[i] || undefined });
 
-        // Store source data, variables, and start/end dates
+        // Store source data, variables, and startDate/endDate
         this.data = rows;
         this.variables = variables;
-        this.start = rows.reduce((min, row) => row.time < min ? row.time : min, rows[0].time);
-        this.end = rows.reduce((max, row) => row.time > max ? row.time : max, rows[0].time);
-      
+        this.startDate = rows.reduce((min, row) => row.time < min ? row.time : min, rows[0].time);
+        this.endDate = rows.reduce((max, row) => row.time > max ? row.time : max, rows[0].time);
+
       }).catch(console.error);
-      
+
 
 
 
