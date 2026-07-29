@@ -10,10 +10,8 @@ class SourceErddap extends Source {
     this.proxyUrl = 'https://api.icatmar.cat/proxy/';
     this.bbox = bbox;
 
-    this.metadata = undefined;             // NC_GLOBAL attributes (dataset-level)
-    this.recentWindowHours = 48;           // how far back getEndTimestamp() checks for recent data
-    this.endTimestamp = undefined;         // Date | null (checked, no recent data) - only fetched if allDatasets.csv lacks max_time
-    this._endTimestampPromise = undefined; // ongoing getEndTimestamp() request, if any
+    this.metadata = undefined;  // NC_GLOBAL attributes (dataset-level)
+    this.recentWindowDays = 2;  // how far back getEndTimestamp() checks for recent data
 
     this.loadingPromise = this.load();
   }
@@ -76,26 +74,29 @@ class SourceErddap extends Source {
     return datasets.find(d => d['datasetID'] === this.dataset);
   }
 
-  // Timestamp of the most recent data point in the last `recentWindowHours`
-  // hours, or null if there's none. Only requested if allDatasets.csv didn't
-  // already give us max_time. Cached: new / ongoing / resolved (endTimestamp
-  // stays undefined until checked, then becomes a Date or null).
-  getEndTimestamp() {
-    if (this.endTimestamp !== undefined)
-      return Promise.resolve(this.endTimestamp);
+  // Midnight UTC, `recentWindowDays` days ago. Rounded to the day (instead of
+  // Date.now()) so the value - and therefore the query URL below - stays
+  // constant all day and only changes once every hour, instead of on every call.
+  // That's what lets FetchManager's cache actually be hit repeatedly.
+  recentWindowStart() {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - this.recentWindowDays);
+    date.setUTCMinutes(0, 0, 0);
+    return date.toISOString();
+  }
 
-    if (this._endTimestampPromise == undefined) {
-      const since = new Date(Date.now() - this.recentWindowHours * 3600 * 1000).toISOString();
-      const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}${this.bboxConstraint()}&orderBy("time")`;
-      this._endTimestampPromise = this.fetchManager.fetch(this.proxied(url)).then(res => res.text()).then(text => {
-        const lines = text.trim().split('\n').filter(line => line);
-        const dataLines = lines.slice(2);
-        this.endTimestamp = dataLines.length ? new Date(dataLines[dataLines.length - 1].split(',')[0]) : null;
-        this._endTimestampPromise = undefined;
-        return this.endTimestamp;
-      });
-    }
-    return this._endTimestampPromise;
+  // Timestamp of the most recent data point since recentWindowStart(), or null
+  // if there's none. Only requested if allDatasets.csv didn't already give us
+  // max_time. No caching of our own here - FetchManager caches the request
+  // itself for X minutes, so calling this again within that window just
+  // re-parses the same cached response instead of hitting the network.
+  async getEndTimestamp() {
+    const since = this.recentWindowStart();
+    const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}${this.bboxConstraint()}&orderBy("time")`;
+    const text = await this.fetchManager.fetch(this.proxied(url), 1).then(res => res.text());
+    const lines = text.trim().split('\n').filter(line => line);
+    const dataLines = lines.slice(2);
+    return dataLines.length ? new Date(dataLines[dataLines.length - 1].split(',')[0]) : null;
   }
 
 }
