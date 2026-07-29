@@ -22,9 +22,13 @@ class FetchManager {
       FetchManager.requests.set(url, entry);
     }
 
-    // Already loading -> reuse the ongoing request
+    // Already loading -> reuse the ongoing request, but give THIS caller its
+    // own clone (entry.promise may end up awaited by several callers, and a
+    // promise resolves to ONE shared value - handing that out directly would
+    // mean two callers reading the same Response, so the second .text()/
+    // .json() throws "body stream already read").
     if (entry.promise != undefined)
-      return entry.promise;
+      return entry.promise.then(res => res.clone());
 
     const isExpired = entry.expiresAt != undefined && Date.now() > entry.expiresAt;
 
@@ -35,16 +39,16 @@ class FetchManager {
     // Otherwise fetch: no cache yet, expired, or forced with ttl 0
     entry.response = undefined;
     entry.promise = fetch(url).then(res => { // global fetch, not recursive
-      entry.response = res;
+      entry.response = res; // stays UNREAD forever - every caller only ever clones it
       entry.promise = undefined;
       entry.expiresAt = (typeof ttl === 'number' && ttl > 0) ? Date.now() + ttl * 60000 : undefined;
-      return res.clone();
+      return res; // return the original - callers clone it themselves (see above and below)
     }).catch(err => {
       entry.promise = undefined; // Allow retrying on the next call
       throw err;
     });
 
-    return entry.promise;
+    return entry.promise.then(res => res.clone());
   }
 
 }

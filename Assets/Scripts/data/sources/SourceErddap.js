@@ -30,7 +30,7 @@ class SourceErddap extends Source {
   }
 
   async load() {
-    // 1) allDatasets.csv - cheap way to try to get this dataset's min_time/max_time
+    // 1) allDatasets.csv - cheap way to try to get this dataset's minTime/maxTime
     const allDatasetsUrl = `${this.baseUrl}/tabledap/allDatasets.csv`;
     const allDatasetsText = await this.fetchManager.fetch(this.proxied(allDatasetsUrl), 1).then(res => res.text());
     const datasetInfo = this.parseAllDatasets(allDatasetsText);
@@ -49,8 +49,8 @@ class SourceErddap extends Source {
     //    historical scan is too slow/expensive for some ERDDAP datasets (e.g.
     //    NOAA-AOML's OSMC), so we only check for RECENT data instead - startDate
     //    stays unknown in that case.
-    const startDateStr = datasetInfo['min_time'];
-    const endDateStr = datasetInfo['max_time'];
+    const startDateStr = datasetInfo['minTime'];
+    const endDateStr = datasetInfo['maxTime'];
     if (startDateStr && endDateStr) {
       this.startDate = new Date(startDateStr);
       this.endDate = new Date(endDateStr);
