@@ -44,10 +44,11 @@ class SourceErddap extends Source {
       this.startDate = new Date(startDateStr);
       this.endDate = new Date(endDateStr);
     } else {
-      console.log(`Start/end date not found in allDatasets.csv, fetching availability timestamps for ${this.dataset}`);
-      const timestamps = await this.getAvailabilityTimestamps();
-      this.startDate = timestamps[0];
-      this.endDate = timestamps[timestamps.length - 1];
+      console.log(`Start/end date not found in allDatasets.csv for ${this.dataset}`);
+      // In some Erddap datasets this request will take too long (NOAA-AOML dataset OSMC for example)
+      // const timestamps = await this.getAvailabilityTimestamps();
+      // this.startDate = timestamps[0];
+      // this.endDate = timestamps[timestamps.length - 1];
     }
   }
 
