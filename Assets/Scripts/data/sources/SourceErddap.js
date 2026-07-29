@@ -32,7 +32,7 @@ class SourceErddap extends Source {
     // 2) variables + metadata, from the dataset's own info page
     const infoUrl = `${this.baseUrl}/info/${this.dataset}/index.jsonlKVP`;
     const infoText = await this.fetchManager.fetch(this.proxied(infoUrl)).then(res => res.text());
-    const { variables, metadata } = this.parseInfo(infoText);
+    const { variables, metadata } = this.parseERDDAPMetadata(infoText);
     this.variables = variables;
     this.metadata = metadata;
 
@@ -62,33 +62,6 @@ class SourceErddap extends Source {
       return row;
     });
     return datasets.find(d => d['datasetID'] === this.dataset);
-  }
-
-  // ERDDAP's dataset info page: one JSON object per line, either declaring a
-  // variable (+ its data type) or an attribute on a variable / on NC_GLOBAL
-  // (dataset-level metadata, e.g. institution, title, license).
-  parseInfo(text) {
-    const rows = text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
-
-    const variables = {};
-    const metadata = {};
-
-    rows.forEach(row => {
-      const varName = row['Variable Name'];
-      const attrName = row['Attribute Name'];
-      const value = row['Value'];
-
-      if (varName === 'NC_GLOBAL') {
-        if (attrName) metadata[attrName] = value;
-        return;
-      }
-
-      if (!variables[varName]) variables[varName] = {};
-      if (row['Row Type'] === 'variable') variables[varName].dataType = row['Data Type'];
-      else if (attrName) variables[varName][attrName] = value;
-    });
-
-    return { variables, metadata };
   }
 
   // All timestamps available for this dataset - only requested if allDatasets.csv
