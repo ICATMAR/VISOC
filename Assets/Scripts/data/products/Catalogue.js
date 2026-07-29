@@ -93,6 +93,29 @@ const dataProducts = [
   },
 
 
+  // Buoys
+  {
+    name: 'Moored buoys',
+    type: 'DPBuoys',
+    description: 'Meteo-oceanographic moored buoys',
+    sources: [
+      {
+        type: 'SourceErddapBuoys',
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        datasets: [
+          'BUOY_SOMO_ADCP',
+          'BUOY_SOMO_CTD',
+          'BUOY_SOMO_METEO',
+          'BUOY_SOMO_SAMI',
+        ]
+      },
+      {
+        type: 'SourceMSM',
+      }
+    ]
+  },
+
+
   // Dynamic generation via EU HFR Node ERDDAP for networks and stations.
 
   // Argo floats from ifremer
