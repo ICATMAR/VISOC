@@ -30,8 +30,8 @@ class SourceErddap extends Source {
   }
 
   async load() {
-    // 1) allDatasets.csv - cheap way to try to get this dataset's minTime/maxTime
-    const allDatasetsUrl = `${this.baseUrl}/tabledap/allDatasets.csv`;
+    // 1) allDatasets.jsonlKVP - cheap way to try to get this dataset's minTime/maxTime
+    const allDatasetsUrl = `${this.baseUrl}/tabledap/allDatasets.jsonlKVP`;
     const allDatasetsText = await this.fetchManager.fetch(this.proxied(allDatasetsUrl), 1).then(res => res.text());
     const datasetInfo = this.parseAllDatasets(allDatasetsText);
     if (!datasetInfo) {
@@ -55,22 +55,17 @@ class SourceErddap extends Source {
       this.startDate = new Date(startDateStr);
       this.endDate = new Date(endDateStr);
     } else {
-      console.log(`Start/end date not found in allDatasets.csv for ${this.dataset}. Checking if there is recent data.`);
+      console.log(`Start/end date not found in allDatasets.jsonlKVP for ${this.dataset}. Checking if there is recent data.`);
       this.endDate = await this.getEndTimestamp();
       if (this.endDate != undefined) console.log('Latest entry for ' + this.dataset +' is on ' + this.endDate);
     }
   }
 
-  // Finds this dataset's row in ERDDAP's allDatasets.csv (list of every dataset on the server).
+  // Finds this dataset's row in ERDDAP's allDatasets.jsonlKVP (list of every
+  // dataset on the server): one JSON object per line, keyed directly by column
+  // name (datasetID, minTime, maxTime, ...) - no header rows, unlike .csv.
   parseAllDatasets(text) {
-    const lines = text.trim().split('\n');
-    const names = lines[0].split(',').map(h => h.trim());
-    const datasets = lines.slice(2).map(line => {
-      const cells = line.split(',');
-      const row = {};
-      names.forEach((name, i) => row[name] = (cells[i] == '' || cells[i] == 'NaN') ? undefined : cells[i]?.trim());
-      return row;
-    });
+    const datasets = text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
     return datasets.find(d => d['datasetID'] === this.dataset);
   }
 
@@ -86,7 +81,7 @@ class SourceErddap extends Source {
   }
 
   // Timestamp of the most recent data point since recentWindowStart(), or null
-  // if there's none. Only requested if allDatasets.csv didn't already give us
+  // if there's none. Only requested if allDatasets.jsonlKVP didn't already give us
   // max_time. No caching of our own here - FetchManager caches the request
   // itself for X minutes, so calling this again within that window just
   // re-parses the same cached response instead of hitting the network.
