@@ -2,61 +2,114 @@ import Source from './Source.js';
 
 class SourceErddap extends Source {
 
-  constructor({ fetchManager, src, dataset}) {
+  constructor({ fetchManager, src, dataset }) {
     super({ fetchManager });
     this.src = src;
     this.dataset = dataset;
+    this.baseUrl = src.replace(/\/index\.html$/, ''); // remove index.html from src
+    this.proxyUrl = 'https://api.icatmar.cat/proxy/';
 
-    // Construct url with all datasets
-    // Remove index.html from src
-    const baseUrl = src.replace(/\/index\.html$/, '');
-    const allDatasetsUrl = `${baseUrl}/tabledap/allDatasets.csv`;
-    // Proxy
-    const proxyURL = 'https://api.icatmar.cat/proxy/';
-    const proxiedUrl = proxyURL + '?url=' + encodeURIComponent(allDatasetsUrl);
+    this.metadata = undefined;               // NC_GLOBAL attributes (dataset-level)
+    this.availabilityTimestamps = undefined; // array of Date - only fetched if allDatasets.csv lacks min/max time
+    this._availabilityPromise = undefined;   // ongoing getAvailabilityTimestamps() request, if any
 
-    this.loadingPromise = this.fetchManager.fetch(proxiedUrl, 1).then(res => res.text()).then(text => {
-      // Parse ERDDAP's CSV response
-      const lines = text.trim().split('\n');
-      const names = lines[0].split(',').map(h => h.trim());
-      const units = lines[1].split(',').map(u => u.trim());
-
-      const datasets = lines.slice(2).map(line => {
-        const cells = line.split(',');
-        const dataset = {};
-        names.forEach((name, i) => dataset[name] = cells[i] == '' ? undefined : cells[i] == 'NaN' ? undefined : cells[i]?.trim());
-        return dataset;
-      });
-
-      // Find the dataset with the specified name
-      const datasetInfo = datasets.find(d => d['datasetID'] === this.dataset);
-      if (!datasetInfo) {
-        throw new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
-      }
-
-      // Find start and end dates
-      const startDateStr = datasetInfo['min_time'];
-      const endDateStr = datasetInfo['max_time'];
-      if (!startDateStr || !endDateStr) {
-        console.log("Start or end date not found in dataset info, fetching max-min times from ERDDAP " + this.dataset);
-        // Load max-min times of the dataset
-        const maxMinUrl = `${baseUrl}/tabledap/${this.dataset}.csv?time&orderBy("time")`;
-        // Proxy
-        const proxiedMaxMinUrl = proxyURL + '?url=' + encodeURIComponent(maxMinUrl);
-        // Request
-        return this.fetchManager.fetch(proxiedMaxMinUrl).then(res => res.text()).then(text => {
-          // Parse the response to extract start and end dates
-          const lines = text.trim().split('\n');
-          const times = lines.slice(2).map(line => line.split(',')[0]);
-          this.startDate = new Date(times[0]);
-          this.endDate = new Date(times[times.length - 1]);
-        }).catch(console.error);
-      } else {
-        this.startDate = new Date(startDateStr);
-        this.endDate = new Date(endDateStr);
-      }
-    }).catch(console.error);
+    this.loadingPromise = this.load();
   }
+
+  proxied(url) {
+    return this.proxyUrl + '?url=' + encodeURIComponent(url);
+  }
+
+  async load() {
+    // 1) allDatasets.csv - cheap way to try to get this dataset's min_time/max_time
+    const allDatasetsUrl = `${this.baseUrl}/tabledap/allDatasets.csv`;
+    const allDatasetsText = await this.fetchManager.fetch(this.proxied(allDatasetsUrl), 1).then(res => res.text());
+    const datasetInfo = this.parseAllDatasets(allDatasetsText);
+    if (!datasetInfo) {
+      throw new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
+    }
+
+    // 2) variables + metadata, from the dataset's own info page
+    const infoUrl = `${this.baseUrl}/info/${this.dataset}/index.jsonlKVP`;
+    const infoText = await this.fetchManager.fetch(this.proxied(infoUrl)).then(res => res.text());
+    const { variables, metadata } = this.parseInfo(infoText);
+    this.variables = variables;
+    this.metadata = metadata;
+
+    // 3) startDate/endDate: from allDatasets if present, otherwise fall back to
+    //    requesting the full timestamp list and use its min/max.
+    const startDateStr = datasetInfo['min_time'];
+    const endDateStr = datasetInfo['max_time'];
+    if (startDateStr && endDateStr) {
+      this.startDate = new Date(startDateStr);
+      this.endDate = new Date(endDateStr);
+    } else {
+      console.log(`Start/end date not found in allDatasets.csv, fetching availability timestamps for ${this.dataset}`);
+      const timestamps = await this.getAvailabilityTimestamps();
+      this.startDate = timestamps[0];
+      this.endDate = timestamps[timestamps.length - 1];
+    }
+  }
+
+  // Finds this dataset's row in ERDDAP's allDatasets.csv (list of every dataset on the server).
+  parseAllDatasets(text) {
+    const lines = text.trim().split('\n');
+    const names = lines[0].split(',').map(h => h.trim());
+    const datasets = lines.slice(2).map(line => {
+      const cells = line.split(',');
+      const row = {};
+      names.forEach((name, i) => row[name] = (cells[i] == '' || cells[i] == 'NaN') ? undefined : cells[i]?.trim());
+      return row;
+    });
+    return datasets.find(d => d['datasetID'] === this.dataset);
+  }
+
+  // ERDDAP's dataset info page: one JSON object per line, either declaring a
+  // variable (+ its data type) or an attribute on a variable / on NC_GLOBAL
+  // (dataset-level metadata, e.g. institution, title, license).
+  parseInfo(text) {
+    const rows = text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
+
+    const variables = {};
+    const metadata = {};
+
+    rows.forEach(row => {
+      const varName = row['Variable Name'];
+      const attrName = row['Attribute Name'];
+      const value = row['Value'];
+
+      if (varName === 'NC_GLOBAL') {
+        if (attrName) metadata[attrName] = value;
+        return;
+      }
+
+      if (!variables[varName]) variables[varName] = {};
+      if (row['Row Type'] === 'variable') variables[varName].dataType = row['Data Type'];
+      else if (attrName) variables[varName][attrName] = value;
+    });
+
+    return { variables, metadata };
+  }
+
+  // All timestamps available for this dataset - only requested if allDatasets.csv
+  // didn't already give us min_time/max_time. Cached: new / ongoing / resolved.
+  getAvailabilityTimestamps() {
+    if (this.availabilityTimestamps != undefined)
+      return Promise.resolve(this.availabilityTimestamps);
+
+    if (this._availabilityPromise == undefined) {
+      const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&orderBy("time")`;
+      this._availabilityPromise = this.fetchManager.fetch(this.proxied(url)).then(res => res.text()).then(text => {
+        const lines = text.trim().split('\n');
+        const timestamps = lines.slice(2).map(line => new Date(line.split(',')[0]));
+        this.availabilityTimestamps = timestamps;
+        this._availabilityPromise = undefined;
+        return timestamps;
+      });
+    }
+    return this._availabilityPromise;
+  }
+
 }
 
 export default SourceErddap;
