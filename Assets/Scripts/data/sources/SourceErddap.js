@@ -9,9 +9,10 @@ class SourceErddap extends Source {
     this.baseUrl = src.replace(/\/index\.html$/, ''); // remove index.html from src
     this.proxyUrl = 'https://api.icatmar.cat/proxy/';
 
-    this.metadata = undefined;               // NC_GLOBAL attributes (dataset-level)
-    this.availabilityTimestamps = undefined; // array of Date - only fetched if allDatasets.csv lacks min/max time
-    this._availabilityPromise = undefined;   // ongoing getAvailabilityTimestamps() request, if any
+    this.metadata = undefined;             // NC_GLOBAL attributes (dataset-level)
+    this.recentWindowHours = 48;           // how far back getEndTimestamp() checks for recent data
+    this.endTimestamp = undefined;         // Date | null (checked, no recent data) - only fetched if allDatasets.csv lacks max_time
+    this._endTimestampPromise = undefined; // ongoing getEndTimestamp() request, if any
 
     this.loadingPromise = this.load();
   }
@@ -36,19 +37,19 @@ class SourceErddap extends Source {
     this.variables = variables;
     this.metadata = metadata;
 
-    // 3) startDate/endDate: from allDatasets if present, otherwise fall back to
-    //    requesting the full timestamp list and use its min/max.
+    // 3) startDate/endDate: from allDatasets if present. Otherwise, a full
+    //    historical scan is too slow/expensive for some ERDDAP datasets (e.g.
+    //    NOAA-AOML's OSMC), so we only check for RECENT data instead - startDate
+    //    stays unknown in that case.
     const startDateStr = datasetInfo['min_time'];
     const endDateStr = datasetInfo['max_time'];
     if (startDateStr && endDateStr) {
       this.startDate = new Date(startDateStr);
       this.endDate = new Date(endDateStr);
     } else {
-      console.log(`Start/end date not found in allDatasets.csv for ${this.dataset}`);
-      // In some Erddap datasets this request will take too long (NOAA-AOML dataset OSMC for example)
-      // const timestamps = await this.getAvailabilityTimestamps();
-      // this.startDate = timestamps[0];
-      // this.endDate = timestamps[timestamps.length - 1];
+      console.log(`Start/end date not found in allDatasets.csv for ${this.dataset}. Checking if there is recent data.`);
+      this.endDate = await this.getEndTimestamp();
+      if (this.endDate != undefined) console.log('Latest entry for ' + this.dataset +' is on ' + this.endDate);
     }
   }
 
@@ -65,23 +66,26 @@ class SourceErddap extends Source {
     return datasets.find(d => d['datasetID'] === this.dataset);
   }
 
-  // All timestamps available for this dataset - only requested if allDatasets.csv
-  // didn't already give us min_time/max_time. Cached: new / ongoing / resolved.
-  getAvailabilityTimestamps() {
-    if (this.availabilityTimestamps != undefined)
-      return Promise.resolve(this.availabilityTimestamps);
+  // Timestamp of the most recent data point in the last `recentWindowHours`
+  // hours, or null if there's none. Only requested if allDatasets.csv didn't
+  // already give us max_time. Cached: new / ongoing / resolved (endTimestamp
+  // stays undefined until checked, then becomes a Date or null).
+  getEndTimestamp() {
+    if (this.endTimestamp !== undefined)
+      return Promise.resolve(this.endTimestamp);
 
-    if (this._availabilityPromise == undefined) {
-      const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&orderBy("time")`;
-      this._availabilityPromise = this.fetchManager.fetch(this.proxied(url)).then(res => res.text()).then(text => {
-        const lines = text.trim().split('\n');
-        const timestamps = lines.slice(2).map(line => new Date(line.split(',')[0]));
-        this.availabilityTimestamps = timestamps;
-        this._availabilityPromise = undefined;
-        return timestamps;
+    if (this._endTimestampPromise == undefined) {
+      const since = new Date(Date.now() - this.recentWindowHours * 3600 * 1000).toISOString();
+      const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}&orderBy("time")`;
+      this._endTimestampPromise = this.fetchManager.fetch(this.proxied(url)).then(res => res.text()).then(text => {
+        const lines = text.trim().split('\n').filter(line => line);
+        const dataLines = lines.slice(2);
+        this.endTimestamp = dataLines.length ? new Date(dataLines[dataLines.length - 1].split(',')[0]) : null;
+        this._endTimestampPromise = undefined;
+        return this.endTimestamp;
       });
     }
-    return this._availabilityPromise;
+    return this._endTimestampPromise;
   }
 
 }
