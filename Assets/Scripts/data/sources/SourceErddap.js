@@ -1,5 +1,7 @@
 import Source from './Source.js';
 
+const PROXY_URL = 'https://api.icatmar.cat/proxy/';
+
 class SourceErddap extends Source {
 
   constructor({ fetchManager, src, dataset, bbox }) {
@@ -7,7 +9,6 @@ class SourceErddap extends Source {
     this.src = src;
     this.dataset = dataset;
     this.baseUrl = src.replace(/\/index\.html$/, ''); // remove index.html from src
-    this.proxyUrl = 'https://api.icatmar.cat/proxy/';
     this.bbox = bbox;
 
     this.metadata = undefined;  // NC_GLOBAL attributes (dataset-level)
@@ -16,8 +17,23 @@ class SourceErddap extends Source {
     this.loadingPromise = this.load();
   }
 
+  static proxied(url) {
+    return PROXY_URL + '?url=' + encodeURIComponent(url);
+  }
+
   proxied(url) {
-    return this.proxyUrl + '?url=' + encodeURIComponent(url);
+    return SourceErddap.proxied(url);
+  }
+
+  // ERDDAP's allDatasets.jsonlKVP (list of every dataset on the server): one
+  // JSON object per line, keyed directly by column name (datasetID, minTime,
+  // maxTime, minLatitude, maxLatitude, ...) - no header rows, unlike .csv.
+  // Shared (not tied to a single `dataset`) so other sources on the same
+  // ERDDAP server can reuse it instead of re-fetching/re-parsing it themselves.
+  static async fetchAllDatasets(fetchManager, baseUrl) {
+    const url = `${baseUrl}/tabledap/allDatasets.jsonlKVP`;
+    const text = await fetchManager.fetch(SourceErddap.proxied(url), 1).then(res => res.text());
+    return text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
   }
 
   // ERDDAP constraint string for this.bbox ({minLat, minLon, maxLat, maxLon}),
@@ -31,9 +47,8 @@ class SourceErddap extends Source {
 
   async load() {
     // 1) allDatasets.jsonlKVP - cheap way to try to get this dataset's minTime/maxTime
-    const allDatasetsUrl = `${this.baseUrl}/tabledap/allDatasets.jsonlKVP`;
-    const allDatasetsText = await this.fetchManager.fetch(this.proxied(allDatasetsUrl), 1).then(res => res.text());
-    const datasetInfo = this.parseAllDatasets(allDatasetsText);
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const datasetInfo = allDatasets.find(d => d['datasetID'] === this.dataset);
     if (!datasetInfo) {
       throw new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
     }
@@ -60,14 +75,6 @@ class SourceErddap extends Source {
       if (this.endDate != undefined) console.log('Latest entry for ' + this.dataset +' is on ' + this.endDate);
       else console.log('No recent data  in the last ' + this.recentWindowDays + ' days found for ' + this.dataset);
     }
-  }
-
-  // Finds this dataset's row in ERDDAP's allDatasets.jsonlKVP (list of every
-  // dataset on the server): one JSON object per line, keyed directly by column
-  // name (datasetID, minTime, maxTime, ...) - no header rows, unlike .csv.
-  parseAllDatasets(text) {
-    const datasets = text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
-    return datasets.find(d => d['datasetID'] === this.dataset);
   }
 
   // Midnight UTC, `recentWindowDays` days ago. Rounded to the day (instead of

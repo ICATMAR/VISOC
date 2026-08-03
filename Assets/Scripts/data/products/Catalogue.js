@@ -125,7 +125,6 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-PBCN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-GNST_v3_table',
         ],
-        bbox: MEDBBOX,
       },
       {
         Class: SourceFileHFRRadials,
