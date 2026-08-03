@@ -100,9 +100,17 @@ class SourceErddap extends Source {
     const text = await this.fetchManager.fetch(this.proxied(url), 1, 5)
       .then(res => res.text())
       .catch(err => {
-        if (err.name !== 'TimeoutError') throw err;
-        console.log(`Timed out checking recent data for ${this.dataset}: ${err.message}`);
-        return null;
+        if (err.name === 'TimeoutError') {
+          console.log(`Timed out checking recent data for ${this.dataset}: ${err.message}`);
+          return null;
+        }
+        // ERDDAP returns 404 (not 200 + empty body) when a query matches zero
+        // rows - that just means no recent data, not a real failure.
+        if (err.name === 'HTTPError' && err.status === 404) {
+          console.log(`No recent data found for ${this.dataset}: ${err.message}`);
+          return null;
+        }
+        throw err;
       });
     if (text == null) return null;
 
