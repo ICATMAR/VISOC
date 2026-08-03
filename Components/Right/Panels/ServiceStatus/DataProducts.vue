@@ -11,7 +11,11 @@
         <div class="dashboard-section-text">{{ $t(product.name) }}</div>
 
         <div class="source-item" v-for="(source, i) in product.sources" :key="i">
-          <span class="source-label">{{ source.label }}</span>
+          <div class="source-title-row">
+            <div class="pd-status-dot" :class="source.status"></div>
+            <a v-if="source.url" class="source-label" :href="source.url" target="_blank" rel="noopener noreferrer">{{ source.label }}</a>
+            <span v-else class="source-label">{{ source.label }}</span>
+          </div>
           <span class="source-range">
             <template v-if="source.startDate || source.endDate">{{ formatDate(source.startDate) }} - {{ formatRelative(source.endDate) }}</template>
             <template v-else>{{ noDataText(source) }}</template>
@@ -49,6 +53,8 @@ export default {
           await source.loadingPromise.catch(() => {}); // one failed source shouldn't hide the rest
           return {
             label: this.sourceTitle(source),
+            url: this.sourceUrl(source),
+            status: this.sourceStatus(source),
             institution: dataProduct.sources[i]?.institution,
             startDate: source.startDate,
             endDate: source.endDate,
@@ -67,6 +73,23 @@ export default {
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
       if (source.path || source.paths) return 'Static files';
       return source.constructor.name;
+    },
+
+    // Only ERDDAP datasets link out - their info page. Nothing yet for
+    // static files or composite sources.
+    sourceUrl(source) {
+      return source.dataset ? `${source.baseUrl}/info/${source.dataset}/index.html` : undefined;
+    },
+
+    // Static files aren't 'live', so always gray. Otherwise based on how
+    // stale endDate is: <=1 day green, <=15 days yellow, older (or no data) gray.
+    sourceStatus(source) {
+      if (source.path || source.paths) return 'inactive';
+      if (!source.endDate) return 'inactive';
+      const ageDays = (Date.now() - source.endDate.getTime()) / 86400000;
+      if (ageDays <= 1) return 'active';
+      if (ageDays <= 15) return 'delayed';
+      return 'inactive';
     },
 
     noDataText(source) {
@@ -119,8 +142,22 @@ export default {
   margin: 8px 0 8px 32px;
 }
 
+.source-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .source-label {
   font-size: x-small;
+  color: white;
+}
+
+a.source-label {
+  text-decoration: underline;
+}
+a.source-label:hover {
+  color: var(--lightBlue);
 }
 
 .source-range {
