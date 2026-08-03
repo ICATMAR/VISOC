@@ -1,3 +1,6 @@
+import SourceErddap from '../sources/SourceErddap.js';
+import SourceFileDrifters from '../sources/SourceFileDrifters.js';
+import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
 
 
 // Data products
@@ -9,7 +12,7 @@ const dataProducts = [
     description: 'Drifters data of SVPs, CODEs and other types of drifters',
     sources: [
       {
-        type: 'SourceErddap',
+        Class: SourceErddap,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'socat_data_drifters_ICATMAR',
         mapping: {
@@ -17,7 +20,7 @@ const dataProducts = [
         },
       },
       {
-        type: 'SourceFileDrifters',
+        Class: SourceFileDrifters,
         path: './Data/drifters/drifters_deriva1.csv',
         pathTimeless: './Data/drifters/drifters_deriva1_timeless.jsonl',
         pathMetadata: './Data/drifters/drifters_metadata.jsonl',
@@ -37,8 +40,8 @@ const dataProducts = [
     sources: [
       // Recent
       {
-        type: 'SourceErddap',
-        src: 'https://erddap.icatmar.cat/erddap/index.html',  
+        Class: SourceErddap,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'HF_radar_L3B_recent',
         mapping: {
           u: {code: 'EWCT'},
@@ -47,8 +50,8 @@ const dataProducts = [
       },
       // Historical
       {
-        type: 'SourceErddap',
-        src: 'https://erddap.icatmar.cat/erddap/index.html',  
+        Class: SourceErddap,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'HF_Radar_L3B_Historic',
         mapping: {
           u: {code: 'EWCT'},
@@ -57,14 +60,19 @@ const dataProducts = [
       },
       // EU HFR Node
       {
-        type: 'SourceErddap',
+        Class: SourceErddap,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3'
       },
       // Static file
       {
-        type: 'SourceFileHFRTotals',
-        paths: './Data/hfr/totals/',
+        Class: SourceFileHFRTotals,
+        paths: [
+          './Data/hfr/totals/TOTL_CATS_2026_07_15_0900.tuv',
+          './Data/hfr/totals/TOTL_CATS_2026_07_15_1000.tuv',
+          './Data/hfr/totals/TOTL_CATS_2026_07_15_1100.tuv',
+          './Data/hfr/totals/TOTL_CATS_2026_07_15_1200.tuv'
+        ],
         mapping: {
           LOND: {code: 'longitude'},
           LATD: {code: 'latitude'},
@@ -196,3 +204,6 @@ const KelvinToCelsius = (value) => {
 const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
 const NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}
 const WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
+
+
+export default dataProducts;
