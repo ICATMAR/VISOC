@@ -9,6 +9,7 @@
     <template v-if="!isLoading">
       <div v-for="product in products" :key="product.name">
         <div class="dashboard-section-text">{{ $t(product.name) }}</div>
+        <div class="dashboard-section-text-description">{{ $t(product.description) }}</div>
 
         <div class="source-item" v-for="(source, i) in product.sources" :key="i">
           <div class="source-title-row">
@@ -59,7 +60,7 @@ export default {
             recentWindowDays: source.recentWindowDays,
           };
         }));
-        return { name, sources };
+        return { name, sources, description: product.description };
       }));
 
       this.isLoading = false;
@@ -137,9 +138,16 @@ export default {
 
 .dashboard-section-text {
   font-size: small;
-  margin: 0px 0px 5px 10px;
+  margin: 10px 0px 0px 10px;
   color: var(--lightBlue);
 }
+
+.dashboard-section-text-description {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--lightBlue);
+}
+
 
 .source-item {
   display: flex;

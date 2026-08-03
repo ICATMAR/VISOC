@@ -1,7 +1,10 @@
 class DataProduct {
 
-  constructor({ fetchManager, sources }) {
-    this.sources = sources.map(src => {
+  constructor(catalogueDP, fetchManager) {
+    this.name = catalogueDP.name;
+    this.description = catalogueDP.description;
+
+    this.sources = catalogueDP.sources.map(src => {
       const source = new src.Class({ fetchManager, ...src });
       source.institution = src.institution;
       return source;

@@ -9,19 +9,19 @@ class DataService {
     this.catalogue = Catalogue;
 
     const drifters = Catalogue.find(p => p.name === 'Drifters');
-    this.drifters = new drifters.Class({ fetchManager: FetchManager, sources: drifters.sources });
+    this.drifters = new drifters.Class(drifters, FetchManager);
 
     const hfrnetwork = Catalogue.find(p => p.name === 'High-frequency radar network');
-    this.hfrnetwork = new hfrnetwork.Class({ fetchManager: FetchManager, sources: hfrnetwork.sources });
+    this.hfrnetwork = new hfrnetwork.Class(hfrnetwork, FetchManager);
 
     const hfrstations = Catalogue.find(p => p.name === 'High-frequency radar stations');
-    this.hfrstations = new hfrstations.Class({ fetchManager: FetchManager, sources: hfrstations.sources });
+    this.hfrstations = new hfrstations.Class(hfrstations, FetchManager);
 
     const buoys = Catalogue.find(p => p.name === 'Buoys');
-    this.buoys = new buoys.Class({ fetchManager: FetchManager, sources: buoys.sources });
+    this.buoys = new buoys.Class(buoys, FetchManager);
 
     const ssforecast = Catalogue.find(p => p.name === 'Sea surface forecast');
-    this.ssforecast = new ssforecast.Class({ fetchManager: FetchManager, sources: ssforecast.sources });
+    this.ssforecast = new ssforecast.Class(ssforecast, FetchManager);
 
     this.dataProducts = [
       { name: drifters.name, product: this.drifters },
