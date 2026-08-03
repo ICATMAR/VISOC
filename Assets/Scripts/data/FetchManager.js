@@ -53,7 +53,12 @@ class FetchManager {
     }).catch(err => {
       clearTimeout(timeoutId);
       entry.promise = undefined; // Allow retrying on the next call
-      throw err.name === 'AbortError' ? new Error(`Fetch timed out after ${timeout}s: ${url}`) : err;
+      if (err.name === 'AbortError') {
+        const timeoutError = new Error(`Fetch timed out after ${timeout}s: ${url}`);
+        timeoutError.name = 'TimeoutError'; // lets callers tell this apart from other fetch errors
+        throw timeoutError;
+      }
+      throw err;
     });
 
     return entry.promise.then(res => res.clone());
