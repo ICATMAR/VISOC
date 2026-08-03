@@ -17,6 +17,15 @@ class FetchManager {
   //  N         -> reuses the cache if not expired; sets a new expiry of N minutes when (re)fetched
   // Timeout, in seconds: aborts the underlying fetch (and rejects) if it hasn't resolved in time.
   // Only applies when this call actually starts a new network request (not to cached/ongoing ones).
+  // Requests routed through the ICATMAR proxy embed the real target in
+  // ?url=... (URL-encoded) - decode it so error messages can show both,
+  // since the proxied form alone doesn't say which server is unreachable.
+  static targetUrl(url) {
+    if (!url.includes('api.icatmar.cat/proxy')) return undefined;
+    const match = url.match(/[?&]url=([^&]+)/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+  }
+
   static fetch(url, ttl, timeout = 30) {
     let entry = FetchManager.requests.get(url);
     if (entry == undefined) {
@@ -50,7 +59,8 @@ class FetchManager {
       // fetch() only rejects on network failure - a 4xx/5xx response still
       // resolves normally, so that has to be checked explicitly here.
       if (!res.ok) {
-        const httpError = new Error(`HTTP ${res.status} ${res.statusText}: ${url}`);
+        const target = FetchManager.targetUrl(url);
+        const httpError = new Error(`HTTP ${res.status} ${res.statusText}: ${url}${target ? ` (${target})` : ''}`);
         httpError.name = 'HTTPError'; // lets callers tell this apart from other fetch errors
         httpError.status = res.status;
         throw httpError;
@@ -64,7 +74,8 @@ class FetchManager {
       clearTimeout(timeoutId);
       entry.promise = undefined; // Allow retrying on the next call
       if (err.name === 'AbortError') {
-        const timeoutError = new Error(`Fetch timed out after ${timeout}s: ${url}`);
+        const target = FetchManager.targetUrl(url);
+        const timeoutError = new Error(`Fetch timed out after ${timeout}s: ${url}${target ? ` (${target})` : ''}`);
         timeoutError.name = 'TimeoutError'; // lets callers tell this apart from other fetch errors
         throw timeoutError;
       }
