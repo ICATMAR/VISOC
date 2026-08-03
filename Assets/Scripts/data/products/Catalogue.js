@@ -1,8 +1,21 @@
 import SourceErddap from '../sources/SourceErddap.js';
 import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
+import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
+import DPHFRStations from './DPHFRStations.js';
+
+
+const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
+const NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}
+const WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
+
+
+const KelvinToCelsius = (value) => {
+  if (value === undefined || value === null) return value;
+  return value - 273.15;
+}
 
 
 // Data products
@@ -91,18 +104,18 @@ const dataProducts = [
   // High-frequency radar stations
   {
     name: 'High-frequency radar stations',
-    type: 'DPHFRStations',
+    Class: DPHFRStations,
     description: "Surface currents from the ICATMAR's high-frequency radar stations",
     sources: [
       {
-        type: 'SourceErddapICATMARHFRStations',
+        Class: SourceErddapICATMARHFRStations,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         datasets: [
           'HF_Radar_L2B_Historic',
         ],
       },
       {
-        type: 'SourceErddapEUHFRStations',
+        Class: SourceErddapEUHFRStations,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         datasets: [
           'EUHFR_NRTcurrent_HFR-ICATMAR-CNET_v3_table',
@@ -113,6 +126,31 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-PBCN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-GNST_v3_table',
         ], 
+      },
+      {
+        Class: SourceFileHFRRadials,
+        path: './Data/hfr/radials/',
+        stations: [
+          'CNET',
+          'CREU',
+          'BEGU',
+          'AREN',
+          'TOSS',
+          'PBCN',
+          'GNST',
+          'SCAL'
+        ],
+        fileStart: '2026-07-15T09',
+        fileEnd: '2026-07-15T12',
+        mapping: {
+          LOND: {code: 'longitude'},
+          LATD: {code: 'latitude'},
+          VELU: {code: 'EWCT'},
+          VELV: {code: 'NSCT'},
+          VELO: {code: 'HCSP'},
+          HEAD: {code: 'HCDT'}
+        },
+
       }
     ],
   },
@@ -198,14 +236,9 @@ const dataProducts = [
 ]
 
 
-const KelvinToCelsius = (value) => {
-  if (value === undefined || value === null) return value;
-  return value - 273.15;
-}
 
-const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
-const NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}
-const WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
+
+
 
 
 export default dataProducts;
