@@ -18,7 +18,8 @@
             <span v-else class="source-label">{{ source.label }}</span>
           </div>
           <span class="source-range">
-            <template v-if="source.startDate || source.endDate">{{ formatDate(source.startDate) }} - {{ formatRelative(source.endDate) }}</template>
+            <template v-if="source.startDate && source.endDate">{{ formatDate(source.startDate) }} - {{ formatRelative(source.endDate) }}</template>
+            <template v-else-if="source.endDate">{{ formatRelative(source.endDate) }}</template>
             <template v-else>{{ noDataText(source) }}</template>
             <span v-if="source.institution" class="source-institution"> · {{ source.institution }}</span>
           </span>

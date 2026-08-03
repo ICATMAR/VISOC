@@ -49,6 +49,32 @@ const dataProducts = [
         mapping: {
           temperature: {code: 'TEMP'},
         },
+      },
+      {
+        Class: SourceErddap,
+        src: 'https://erddap.aoml.noaa.gov/gdp/erddap/index.html',
+        dataset: 'OSMC_RealTime',
+        institution: 'NOAA-AOML',
+        mapping: {
+          sst: {code: 'TEMP'},
+          ztmp: {code: 'THETAO'},
+          sss: {code: 'PSAL'},
+          zsal: {code: 'PSAL'}, 
+          atmp: {code: 'DRYT'},
+          windspd: {code: 'WSPD'},
+          winddir: {code: 'WDIR'},
+          uo: {code: 'EWCT'},
+          vo: {code: 'NSCT'},
+          wo: {code: 'VCSP'},
+          wvht: {code: 'VHM0'},
+          sea_water_pressure: {code: 'PRES'},
+          sea_water_elec_conductivity: {code: 'CNDC'},
+          slp: {code: 'ATMS'},
+          dewpoint: {code: 'DEWT'},
+          observation_depth: {code: 'DEPTH'},
+          hur: {code: 'RELH'},
+        },
+        bbox: MEDBBOX,
       }
     ]
   },
