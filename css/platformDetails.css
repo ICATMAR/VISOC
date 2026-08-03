@@ -65,7 +65,7 @@
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.55);
   flex-wrap: nowrap;
 }
@@ -82,7 +82,7 @@
   border: none;
   padding: 0;
   color: rgba(255, 255, 255, 0.3);
-  font-size: x-small;
+  font-size: 0.7rem;
   line-height: 1;
   flex-shrink: 0;
   transition: color 0.15s;
@@ -106,7 +106,7 @@
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.55);
   text-shadow: none;
 }
@@ -134,13 +134,13 @@
 }
 
 .pd-date {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.45);
   text-shadow: none;
 }
 
 .pd-time-toggle {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.45);
   text-shadow: none;
   text-decoration: underline;
@@ -179,13 +179,13 @@
 }
 
 .pd-value-label {
-  font-size: xx-small;
+  font-size: x0.7rem;
   color: rgba(0, 0, 0, 0.6);
   text-shadow: none;
 }
 
 .pd-value-number {
-  font-size: x-small;
+  font-size: 0.7rem;
   font-weight: bold;
   color: black;
   text-shadow: none;
@@ -196,7 +196,7 @@
 }
 
 .pd-no-data {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.35);
   text-shadow: none;
   align-self: center;
@@ -244,7 +244,7 @@
   text-shadow: none;
   border-radius: 0 8px 8px 0;
   padding: 0 10px 0 12px;
-  font-size: x-small;
+  font-size: 0.7rem;
   height: 24px;          /* 4px less than the 28px circle */
   display: flex;
   align-items: center;

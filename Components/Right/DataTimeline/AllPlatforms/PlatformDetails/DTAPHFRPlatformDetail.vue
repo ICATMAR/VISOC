@@ -69,7 +69,7 @@
         @error="imgError = true">
       <div v-else class="pd-circular-fallback">
         <img :src="radarIconURL" style="width:45%; opacity:0.35; filter:invert(1)" alt="">
-        <span style="font-size:x-small; color:rgba(255,255,255,0.4)">{{ station.id }}</span>
+        <span style="font-size:0.7rem; color:rgba(255,255,255,0.4)">{{ station.id }}</span>
       </div>
     </div>
   </div>

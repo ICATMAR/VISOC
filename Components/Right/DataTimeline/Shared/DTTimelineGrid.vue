@@ -92,7 +92,7 @@ export default {
 }
 
 .hourCell {
-  font-size: x-small;
+  font-size: 0.7rem;
   border-bottom: 1px solid #0000002e;
   position: relative;
   overflow: visible;

@@ -91,7 +91,7 @@ export default {
   position: absolute;
   transform: translateX(calc(50% + 52px));
   background: var(--darkBlue);
-  font-size: x-small;
+  font-size: 0.7rem;
   padding-right: 6px;
   padding-left: 2px;
   border-radius: 0 5px 5px 0;
@@ -99,7 +99,7 @@ export default {
 
 .variableValue {
   position: absolute;
-  font-size: xx-small;
+  font-size: x0.7rem;
   transform: translateX(calc(-50% + 49px));
   background: var(--blue);
   padding-right: 2px;

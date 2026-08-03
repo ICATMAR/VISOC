@@ -151,7 +151,7 @@ export default {
 }
 
 .source-label {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: white;
 }
 
@@ -163,7 +163,7 @@ a.source-label:hover {
 }
 
 .source-range {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.6);
 }
 

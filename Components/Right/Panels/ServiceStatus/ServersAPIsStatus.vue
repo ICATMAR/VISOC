@@ -183,7 +183,7 @@ export default {
 }
 
 .service-link {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: white;
   text-decoration: underline;
 }
@@ -192,7 +192,7 @@ export default {
 }
 
 .service-description {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.6);
   text-shadow: none;
   margin: 2px 0 0;

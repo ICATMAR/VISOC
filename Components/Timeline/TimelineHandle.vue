@@ -175,7 +175,7 @@ export default {
   justify-content: center;
   border-radius: 50%;
   background: rgb(82 181 217 / 68%);
-  font-size: x-small;
+  font-size: 0.7rem;
   margin: 5px;
   margin-bottom: -10px;
   margin-top: -10px;
@@ -204,7 +204,7 @@ export default {
 }
 
 .time-ago {
-  font-size: xx-small;
+  font-size: x0.7rem;
 }
 
 </style>

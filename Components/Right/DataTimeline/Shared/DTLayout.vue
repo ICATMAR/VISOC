@@ -217,7 +217,7 @@ export default {
 
 .variable-names-container {
   width: 125px;
-  font-size: x-small;
+  font-size: 0.7rem;
   height: 100%;
   background: var(--lightBlue);
   align-items: flex-end;
@@ -305,7 +305,7 @@ export default {
   background: var(--red);
   border: none;
   padding: 0;
-  font-size: x-small;
+  font-size: 0.7rem;
   text-transform: uppercase;
   border-radius: 10px 0px 0px 10px;
   padding-inline: 10px;

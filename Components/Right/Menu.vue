@@ -240,7 +240,7 @@ export default {
   border: none;
   text-decoration: underline;
   color: white;
-  font-size: x-small;
+  font-size: 0.7rem;
 }
 
 .is-unavailable {
@@ -284,13 +284,13 @@ export default {
 }
 
 .dashboard-section-text {
-  font-size: x-small;
+  font-size: 0.7rem;
   margin: 30px 0px 5px 10px;
   color: var(--lightBlue);
 }
 
 .dashboard-bottom-text {
-  font-size: x-small;
+  font-size: 0.7rem;
   text-align: center;
   padding-top: 2px;
 

@@ -129,7 +129,7 @@ export default {
   z-index: 1;
   top: 4px;
   right: 4px;
-  font-size: x-small;
+  font-size: 0.7rem;
   background: #80808052;
   padding: 3px;
   border-radius: 5px;
@@ -147,7 +147,7 @@ export default {
 }
 
 .platform-type {
-  font-size: x-small;
+  font-size: 0.7rem;
   opacity: 0.6;
 }
 
@@ -159,14 +159,14 @@ export default {
 }
 
 .coordinates {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: white;
   opacity: 0.6;
   text-shadow: none;
 }
 
 .meta {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: white;
   text-shadow: none;
   opacity: 0.6;
@@ -184,7 +184,7 @@ export default {
 }
 
 .value-container span:first-child {
-  font-size: x-small;
+  font-size: 0.7rem;
   color: black;
   text-shadow: none;
 }

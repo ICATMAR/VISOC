@@ -99,7 +99,7 @@ export default {
 
   width: 50px;
   height: 50px;
-  font-size: x-small;
+  font-size: 0.7rem;
   border-radius: 50%;
 
   display: flex;

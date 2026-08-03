@@ -69,7 +69,7 @@ export default {
 
 <style scoped>
 :deep(*){
-  font-size: x-small;
+  font-size: 0.7rem;
 }
 
 :deep(.options-container) {

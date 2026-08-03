@@ -510,7 +510,7 @@ export default {
   height: 22px;
   gap: 6px;
   padding: 0 12px;
-  font-size: x-small;
+  font-size: 0.7rem;
   background: var(--blue);
 }
 .legend-title { color: white; text-shadow: none; margin-right: 4px; }
@@ -551,7 +551,7 @@ export default {
 }
 .zoom-group { height: 22px; justify-content: flex-end; align-items: center; padding-right: 8px; gap: 2px; }
 .tz-row { height: 22px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; }
-.tz-toggle { font-size: x-small; color: white; text-decoration: underline; text-align: right; }
+.tz-toggle { font-size: 0.7rem; color: white; text-decoration: underline; text-align: right; }
 .zoom-btn {
   background: none; border: none; padding: 2px 3px; font-size: small;
   color: white; text-shadow: 0 0 4px black; line-height: 1; border-radius: 4px;
@@ -567,7 +567,7 @@ export default {
 .name-id {
   width: 42px; min-width: 42px;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: x-small;
+  cursor: pointer; font-size: 0.7rem;
   border-top: 1px solid rgba(255, 255, 255, 0.4);
 }
 .name-id span { color: black; text-shadow: none; }
@@ -577,7 +577,7 @@ export default {
 .name-var {
   height: 22px; display: flex; align-items: center; justify-content: flex-end;
   padding-right: 8px; text-align: right;
-  font-size: xx-small; color: rgba(0, 0, 0, 0.7);
+  font-size: x0.7rem; color: rgba(0, 0, 0, 0.7);
 }
 .temp-unit { cursor: pointer; color: inherit; text-shadow: none; }
 
@@ -639,7 +639,7 @@ export default {
   text-shadow: none;
 }
 .hourCell {
-  font-size: x-small;
+  font-size: 0.7rem;
   border-bottom: 1px solid #0000002e;
   position: relative;
   overflow: visible;
@@ -675,7 +675,7 @@ export default {
 .temp-text {
   position: absolute; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  font-size: x-small; color: black; text-shadow: none;
+  font-size: 0.7rem; color: black; text-shadow: none;
   white-space: nowrap; pointer-events: none;
 }
 
