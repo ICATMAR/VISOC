@@ -9,6 +9,7 @@ import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
 import DPHFRStations from './DPHFRStations.js';
 import DPBuoys from './DPBuoys.js';
+import DPSSForecast from './DPSSForecast.js';
 
 
 const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
@@ -189,6 +190,28 @@ const dataProducts = [
   },
 
 
+  // Sea surface forecast
+  {
+    name: 'Sea surface forecast',
+    Class: DPSSForecast,
+    description: 'High-resolution short-term forecast of sea surface temperature and currents of the Catalan Sea',
+    sources: [
+      {
+        Class: SourceErddap,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        institution: 'ICATMAR',
+        dataset: 'sea_surface_forecast',
+        mapping: {
+          UO: {code: 'EWCT'},
+          VO: {code: 'NSCT'},
+          THETAO: {unitTransform: KelvinToCelsius},
+          SST: {unitTransform: KelvinToCelsius}
+        }
+      }
+    ]
+  },
+
+
   // Dynamic generation via EU HFR Node ERDDAP for non-ICATMAR networks and stations
   // Most likely will be integrated inside DPHFRNetwork and DPHFRStations, but for now we keep them separate for clarity.
 
@@ -222,25 +245,7 @@ const dataProducts = [
     ]
   },
 
-  // Sea surface forecast
-  {
-    name: 'Sea surface forecast',
-    description: 'High-resolution short-term forecast of sea surface temperature and currents of the Catalan Sea',
-    sources: [
-      {
-        type: 'SourceErddap',
-        src: 'https://erddap.icatmar.cat/erddap/index.html',
-        institution: 'ICATMAR',
-        dataset: 'sea_surface_forecast',
-        mapping: {
-          UO: {code: 'EWCT'},
-          VO: {code: 'NSCT'},
-          THETAO: {unitTransform: KelvinToCelsius},
-          SST: {unitTransform: KelvinToCelsius}
-        }
-      }
-    ]
-  }
+  
 
   // Dynamic generation of other forecast models (CMEMS)
   // Check HFRadar and VISAP codes

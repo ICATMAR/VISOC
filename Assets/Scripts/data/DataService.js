@@ -20,11 +20,15 @@ class DataService {
     const buoys = Catalogue.find(p => p.name === 'Buoys');
     this.buoys = new buoys.Class({ fetchManager: FetchManager, sources: buoys.sources });
 
+    const ssforecast = Catalogue.find(p => p.name === 'Sea surface forecast');
+    this.ssforecast = new ssforecast.Class({ fetchManager: FetchManager, sources: ssforecast.sources });
+
     this.dataProducts = [
       { name: drifters.name, product: this.drifters },
       { name: hfrnetwork.name, product: this.hfrnetwork },
       { name: hfrstations.name, product: this.hfrstations },
       { name: buoys.name, product: this.buoys },
+      { name: ssforecast.name, product: this.ssforecast },
     ];
   }
 
