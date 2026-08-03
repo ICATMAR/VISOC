@@ -3,9 +3,12 @@ import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
 import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
+import SourceErddapBuoys from '../sources/SourceErddapBuoys.js';
+
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
 import DPHFRStations from './DPHFRStations.js';
+import DPBuoys from './DPBuoys.js';
 
 
 const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
@@ -168,11 +171,11 @@ const dataProducts = [
   // Buoys
   {
     name: 'Moored buoys',
-    type: 'DPBuoys',
+    Class: DPBuoys,
     description: 'Meteo-oceanographic moored buoys',
     sources: [
       {
-        type: 'SourceErddapBuoys',
+        Class: SourceErddapBuoys,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         institution: 'ICATMAR',
         datasets: [
@@ -182,9 +185,6 @@ const dataProducts = [
           'BUOY_SOMO_SAMI',
         ]
       },
-      {
-        type: 'SourceMSM',
-      }
     ]
   },
 
