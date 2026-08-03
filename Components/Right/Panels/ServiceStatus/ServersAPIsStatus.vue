@@ -152,14 +152,11 @@ export default {
 .status-off     { background: var(--red); box-shadow: 0 0 4px rgba(var(--redRGB), 0.5); }
 .status-unknown { background: #757575; }
 
-.institution-group {
-  margin-top: 18px;
-}
-
 .institution-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 30px 0px 5px 10px;
 }
 
 .institution-logo {
@@ -171,7 +168,8 @@ export default {
 }
 
 .institution-name {
-  font-weight: bold;
+  font-size: x-small;
+  color: var(--lightBlue);
 }
 
 .service-item {
@@ -185,6 +183,7 @@ export default {
 }
 
 .service-link {
+  font-size: small;
   color: white;
   text-decoration: underline;
 }

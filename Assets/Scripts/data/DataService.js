@@ -6,6 +6,7 @@ class DataService {
 
   constructor(FetchManager) {
     this.serviceStatus = new ServiceStatus(FetchManager);
+    this.catalogue = Catalogue;
 
     const drifters = Catalogue.find(p => p.name === 'Drifters');
     this.drifters = new drifters.Class({ fetchManager: FetchManager, sources: drifters.sources });
