@@ -46,6 +46,16 @@ class FetchManager {
 
     entry.promise = fetch(url, { signal: controller.signal }).then(res => { // global fetch, not recursive
       clearTimeout(timeoutId);
+
+      // fetch() only rejects on network failure - a 4xx/5xx response still
+      // resolves normally, so that has to be checked explicitly here.
+      if (!res.ok) {
+        const httpError = new Error(`HTTP ${res.status} ${res.statusText}: ${url}`);
+        httpError.name = 'HTTPError'; // lets callers tell this apart from other fetch errors
+        httpError.status = res.status;
+        throw httpError;
+      }
+
       entry.response = res; // stays UNREAD forever - every caller only ever clones it
       entry.promise = undefined;
       entry.expiresAt = (typeof ttl === 'number' && ttl > 0) ? Date.now() + ttl * 60000 : undefined;
