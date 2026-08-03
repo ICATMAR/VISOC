@@ -31,6 +31,7 @@ const dataProducts = [
         Class: SourceErddap,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'socat_data_drifters_ICATMAR',
+        institution: 'ICATMAR',
         mapping: {
           temperature: {code: 'TEMP'},
         },
@@ -40,6 +41,7 @@ const dataProducts = [
         path: './Data/drifters/drifters_deriva1.csv',
         pathTimeless: './Data/drifters/drifters_deriva1_timeless.jsonl',
         pathMetadata: './Data/drifters/drifters_metadata.jsonl',
+        institution: 'ICATMAR',
         mapping: {
           temperature: {code: 'TEMP'},
         },
@@ -59,6 +61,7 @@ const dataProducts = [
         Class: SourceErddap,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'HF_radar_L3B_recent',
+        institution: 'ICATMAR',
         mapping: {
           u: {code: 'EWCT'},
           v: {code: 'NSCT'},
@@ -69,6 +72,7 @@ const dataProducts = [
         Class: SourceErddap,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'HF_Radar_L3B_Historic',
+        institution: 'ICATMAR',
         mapping: {
           u: {code: 'EWCT'},
           v: {code: 'NSCT'},
@@ -78,7 +82,8 @@ const dataProducts = [
       {
         Class: SourceErddap,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
-        dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3'
+        dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3',
+        institution: 'EU HFR Node',
       },
       // Static file
       {
@@ -89,6 +94,7 @@ const dataProducts = [
           './Data/hfr/totals/TOTL_CATS_2026_07_25_1100.tuv',
           './Data/hfr/totals/TOTL_CATS_2026_07_25_1200.tuv'
         ],
+        institution: 'ICATMAR',
         mapping: {
           LOND: {code: 'longitude'},
           LATD: {code: 'latitude'},
@@ -112,10 +118,12 @@ const dataProducts = [
         Class: SourceErddap,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'HF_Radar_L2B_Historic',
+        institution: 'ICATMAR',
       },
       {
         Class: SourceErddapEUHFRStations,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
+        institution: 'EU HFR Node',
         datasets: [
           'EUHFR_NRTcurrent_HFR-ICATMAR-CNET_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-CREU_v3_table',
@@ -129,6 +137,7 @@ const dataProducts = [
       {
         Class: SourceFileHFRRadials,
         path: './Data/hfr/radials/',
+        institution: 'ICATMAR',
         stations: [
           'CNET',
           'CREU',
@@ -141,6 +150,7 @@ const dataProducts = [
         ],
         fileStart: '2026-07-25T09',
         fileEnd: '2026-07-25T12',
+        institution: 'ICATMAR',
         mapping: {
           LOND: {code: 'longitude'},
           LATD: {code: 'latitude'},
@@ -164,6 +174,7 @@ const dataProducts = [
       {
         type: 'SourceErddapBuoys',
         src: 'https://erddap.icatmar.cat/erddap/index.html',
+        institution: 'ICATMAR',
         datasets: [
           'BUOY_SOMO_ADCP',
           'BUOY_SOMO_CTD',
@@ -219,6 +230,7 @@ const dataProducts = [
       {
         type: 'SourceErddap',
         src: 'https://erddap.icatmar.cat/erddap/index.html',
+        institution: 'ICATMAR',
         dataset: 'sea_surface_forecast',
         mapping: {
           UO: {code: 'EWCT'},
