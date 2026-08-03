@@ -205,11 +205,12 @@ const dataProducts = [
         Class: SourceErddapBuoys,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         institution: 'ICATMAR',
-        datasets: [
-          'BUOY_SOMO_ADCP',
-          'BUOY_SOMO_CTD',
-          'BUOY_SOMO_METEO',
-          'BUOY_SOMO_SAMI',
+        datasetTitles: [
+          'BUOY_SOMO',
+          'BUOY_MEDES',
+          'BUOY_MONTGO',
+          'BUOY_NORD_CAP_DE_CREUS',
+          'BUOY_SUD_CAP_DE_CREUS',
         ]
       },
     ]
