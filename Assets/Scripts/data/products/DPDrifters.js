@@ -1,11 +1,6 @@
-class DPDrifters {
+import DP from './DataProduct.js';
 
-  constructor({ fetchManager, sources }) {
-    this.sources = sources.map(src => new src.Class({ fetchManager, ...src }));
-
-    console.log("DPDrifters: sources loaded", this.sources);
-  }
-
+class DPDrifters extends DP {
 }
 
 export default DPDrifters;

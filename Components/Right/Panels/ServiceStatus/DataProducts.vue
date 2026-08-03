@@ -47,15 +47,13 @@ export default {
       const entries = this.$dataService.dataProducts; // [{ name, product }, ...]
 
       this.products = await Promise.all(entries.map(async ({ name, product }) => {
-        const dataProduct = this.$dataService.catalogue.find(p => p.name === name); // source config (institution, mapping...)
-
-        const sources = await Promise.all(product.sources.map(async (source, i) => {
+        const sources = await Promise.all(product.sources.map(async source => {
           await source.loadingPromise.catch(() => {}); // one failed source shouldn't hide the rest
           return {
             label: this.sourceTitle(source),
             url: this.sourceUrl(source),
             status: this.sourceStatus(source),
-            institution: dataProduct.sources[i]?.institution,
+            institution: source.institution,
             startDate: source.startDate,
             endDate: source.endDate,
             recentWindowDays: source.recentWindowDays,
@@ -72,7 +70,7 @@ export default {
     // revisit once we build out that view.
     sourceTitle(source) {
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
-      if (source.datasets) {debugger; return `ERDDAP - ${source.institution}`;}
+      if (source.datasets) return `ERDDAP - ${source.institution}`;
       if (source.path || source.paths) return 'Static files';
       return source.constructor.name;
     },

@@ -1,10 +1,6 @@
-class DPHFRNetwork {
+import DP from './DataProduct.js';
 
-  constructor ({ fetchManager, sources }) {
-    this.sources = sources.map(src => new src.Class({ fetchManager, ...src }));
-
-    console.log('DPHFRNetwork: sources loaded', this.sources);
-  }
+class DPHFRNetwork extends DP {
 }
 
 export default DPHFRNetwork;
