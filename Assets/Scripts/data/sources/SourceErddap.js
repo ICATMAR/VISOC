@@ -89,7 +89,7 @@ class SourceErddap extends Source {
   async getEndTimestamp() {
     const since = this.recentWindowStart();
     const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}${this.bboxConstraint()}&orderBy("time")`;
-    const text = await this.fetchManager.fetch(this.proxied(url), 1).then(res => res.text());
+    const text = await this.fetchManager.fetch(this.proxied(url), 1, 5).then(res => res.text());
     const lines = text.trim().split('\n').filter(line => line);
     const dataLines = lines.slice(2);
     return dataLines.length ? new Date(dataLines[dataLines.length - 1].split(',')[0]) : null;

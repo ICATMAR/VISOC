@@ -15,7 +15,9 @@ class FetchManager {
   //  undefined -> does not set a new expiry; still reloads if a previously set TTL expired
   //  0         -> forces a fresh fetch; does not set an expiry
   //  N         -> reuses the cache if not expired; sets a new expiry of N minutes when (re)fetched
-  static fetch(url, ttl) {
+  // Timeout, in seconds: aborts the underlying fetch (and rejects) if it hasn't resolved in time.
+  // Only applies when this call actually starts a new network request (not to cached/ongoing ones).
+  static fetch(url, ttl, timeout) {
     let entry = FetchManager.requests.get(url);
     if (entry == undefined) {
       entry = {};
@@ -38,14 +40,20 @@ class FetchManager {
 
     // Otherwise fetch: no cache yet, expired, or forced with ttl 0
     entry.response = undefined;
-    entry.promise = fetch(url).then(res => { // global fetch, not recursive
+
+    const controller = new AbortController();
+    const timeoutId = typeof timeout === 'number' ? setTimeout(() => controller.abort(), timeout * 1000) : undefined;
+
+    entry.promise = fetch(url, { signal: controller.signal }).then(res => { // global fetch, not recursive
+      clearTimeout(timeoutId);
       entry.response = res; // stays UNREAD forever - every caller only ever clones it
       entry.promise = undefined;
       entry.expiresAt = (typeof ttl === 'number' && ttl > 0) ? Date.now() + ttl * 60000 : undefined;
       return res; // return the original - callers clone it themselves (see above and below)
     }).catch(err => {
+      clearTimeout(timeoutId);
       entry.promise = undefined; // Allow retrying on the next call
-      throw err;
+      throw err.name === 'AbortError' ? new Error(`Fetch timed out after ${timeout}s: ${url}`) : err;
     });
 
     return entry.promise.then(res => res.clone());
