@@ -24,8 +24,8 @@
         <!-- Services grouped by institution -->
         <div class="institution-group" v-for="group in groups" :key="group.name">
           <div class="institution-header">
-            <img class="institution-logo" :src="group.logoSrc" :alt="group.name">
             <span class="institution-name">{{ group.name }}</span>
+            <img class="institution-logo" :src="group.logoSrc" :alt="group.name"></img>
           </div>
 
           <div class="service-item" v-for="service in group.services" :key="service.label">
@@ -143,20 +143,20 @@ export default {
 }
 
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-on      { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
-.status-off     { background: var(--red); box-shadow: 0 0 4px rgba(var(--redRGB), 0.5); }
+.status-on      { background: #4caf50; box-shadow: 0 0 2px #4caf5088; }
+.status-off     { background: var(--red); box-shadow: 0 0 2px rgba(var(--redRGB), 0.5); }
 .status-unknown { background: #757575; }
 
 .institution-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 30px 0px 5px 10px;
+  margin: 0px 0px 5px 10px;
 }
 
 .institution-logo {
@@ -168,7 +168,7 @@ export default {
 }
 
 .institution-name {
-  font-size: x-small;
+  font-size: small;
   color: var(--lightBlue);
 }
 
@@ -183,7 +183,7 @@ export default {
 }
 
 .service-link {
-  font-size: small;
+  font-size: x-small;
   color: white;
   text-decoration: underline;
 }

@@ -108,8 +108,8 @@ export default {
 }
 
 .dashboard-section-text {
-  font-size: x-small;
-  margin: 30px 0px 5px 10px;
+  font-size: small;
+  margin: 0px 0px 5px 10px;
   color: var(--lightBlue);
 }
 
@@ -120,7 +120,7 @@ export default {
 }
 
 .source-label {
-  font-size: small;
+  font-size: x-small;
 }
 
 .source-range {

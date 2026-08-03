@@ -5,6 +5,9 @@
     <i class="fa fa-arrow-left back-arrow clickable" v-on:click="$emit('close')"></i>
 
     <ServersAPIsStatus />
+
+    <div class="divider-small"></div>
+
     <DataProducts />
 
   </div>
