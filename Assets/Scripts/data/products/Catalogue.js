@@ -70,6 +70,8 @@ const dataProducts = [
           LATD: {code: 'latitude'},
           VELU: {code: 'EWCT'},
           VELV: {code: 'NSCT'},
+          VELO: {code: 'HCSP'},
+          HEAD: {code: 'HCDT'}
         }
       }
     ]
@@ -83,7 +85,14 @@ const dataProducts = [
     description: 'Surface currents from the Catalan Sea high-frequency radar stations',
     sources: [
       {
-        type: 'SourceErddapHFRStations',
+        type: 'SourceErddapICATMARHFRStations',
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        datasets: [
+          'HF_Radar_L2B_Historic',
+        ],
+      },
+      {
+        type: 'SourceErddapEUHFRStations',
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         datasets: [
           'EUHFR_NRTcurrent_HFR-ICATMAR-CNET_v3_table',
@@ -93,7 +102,7 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-AREN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-PBCN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-GNST_v3_table',
-        ],
+        ], 
       }
     ],
   },
