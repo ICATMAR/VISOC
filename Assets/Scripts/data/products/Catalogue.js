@@ -33,7 +33,7 @@ const dataProducts = [
   {
     name: 'High-frequency radar network',
     type: 'DPHFRNetwork',
-    description: 'Surface currents from the Catalan Sea high-frequency radar network',
+    description: "Surface currents from the ICATMAR's high-frequency radar network",
     sources: [
       // Recent
       {
@@ -82,7 +82,7 @@ const dataProducts = [
   {
     name: 'High-frequency radar stations',
     type: 'DPHFRStations',
-    description: 'Surface currents from the Catalan Sea high-frequency radar stations',
+    description: "Surface currents from the ICATMAR's high-frequency radar stations",
     sources: [
       {
         type: 'SourceErddapICATMARHFRStations',
@@ -131,7 +131,8 @@ const dataProducts = [
   },
 
 
-  // Dynamic generation via EU HFR Node ERDDAP for networks and stations.
+  // Dynamic generation via EU HFR Node ERDDAP for non-ICATMAR networks and stations
+  // Most likely will be integrated inside DPHFRNetwork and DPHFRStations, but for now we keep them separate for clarity.
 
   // Argo floats from ifremer
   {
