@@ -17,7 +17,7 @@ class FetchManager {
   //  N         -> reuses the cache if not expired; sets a new expiry of N minutes when (re)fetched
   // Timeout, in seconds: aborts the underlying fetch (and rejects) if it hasn't resolved in time.
   // Only applies when this call actually starts a new network request (not to cached/ongoing ones).
-  static fetch(url, ttl, timeout) {
+  static fetch(url, ttl, timeout = 30) {
     let entry = FetchManager.requests.get(url);
     if (entry == undefined) {
       entry = {};
