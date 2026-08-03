@@ -1,6 +1,8 @@
 import SourceErddap from '../sources/SourceErddap.js';
 import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
+import DPDrifters from './DPDrifters.js';
+import DPHFRNetwork from './DPHFRNetwork.js';
 
 
 // Data products
@@ -8,7 +10,7 @@ const dataProducts = [
 // Drifters
   {
     name: 'Drifters',
-    type: 'DPDrifters',
+    Class: DPDrifters,
     description: 'Drifters data of SVPs, CODEs and other types of drifters',
     sources: [
       {
@@ -35,7 +37,7 @@ const dataProducts = [
   // High-frequency radar network
   {
     name: 'High-frequency radar network',
-    type: 'DPHFRNetwork',
+    Class: DPHFRNetwork,
     description: "Surface currents from the ICATMAR's high-frequency radar network",
     sources: [
       // Recent
