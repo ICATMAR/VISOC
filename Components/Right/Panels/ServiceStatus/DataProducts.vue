@@ -105,16 +105,19 @@ export default {
       return date.toLocaleDateString();
     },
 
-    // Up to 7 days old: 'X minutes/hours/days ago'. Older than that: just the date.
+    // Up to 7 days away: 'X minutes/hours/days ago' (past) or '...ahead'
+    // (future, e.g. a forecast's end date). Beyond that: just the date.
     formatRelative(date) {
       if (!date) return '';
-      const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+      const diffMs = date.getTime() - Date.now();
+      const suffix = diffMs > 0 ? 'ahead' : 'ago';
+      const minutes = Math.floor(Math.abs(diffMs) / 60000);
       const hours = Math.floor(minutes / 60);
       const days = Math.floor(hours / 24);
       if (days > 7) return this.formatDate(date);
-      if (days >= 1) return `${days} ${days === 1 ? 'day' : 'days'} ago`;
-      if (hours >= 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-      return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+      if (days >= 1) return `${days} ${days === 1 ? 'day' : 'days'} ${suffix}`;
+      if (hours >= 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ${suffix}`;
+      return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ${suffix}`;
     }
   }
 }
