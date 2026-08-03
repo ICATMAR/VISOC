@@ -67,18 +67,22 @@ export default {
       this.isLoading = false;
     },
 
-    // Composite sources (multiple datasets/stations in one Source) aren't
-    // titled specifically yet - revisit once we build out their UI.
+    // SourceErddapEUHFRStations (multiple datasets, one per station) isn't
+    // broken down per-station in the UI yet, just shown as one ERDDAP entry -
+    // revisit once we build out that view.
     sourceTitle(source) {
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
+      if (source.datasets) {debugger; return `ERDDAP - ${source.institution}`;}
       if (source.path || source.paths) return 'Static files';
       return source.constructor.name;
     },
 
-    // Only ERDDAP datasets link out - their info page. Nothing yet for
-    // static files or composite sources.
+    // ERDDAP datasets link to their info page; the EU HFR Node source links
+    // to the server itself, since it isn't one single dataset.
     sourceUrl(source) {
-      return source.dataset ? `${source.baseUrl}/info/${source.dataset}/index.html` : undefined;
+      if (source.dataset) return `${source.baseUrl}/info/${source.dataset}/index.html`;
+      if (source.datasets) return source.src;
+      return undefined;
     },
 
     // Static files aren't 'live', so always gray. Otherwise based on how
