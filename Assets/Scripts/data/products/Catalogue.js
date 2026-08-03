@@ -170,7 +170,7 @@ const dataProducts = [
 
   // Buoys
   {
-    name: 'Moored buoys',
+    name: 'Buoys',
     Class: DPBuoys,
     description: 'Meteo-oceanographic moored buoys',
     sources: [
