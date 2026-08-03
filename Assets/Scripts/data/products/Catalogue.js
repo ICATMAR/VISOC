@@ -84,10 +84,10 @@ const dataProducts = [
       {
         Class: SourceFileHFRTotals,
         paths: [
-          './Data/hfr/totals/TOTL_CATS_2026_07_15_0900.tuv',
-          './Data/hfr/totals/TOTL_CATS_2026_07_15_1000.tuv',
-          './Data/hfr/totals/TOTL_CATS_2026_07_15_1100.tuv',
-          './Data/hfr/totals/TOTL_CATS_2026_07_15_1200.tuv'
+          './Data/hfr/totals/TOTL_CATS_2026_07_25_0900.tuv',
+          './Data/hfr/totals/TOTL_CATS_2026_07_25_1000.tuv',
+          './Data/hfr/totals/TOTL_CATS_2026_07_25_1100.tuv',
+          './Data/hfr/totals/TOTL_CATS_2026_07_25_1200.tuv'
         ],
         mapping: {
           LOND: {code: 'longitude'},
@@ -140,8 +140,8 @@ const dataProducts = [
           'GNST',
           'SCAL'
         ],
-        fileStart: '2026-07-15T09',
-        fileEnd: '2026-07-15T12',
+        fileStart: '2026-07-25T09',
+        fileEnd: '2026-07-25T12',
         mapping: {
           LOND: {code: 'longitude'},
           LATD: {code: 'latitude'},
