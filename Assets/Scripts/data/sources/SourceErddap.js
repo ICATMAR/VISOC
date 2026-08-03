@@ -58,6 +58,7 @@ class SourceErddap extends Source {
       console.log(`Start/end date not found in allDatasets.jsonlKVP for ${this.dataset}. Checking if there is recent data.`);
       this.endDate = await this.getEndTimestamp();
       if (this.endDate != undefined) console.log('Latest entry for ' + this.dataset +' is on ' + this.endDate);
+      else console.log('No recent data  in the last ' + this.recentWindowDays + ' days found for ' + this.dataset);
     }
   }
 

@@ -2,6 +2,7 @@ import SourceErddap from '../sources/SourceErddap.js';
 import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
+import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
 import DPHFRStations from './DPHFRStations.js';
@@ -108,11 +109,9 @@ const dataProducts = [
     description: "Surface currents from the ICATMAR's high-frequency radar stations",
     sources: [
       {
-        Class: SourceErddapICATMARHFRStations,
+        Class: SourceErddap,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
-        datasets: [
-          'HF_Radar_L2B_Historic',
-        ],
+        dataset: 'HF_Radar_L2B_Historic',
       },
       {
         Class: SourceErddapEUHFRStations,
@@ -125,7 +124,8 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-AREN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-PBCN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-GNST_v3_table',
-        ], 
+        ],
+        bbox: MEDBBOX,
       },
       {
         Class: SourceFileHFRRadials,

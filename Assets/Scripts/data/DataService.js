@@ -12,6 +12,9 @@ class DataService {
 
     const hfrnetwork = Catalogue.find(p => p.name === 'High-frequency radar network');
     this.hfrnetwork = new hfrnetwork.Class({ fetchManager: FetchManager, sources: hfrnetwork.sources });
+
+    const hfrstations = Catalogue.find(p => p.name === 'High-frequency radar stations');
+    this.hfrstations = new hfrstations.Class({ fetchManager: FetchManager, sources: hfrstations.sources });
   }
 
 }
