@@ -5,11 +5,11 @@
 
     <!-- Platform icon -->
     <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
-      <img class="platform-icon clickable" :class="{ selected: isIconSelected(station) }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
+      <img class="platform-icon clickable" :class="{ selected: isIconSelected(station), offline: stationStatus(station) === 'offline' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
       <!-- Status indicator -->
       <div class="platform-status-indicator" :class="stationStatus(station)"></div>
-      <!-- ICATMAR marker -->
-      <div class="platform-marker-indicator">
+      <!-- ICATMAR marker - only for ICATMAR's own stations -->
+      <div class="platform-marker-indicator" v-if="isICATMARStation(station)">
         <img :src="icatmarLogoURL" alt="">
       </div>
     </div>
@@ -25,22 +25,39 @@
 
 export default {
   name: "MapOverlayHFRStations",
-  created() {
-
-  },
   mounted() {
 
     this.$nextTick(() => {
       if (this.map == undefined) {
         this.map = this.$parent.map; // Access the map instance from the parent component
       }
-      // Create overlays
-      for (let i = 0 ; i < this.stations.length; i++) {
+      this.loadStations();
+    });
+  },
+  data (){
+    return {
+      iconURL: './Assets/Icons/radar.svg',
+      icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
+      stations: [],
+    }
+  },
+  methods: {
+    // getAllStations() groups stations by network - flattened here since the
+    // map just shows every station regardless of which network it's on.
+    async loadStations() {
+      const groups = await this.$dataService.hfrstations.getAllStations();
+      this.stations = groups.flatMap(g => g.stations);
+
+      await this.$nextTick(); // wait for the v-for to render before refs exist
+      this.createOverlays();
+    },
+    createOverlays() {
+      for (let i = 0; i < this.stations.length; i++) {
         let station = this.stations[i];
         const olOverlay = new ol.Overlay({
           element: this.$refs[station.id]?.[0],
           positioning: 'center-center',
-          position: ol.proj.fromLonLat([station.lon, station.lat]),
+          position: ol.proj.fromLonLat([station.longitude, station.latitude]),
           stopEvent: false,
         });
         const overlayEl = olOverlay.getElement();
@@ -49,18 +66,21 @@ export default {
         olOverlay.element.classList.add('no-pointer-events');
         this.map.addOverlay(olOverlay);
       }
-
-    });
-  },
-  data (){
-    return {
-      iconURL: './Assets/Icons/radar.svg',
-      icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
-    }
-  },
-  methods: {
+    },
+    // Based on how stale time_coverage_end is: <3h active, up to 1 day
+    // delayed, up to 30 days inactive, older than that offline.
     stationStatus(station) {
-      return this.$requests.getStationStatus(station.id, 'hfr');
+      const endStr = station.metadata?.time_coverage_end;
+      if (!endStr) return 'inactive';
+
+      const ageHours = (Date.now() - new Date(endStr).getTime()) / 3600000;
+      if (ageHours < 3) return 'active';
+      if (ageHours <= 24) return 'delayed';
+      if (ageHours <= 24 * 30) return 'inactive';
+      return 'offline';
+    },
+    isICATMARStation(station) {
+      return station.metadata?.network === 'HFR-ICATMAR' && station.id != 'CNET';
     },
     isIconSelected(station) {
       if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'hfr') return false;
@@ -81,11 +101,6 @@ export default {
       this.$gui.isDataTimelineOpen = true;
       this.$gui.isPlatformDetailOpen = true;
       this.$gui.isMenuOpen = false;
-    }
-  },
-  computed: {
-    stations() {
-      return this.$requests.hfrStations;
     }
   },
   watch: {
