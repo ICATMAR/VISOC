@@ -69,6 +69,19 @@ class DPHFRStations extends DP {
     }
   }
 
+
+  // Get number of points per hour (only ICATMAR now)
+  async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
+    stationIds = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL'];
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
+    if (euHFRSource) {
+      try {
+        return await euHFRSource.getNumberOfValidPointsPerStations(stationIds, startDate, endDate);
+      } catch (error) {
+        console.error('Error loading EU HFR Node station data:', error);
+      }
+    }
+  }
 }
 
 
