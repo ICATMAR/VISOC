@@ -7,7 +7,7 @@
     <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
       <img class="platform-icon clickable" :class="{ selected: isIconSelected(station), offline: stationStatus(station) === 'offline' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
       <!-- Status indicator -->
-      <div class="platform-status-indicator" :class="stationStatus(station)"></div>
+      <div class="platform-status-indicator" :class="stationStatus(station)" v-if="stationStatus(station) != 'offline'"></div>
       <!-- ICATMAR marker - only for ICATMAR's own stations -->
       <div class="platform-marker-indicator" v-if="isICATMARStation(station)">
         <img :src="icatmarLogoURL" alt="">

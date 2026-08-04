@@ -3,7 +3,11 @@
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <!-- TOTALS row at top, separated from station rows by border -->
-        <tr :class="{ 'row-selected': isRowSelected('TOTALS') }"
+        <!-- No live source for totals yet - show a placeholder message instead of bars -->
+        <tr v-if="totals.unavailable">
+          <td :colspan="cells.length" class="message-cell totals-bar-cell">{{ $t('API feature missing for totals (combination of stations)') }}</td>
+        </tr>
+        <tr v-else :class="{ 'row-selected': isRowSelected('TOTALS') }"
           @mouseenter="hoveredStation = 'TOTALS'" @mouseleave="hoveredStation = null">
           <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell totals-bar-cell">
             <div class="bars-group">
@@ -19,23 +23,29 @@
           </td>
         </tr>
         <!-- Individual station availability bars -->
-        <tr v-for="station in stations" :key="station.name"
-          :class="{ 'row-selected': isRowSelected(station.name) }"
-          @mouseenter="hoveredStation = station.name"
-          @mouseleave="hoveredStation = null">
-          <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
-            <div class="bars-group">
-              <div v-for="sub in barsPerCell" :key="sub"
-                class="dt-col clickable"
-                :class="{ 'dt-col-selected': isBarSelected(station.name, cellIndex, sub - 1) }"
-                :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'"
-                @click="stationClicked(station, cellIndex, sub - 1, cell)">
-                <div class="bar-inner" :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"></div>
-                <div class="dt-col-overlay"></div>
+        <template v-for="station in stations" :key="station.name">
+          <!-- No EU HFR Node dataset for this station (e.g. SCAL) - show a placeholder message instead of bars -->
+          <tr v-if="station.noData">
+            <td :colspan="cells.length" class="message-cell">{{ $t('No data for ') + station.name }}</td>
+          </tr>
+          <tr v-else
+            :class="{ 'row-selected': isRowSelected(station.name) }"
+            @mouseenter="hoveredStation = station.name"
+            @mouseleave="hoveredStation = null">
+            <td v-for="(cell, cellIndex) in cells" :key="cellIndex" class="bar-cell">
+              <div class="bars-group">
+                <div v-for="sub in barsPerCell" :key="sub"
+                  class="dt-col clickable"
+                  :class="{ 'dt-col-selected': isBarSelected(station.name, cellIndex, sub - 1) }"
+                  :title="getHourlyValue(station, cellIndex, sub - 1) + ' valid points'"
+                  @click="stationClicked(station, cellIndex, sub - 1, cell)">
+                  <div class="bar-inner" :style="{ height: (getHourlyValue(station, cellIndex, sub - 1) / station.maxValue * 100) + '%' }"></div>
+                  <div class="dt-col-overlay"></div>
+                </div>
               </div>
-            </div>
-          </td>
-        </tr>
+            </td>
+          </tr>
+        </template>
       </DTTimelineGrid>
     </template>
   </DTLayout>
@@ -49,31 +59,14 @@ import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 export default {
   name: "DTAPHFR",
   created() {
-    const totalHours = Math.round(
-      (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
-    );
-    for (const station of this.stations) {
-      for (let i = 0; i < totalHours; i++) {
-        station.hourlyData[i] = 500 + Math.round(Math.random() * 500);
-        if (station.hourlyData[i] > station.maxValue)
-          station.maxValue = station.hourlyData[i];
-      }
-    }
-    // Independent mockup data for the TOTALS network product
-    for (let i = 0; i < totalHours; i++) {
-      const ok = Math.random() > 0.08;
-      const validPts = ok ? 300 + Math.round(Math.random() * 500) : 0;
-      const activeStations = ok ? 4 + Math.round(Math.random() * 4) : Math.round(Math.random() * 2);
-      this.totals.hourlyData.push(validPts);
-      this.totals.activeStations.push(activeStations);
-      if (validPts > this.totals.maxValue) this.totals.maxValue = validPts;
-    }
+    this.loadStations();
   },
   data() {
     return {
       hoveredStation: null,
       selectedBar: null,
-      totals: { name: 'TOTALS', hourlyData: [], activeStations: [], maxValue: 0 },
+      // No live source for network-wide totals yet - shown as unavailable, see template.
+      totals: { name: 'TOTALS', hourlyData: [], activeStations: [], maxValue: 0, unavailable: true },
       stations: [
         { name: 'CNET', hourlyData: [], maxValue: 0 },
         { name: 'CREU', hourlyData: [], maxValue: 0 },
@@ -87,6 +80,25 @@ export default {
     }
   },
   methods: {
+    async loadStations() {
+      const stationIds = this.stations.map(s => s.name);
+      const result = await this.$dataService.hfrstations.getNumberOfValidPointsPerStations(
+        stationIds, this.$gui.timelineStartDate, this.$gui.timelineEndDate
+      );
+
+      const startMs = this.$gui.timelineStartDate.getTime();
+      for (const station of this.stations) {
+        const validPoints = result?.[station.name];
+        if (!validPoints) { station.noData = true; continue; } // e.g. SCAL - no EU HFR Node dataset
+
+        Object.entries(validPoints).forEach(([timeStr, count]) => {
+          const hourIndex = Math.round((new Date(timeStr).getTime() - startMs) / (1000 * 3600));
+          if (hourIndex < 0) return;
+          station.hourlyData[hourIndex] = count;
+          if (count > station.maxValue) station.maxValue = count;
+        });
+      }
+    },
     totalsValue(cellIndex, subIndex) {
       return this.totals.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
     },
@@ -235,5 +247,14 @@ export default {
 
 .totals-bar-cell {
   border-bottom: 2px solid var(--blue);
+}
+
+.message-cell {
+  padding: 0;
+  height: 22px;
+  text-align: center;
+  font-size: x-small;
+  color: rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 </style>

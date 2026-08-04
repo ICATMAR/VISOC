@@ -12,7 +12,7 @@
 
       <!-- Line 1: type · lat/lon [copy] -->
       <div class="pd-header">
-        <span>{{ $t('High-frequency radar station') }}</span>
+        <span>{{ $t('HFR station') }}</span>
         <span>·</span>
         <span class="pd-coords">{{ station.lat.toFixed(4) }}° N, {{ station.lon.toFixed(4) }}° E</span>
         <button class="pd-copy-btn clickable" @click="copyCoords" :title="$t('Copy coordinates')">
