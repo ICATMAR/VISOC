@@ -13,7 +13,7 @@ class DPHFRStations extends DP {
   // [{ name, latitude, longitude, metadata }, ...]. Same shape whether it
   // came from the static file or a live EU HFR Node request, so callers
   // don't need to care which one it was.
-  async getHFRStationPositions() {
+  async getICATMARHFRStations() {
     // Static file - tried first: cheap (one small local fetch) and avoids
     // querying ERDDAP at all when the positions are already known. Only
     // falls through to the live sources below if this file is missing/unreadable.
@@ -29,7 +29,7 @@ class DPHFRStations extends DP {
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
     if (euHFRSource) {
       try {
-        return await euHFRSource.getICATMARStationPositions();
+        return await euHFRSource.getICATMARHFRStations();
       } catch (error) {
         console.error('Error loading EU HFR Node station data:', error);
       }
@@ -50,6 +50,21 @@ class DPHFRStations extends DP {
         return { network: undefined, stations };
       } catch (error) {
         console.error('Error loading static HFR radials data:', error);
+      }
+    }
+  }
+
+
+
+  // Every network and station on the EU HFR Node (ICATMAR included, not just
+  // it) - one { network, stations } group per network.
+  async getAllStations() {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
+    if (euHFRSource) {
+      try {
+        return await euHFRSource.getAllStations();
+      } catch (error) {
+        console.error('Error loading EU HFR Node station data:', error);
       }
     }
   }

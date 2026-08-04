@@ -17,7 +17,8 @@ class DataService {
     const hfrstations = Catalogue.find(p => p.name === 'High-frequency radar stations');
     this.hfrstations = new hfrstations.Class(hfrstations, FetchManager);
 
-    this.hfrstations.getHFRStationPositions().then(positions => console.log(positions));
+    // this.hfrstations.getICATMARHFRStations().then(stations => console.log(stations));
+    // this.hfrstations.getAllStations().then(stations => console.log(stations));
 
     const buoys = Catalogue.find(p => p.name === 'Buoys');
     this.buoys = new buoys.Class(buoys, FetchManager);
