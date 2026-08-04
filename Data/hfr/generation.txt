@@ -1,0 +1,2 @@
+You will find the static data in this repository
+https://github.com/ICATMAR/data
