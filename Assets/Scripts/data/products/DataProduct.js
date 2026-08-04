@@ -1,6 +1,7 @@
 class DataProduct {
 
   constructor(catalogueDP, fetchManager) {
+    this.fetchManager = fetchManager; // kept for subclasses' own supplementary fetches, beyond their configured sources
     this.name = catalogueDP.name;
     this.description = catalogueDP.description;
     this.type = catalogueDP.type;
