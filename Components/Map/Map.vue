@@ -4,10 +4,10 @@
   <div id="map" ref="OLMap" v-on:drop="onDropFile($event)" v-on:dragover="onDragOver($event)"></div>
 
   <!-- OVERLAYS -->
-  <MapOverlayMockup></MapOverlayMockup>
+  <!-- <MapOverlayMockup></MapOverlayMockup> -->
   <MapOverlayHFRStations></MapOverlayHFRStations>
-  <MapOverlayBuoys></MapOverlayBuoys>
-  <MapOverlayDrifters></MapOverlayDrifters>
+  <!-- <MapOverlayBuoys></MapOverlayBuoys>
+  <MapOverlayDrifters></MapOverlayDrifters> -->
 </template>
 
 
