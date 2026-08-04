@@ -30,6 +30,7 @@ const dataProducts = [
     name: 'Drifters',
     Class: DPDrifters,
     description: 'Drifters data of SVPs, CODEs and other types of drifters',
+    type: 'real-time',
     sources: [
       {
         Class: SourceErddap,
@@ -85,6 +86,7 @@ const dataProducts = [
     name: 'High-frequency radar network',
     Class: DPHFRNetwork,
     description: "Surface currents from the ICATMAR's high-frequency radar network",
+    type: 'near-real-time',
     sources: [
       // Recent
       {
@@ -143,6 +145,7 @@ const dataProducts = [
     name: 'High-frequency radar stations',
     Class: DPHFRStations,
     description: "Surface currents from the ICATMAR's high-frequency radar stations",
+    type: 'near-real-time',
     sources: [
       {
         Class: SourceErddap,
@@ -200,6 +203,7 @@ const dataProducts = [
     name: 'Buoys',
     Class: DPBuoys,
     description: 'Meteo-oceanographic moored buoys',
+    type: 'real-time',
     sources: [
       {
         Class: SourceErddapBuoys,
@@ -216,6 +220,7 @@ const dataProducts = [
     name: 'Sea surface forecast',
     Class: DPSSForecast,
     description: 'High-resolution short-term forecast of sea surface temperature and currents of the Catalan Sea',
+    type: 'forecast',
     sources: [
       {
         Class: SourceErddap,
@@ -239,7 +244,8 @@ const dataProducts = [
   // Argo floats from ifremer
   {
     name: 'Argo floats',
-    type: 'DPArgo',
+    //Class: DPArgoFloats,
+    type: 'near-real-time',
     description: 'Argo floats data from the Catalan Sea and surrounding areas',
     sources: [
       {

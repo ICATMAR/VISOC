@@ -54,7 +54,7 @@ export default {
           return {
             label: this.sourceTitle(source),
             url: this.sourceUrl(source),
-            status: this.sourceStatus(source),
+            status: this.sourceStatus(source, product.type),
             institution: source.institution,
             startDate: source.startDate,
             endDate: source.endDate,
@@ -87,13 +87,25 @@ export default {
 
     // Static files aren't 'live', so always gray. Otherwise based on how
     // stale endDate is: <=1 day green, <=15 days yellow, older (or no data) gray.
-    sourceStatus(source) {
+    sourceStatus(source, dpType) {
       if (source.path || source.paths) return 'inactive';
       if (!source.endDate) return 'inactive';
-      const ageDays = (Date.now() - source.endDate.getTime()) / 86400000;
-      if (ageDays <= 1) return 'active';
-      if (ageDays <= 15) return 'delayed';
-      return 'inactive';
+      // Not forecast
+      if (!(dpType == 'forecast')) {
+        const ageDays = (Date.now() - source.endDate.getTime()) / 86400000;
+        if (ageDays <= 1) return 'active';
+        if (ageDays <= 15) return 'delayed';
+        return 'inactive';
+      } 
+      // Forecast
+      else {
+        // If forecast end date is in the past for less than a 1 day, it's delayed. More than a day, it's inactive. If it's in the future, it's active.
+        const ageDays = (source.endDate.getTime() - Date.now()) / 86400000;
+        if (ageDays > 0) return 'active';
+        if (ageDays > -1) return 'delayed';
+        return 'inactive';
+      }
+      
     },
 
     noDataText(source) {
