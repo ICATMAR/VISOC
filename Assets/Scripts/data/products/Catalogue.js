@@ -3,6 +3,7 @@ import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
 import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
+import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 import SourceErddapBuoys from '../sources/SourceErddapBuoys.js';
 
 import DPDrifters from './DPDrifters.js';
@@ -166,6 +167,11 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-PBCN_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-GNST_v3_table',
         ],
+      },
+      {
+        Class: SourceGithubHFR,
+        institution: 'ICATMAR',
+        src: 'https://github.com/ICATMAR/data/'
       },
       {
         Class: SourceFileHFRRadials,

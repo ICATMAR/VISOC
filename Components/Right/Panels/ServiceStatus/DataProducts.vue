@@ -50,7 +50,9 @@ export default {
 
       this.products = await Promise.all(entries.map(async ({ name, product }) => {
         const sources = await Promise.all(product.sources.map(async source => {
-          await source.loadingPromise.catch(() => {}); // one failed source shouldn't hide the rest
+          if (source.loadingPromise != undefined){
+            await source.loadingPromise.catch(() => {}); // one failed source shouldn't hide the rest
+          }
           return {
             label: this.sourceTitle(source),
             url: this.sourceUrl(source),
