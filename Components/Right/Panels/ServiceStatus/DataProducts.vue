@@ -20,6 +20,7 @@
           <span class="source-range">
             <template v-if="source.startDate && source.endDate">{{ formatDate(source.startDate) }} - {{ formatRelative(source.endDate) }}</template>
             <template v-else-if="source.endDate">{{ formatRelative(source.endDate) }}</template>
+            <template v-else-if="source.rateLimited">{{ $t('API limit reached, resets in 1 hour') }}</template>
             <template v-else>{{ noDataText(source) }}</template>
             <span v-if="source.institution" class="source-institution"> · {{ source.institution }}</span>
           </span>
@@ -61,6 +62,7 @@ export default {
             startDate: source.startDate,
             endDate: source.endDate,
             recentWindowDays: source.recentWindowDays,
+            rateLimited: source.isRateLimited,
           };
         }));
         return { name, sources, description: product.description };

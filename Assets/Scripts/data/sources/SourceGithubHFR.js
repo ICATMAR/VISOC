@@ -102,6 +102,11 @@ class SourceGithubHFR extends Source {
     // (SCAL only) latitude/longitude/metadata - discovered by load().
     this.stations = {};
 
+    // Set by load() on a 403 - read by DataProducts.vue to tell "GitHub is
+    // rate-limiting us" apart from "no data", which otherwise look the same
+    // (both leave startDate/endDate undefined).
+    this.isRateLimited = false;
+
     this.loadingPromise = this.load();
   }
 
@@ -110,12 +115,18 @@ class SourceGithubHFR extends Source {
   // branch name straight to its root tree), rather than walking every
   // station/month directory just to find out how fresh the data is.
   async load() {
+    this.isRateLimited = false;
+
     const url = `${GITHUB_API_URL}/${REPO}/git/trees/${BRANCH}?recursive=1`;
     const tree = await this.fetchManager.fetch(url, TREE_TTL_MINUTES)
       .then(res => res.json())
       .catch(err => {
-        if (err.name === 'HTTPError' && err.status === 403) console.error(`GitHub API rate limit reached while loading the repository tree (60 requests/hour when unauthenticated):`, err);
-        else console.error('Error loading GitHub HFR repository tree:', err);
+        if (err.name === 'HTTPError' && err.status === 403) {
+          console.error(`GitHub API rate limit reached while loading the repository tree (60 requests/hour when unauthenticated):`, err);
+          this.isRateLimited = true;
+        } else {
+          console.error('Error loading GitHub HFR repository tree:', err);
+        }
         return undefined;
       });
     if (!tree?.tree) return;
