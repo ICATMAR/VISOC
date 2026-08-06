@@ -8,6 +8,13 @@ import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 // further back than that would just come back empty.
 const GITHUB_RETENTION_DAYS = 14;
 
+// The ICATMAR station IDs published on the EU HFR Node - shared between
+// getAllStations() (to find ICATMAR's group among every network on the EU
+// HFR Node) and getNumberOfValidPointsPerStations(). SCAL is ICATMAR's too,
+// but GitHub-only (no EU HFR Node dataset), so it's kept out of this list and
+// handled separately wherever that distinction matters.
+const ICATMAR_STATION_IDS = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST'];
+
 class DPHFRStations extends DP {
 
   // Precomputed positions file - FetchManager caches it after the first
@@ -63,16 +70,50 @@ class DPHFRStations extends DP {
 
 
   // Every network and station on the EU HFR Node (ICATMAR included, not just
-  // it) - one { network, stations } group per network.
+  // it) - one { network, stations } group per network. ICATMAR's group is
+  // then topped up from GitHub: every ICATMAR station's time_coverage_end is
+  // refreshed to GitHub's latest file timestamp (ERDDAP's own dataset
+  // metadata can lag behind the actual files by days - seen with BEGU), and
+  // SCAL is added in, since it has no EU HFR Node dataset to come from at all.
   async getAllStations() {
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
-    if (euHFRSource) {
-      try {
-        return await euHFRSource.getAllStations();
-      } catch (error) {
-        console.error('Error loading EU HFR Node station data:', error);
-      }
+    if (!euHFRSource) return;
+
+    let groups;
+    try {
+      groups = await euHFRSource.getAllStations();
+    } catch (error) {
+      console.error('Error loading EU HFR Node station data:', error);
+      return;
     }
+
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    if (!githubSource) return groups;
+    await githubSource.loadingPromise;
+
+    const icatmarGroup = groups.find(g => g.stations.some(s => ICATMAR_STATION_IDS.includes(s.id)));
+    if (!icatmarGroup) return groups;
+
+    icatmarGroup.stations.forEach(station => {
+      const endDate = githubSource.stations[station.id]?.endDate;
+      if (endDate) station.metadata.time_coverage_end = endDate.toISOString().replace('.000Z', 'Z');
+    });
+
+    const scal = githubSource.stations['SCAL'];
+    if (scal?.latitude != undefined) {
+      icatmarGroup.stations.push({
+        id: 'SCAL',
+        latitude: scal.latitude,
+        longitude: scal.longitude,
+        metadata: {
+          ...scal.metadata,
+          time_coverage_start: scal.startDate?.toISOString().replace('.000Z', 'Z'),
+          time_coverage_end: scal.endDate?.toISOString().replace('.000Z', 'Z'),
+        },
+      });
+    }
+
+    return groups;
   }
 
 
@@ -91,7 +132,7 @@ class DPHFRStations extends DP {
   // no ERDDAP dataset at all), and only within GITHUB_RETENTION_DAYS, since
   // that's all the repository keeps.
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
-    stationIds = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL'];
+    stationIds = [...ICATMAR_STATION_IDS, 'SCAL'];
     const end = endDate ?? new Date();
 
     let result = {};

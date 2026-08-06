@@ -75,15 +75,18 @@ export default {
     sourceTitle(source) {
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
       if (source.datasets) return `ERDDAP - ${source.institution}`;
+      if (source.repo) return `Github - ${source.repo}`;
       if (source.path || source.paths) return 'Static files';
       return source.constructor.name;
     },
 
-    // ERDDAP datasets link to their info page; the EU HFR Node source links
-    // to the server itself, since it isn't one single dataset.
+    // ERDDAP datasets link to their info page; the EU HFR Node and Github
+    // sources link to the server/repository itself, since neither is one
+    // single dataset.
     sourceUrl(source) {
       if (source.dataset) return `${source.baseUrl}/info/${source.dataset}/index.html`;
       if (source.datasets) return source.src;
+      if (source.repo) return source.src;
       return undefined;
     },
 

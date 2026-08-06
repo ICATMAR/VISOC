@@ -49,6 +49,31 @@ const DEFAULT_CALIBRATION = { headerBytes: 7000, bytesPerPoint: 242.4 };
 // this station's estimates are the least trustworthy.
 const UNSTABLE_STATIONS = ['BEGU'];
 
+// SCAL isn't on the EU HFR Node, so DPHFRStations can't get its lat/lon or
+// metadata from ERDDAP the way it does for the other ICATMAR stations.
+// latitude/longitude and sensor_model are read straight off SCAL's own .ruv
+// header (%Origin, %Manufacturer); institution/network aren't actually in
+// that header, they're inferred from SCAL being one of ICATMAR's own
+// stations same as the rest; doa_estimation_method is inferred from
+// %RadialMusicParameters being present in the header (CODAR SeaSondes report
+// direction of arrival via the MUSIC algorithm when that block is there).
+// time_coverage_start/end aren't hardcoded here - load() fills those in from
+// the actual file timestamps, same as it does for every other station.
+const SCAL_METADATA = {
+  latitude: 41.1862833,
+  longitude: 1.6073000,
+  metadata: {
+    institution: 'ICATMAR',
+    network: 'HFR-ICATMAR',
+    sensor_model: 'CODAR',
+    doa_estimation_method: 'Direction Finding',
+  },
+};
+
+// How long load()'s repo-wide tree is cached for - short, since its only
+// purpose is finding out how fresh each station's data currently is.
+const TREE_TTL_MINUTES = 10;
+
 function pad(n) {
   return String(n).padStart(2, '0');
 }
@@ -66,10 +91,55 @@ class SourceGithubHFR extends Source {
   constructor({ fetchManager, src }) {
     super({ fetchManager });
     this.src = src;
+    this.repo = REPO; // exposed so DataProducts.vue can label/link this source, same as SourceErddap's `dataset`
+
     // One entry per station-month directory request, keyed '<station>/<year>/<month>'.
     // Holds the promise (not the resolved value) so concurrent callers share
     // the same in-flight request instead of each issuing their own.
     this.requests = new Map();
+
+    // Per-station coverage, keyed by station id: { startDate, endDate }, plus
+    // (SCAL only) latitude/longitude/metadata - discovered by load().
+    this.stations = {};
+
+    this.loadingPromise = this.load();
+  }
+
+  // Discovers every station's earliest/latest timestamp, from the repo's
+  // file tree - fetched recursively in a SINGLE request (GitHub resolves a
+  // branch name straight to its root tree), rather than walking every
+  // station/month directory just to find out how fresh the data is.
+  async load() {
+    const url = `${GITHUB_API_URL}/${REPO}/git/trees/${BRANCH}?recursive=1`;
+    const tree = await this.fetchManager.fetch(url, TREE_TTL_MINUTES)
+      .then(res => res.json())
+      .catch(err => {
+        if (err.name === 'HTTPError' && err.status === 403) console.error(`GitHub API rate limit reached while loading the repository tree (60 requests/hour when unauthenticated):`, err);
+        else console.error('Error loading GitHub HFR repository tree:', err);
+        return undefined;
+      });
+    if (!tree?.tree) return;
+
+    const prefix = `${PATH}/`;
+    tree.tree.forEach(entry => {
+      if (entry.type !== 'blob' || !entry.path.startsWith(prefix)) return;
+      const [station, , , fileName] = entry.path.slice(prefix.length).split('/');
+      const time = this.timestampFromFileName(fileName);
+      if (time == undefined) return;
+
+      const date = new Date(time);
+      const coverage = this.stations[station] ?? (this.stations[station] = {});
+      if (coverage.startDate == undefined || date < coverage.startDate) coverage.startDate = date;
+      if (coverage.endDate == undefined || date > coverage.endDate) coverage.endDate = date;
+    });
+
+    if (this.stations['SCAL']) Object.assign(this.stations['SCAL'], SCAL_METADATA);
+
+    // Earliest/latest across every station - same as SourceErddapEUHFRStations's
+    // own startDate/endDate, read by DataProducts.vue for this source's status dot.
+    const coverages = Object.values(this.stations);
+    this.startDate = coverages.length ? new Date(Math.min(...coverages.map(c => c.startDate))) : undefined;
+    this.endDate = coverages.length ? new Date(Math.max(...coverages.map(c => c.endDate))) : undefined;
   }
 
   // GitHub's contents API: a JSON array of { name, size, ... }, one entry per

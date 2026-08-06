@@ -26,9 +26,21 @@ class ServiceStatus {
     if (!navigator.onLine)
       return { hasInternet: false };
 
-    const isProxyOn = await this.fetchURL(this.proxyURL, ttl, text => text.includes('ProxyServerAPI RUNNING'));
+    // Checked directly (not through fetchURL()) because a 429 needs to be
+    // told apart from every other failure - the proxy is rate-limiting us,
+    // not down, and none of the services below can be checked either way
+    // (they all go through the same proxy).
+    let isProxyOn = false;
+    let isProxyRateLimited = false;
+    try {
+      const res = await this.fetchManager.fetch(this.proxyURL, ttl);
+      const text = await res.text();
+      isProxyOn = text.includes('ProxyServerAPI RUNNING');
+    } catch (err) {
+      isProxyRateLimited = err.status === 429;
+    }
     if (!isProxyOn)
-      return { hasInternet: true, isProxyOn: false };
+      return { hasInternet: true, isProxyOn: false, isProxyRateLimited };
 
     const [icatmarErddap, msm, ais, ifremerErddap, noaaErddap, eunodeErddap] = await Promise.all([
       this.checkProxied(this.services.icatmarErddap, ttl, text => !text.includes('Service Unavailable')),

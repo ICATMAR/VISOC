@@ -15,27 +15,39 @@
       </div>
 
       <template v-else>
-        <!-- Proxy off -> services below are shown as unknown (gray), we cannot reach them -->
-        <div class="status-row" v-if="!status.isProxyOn">
+        <!-- Proxy rate-limited -> every service below goes through it, so none
+             of them can be checked either - only this is shown, nothing else. -->
+        <div class="status-row" v-if="status.isProxyRateLimited">
           <span class="status-dot status-off"></span>
-          <span>{{ $t('Proxy server unavailable') }}</span>
+          <div class="status-text">
+            <span>{{ $t('ICATMAR API unavailable') }}</span>
+            <span class="status-subtext">{{ $t('API request limit reached. Please wait 15 minutes') }}</span>
+          </div>
         </div>
 
-        <!-- Services grouped by institution -->
-        <div class="institution-group" v-for="group in groups" :key="group.name">
-          <div class="institution-header">
-            <span class="institution-name">{{ group.name }}</span>
-            <img class="institution-logo" :src="group.logoSrc" :alt="group.name"></img>
+        <template v-else>
+          <!-- Proxy off -> services below are shown as unknown (gray), we cannot reach them -->
+          <div class="status-row" v-if="!status.isProxyOn">
+            <span class="status-dot status-off"></span>
+            <span>{{ $t('Proxy server unavailable') }}</span>
           </div>
 
-          <div class="service-item" v-for="service in group.services" :key="service.label">
-            <div class="service-row">
-              <span class="status-dot" :class="'status-' + service.state"></span>
-              <a class="service-link" :href="service.url" target="_blank" rel="noopener noreferrer">{{ service.label }}</a>
+          <!-- Services grouped by institution -->
+          <div class="institution-group" v-for="group in groups" :key="group.name">
+            <div class="institution-header">
+              <span class="institution-name">{{ group.name }}</span>
+              <img class="institution-logo" :src="group.logoSrc" :alt="group.name"></img>
             </div>
-            <p class="service-description">{{ $t(service.description) }}</p>
+
+            <div class="service-item" v-for="service in group.services" :key="service.label">
+              <div class="service-row">
+                <span class="status-dot" :class="'status-' + service.state"></span>
+                <a class="service-link" :href="service.url" target="_blank" rel="noopener noreferrer">{{ service.label }}</a>
+              </div>
+              <p class="service-description">{{ $t(service.description) }}</p>
+            </div>
           </div>
-        </div>
+        </template>
       </template>
     </template>
 
@@ -151,6 +163,16 @@ export default {
 .status-on      { background: #4caf50; box-shadow: 0 0 2px #4caf5088; }
 .status-off     { background: var(--red); box-shadow: 0 0 2px rgba(var(--redRGB), 0.5); }
 .status-unknown { background: #757575; }
+
+.status-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-subtext {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.6);
+}
 
 .institution-header {
   display: flex;
