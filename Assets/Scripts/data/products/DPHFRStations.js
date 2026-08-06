@@ -1,6 +1,12 @@
 import DP from './DataProduct.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
 import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
+import SourceGithubHFR from '../sources/SourceGithubHFR.js';
+
+// ICATMAR/data (GitHub) only keeps HFR radial files for the last two weeks -
+// confirmed active (commits still landing daily) on 2026-08-06, so a request
+// further back than that would just come back empty.
+const GITHUB_RETENTION_DAYS = 14;
 
 class DPHFRStations extends DP {
 
@@ -70,17 +76,58 @@ class DPHFRStations extends DP {
   }
 
 
-  // Get number of points per hour (only ICATMAR now)
+  // Every hourly timestamp (ISO string, no milliseconds - matching how both
+  // ERDDAP and GitHub key their results) in [startDate, endDate] - used to
+  // tell which hours a station's ERDDAP result is missing.
+  hourlyTimestamps(startDate, endDate) {
+    const hours = [];
+    for (let t = startDate.getTime(); t <= endDate.getTime(); t += 3600000) hours.push(new Date(t).toISOString().replace('.000Z', 'Z'));
+    return hours;
+  }
+
+  // Get number of points per hour (only ICATMAR now). ERDDAP is queried
+  // first; GitHub then fills in only whatever ERDDAP's result is missing for
+  // a station (ERDDAP occasionally lags behind the actual files, and SCAL has
+  // no ERDDAP dataset at all), and only within GITHUB_RETENTION_DAYS, since
+  // that's all the repository keeps.
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
     stationIds = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL'];
+    const end = endDate ?? new Date();
+
+    let result = {};
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
     if (euHFRSource) {
       try {
-        return await euHFRSource.getNumberOfValidPointsPerStations(stationIds, startDate, endDate);
+        result = await euHFRSource.getNumberOfValidPointsPerStations(stationIds, startDate, end);
       } catch (error) {
         console.error('Error loading EU HFR Node station data:', error);
       }
     }
+
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    if (githubSource) {
+      const githubStart = new Date(Math.max(startDate, end - GITHUB_RETENTION_DAYS * 86400000));
+      if (githubStart <= end) {
+        const hours = this.hourlyTimestamps(githubStart, end);
+        const missingStations = stationIds.filter(id => hours.some(time => result[id]?.[time] == undefined));
+
+        if (missingStations.length) {
+          try {
+            const fromGithub = await githubSource.getNumberOfValidPointsPerStations(missingStations, githubStart, end);
+            missingStations.forEach(id => {
+              const points = result[id] ?? (result[id] = {});
+              hours.forEach(time => {
+                if (points[time] == undefined && fromGithub[id]?.[time] != undefined) points[time] = fromGithub[id][time];
+              });
+            });
+          } catch (error) {
+            console.error('Error loading GitHub HFR station data:', error);
+          }
+        }
+      }
+    }
+
+    return result;
   }
 }
 

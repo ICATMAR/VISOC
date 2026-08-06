@@ -63,9 +63,9 @@ function pad(n) {
 // SourceFileHFRRadials already does that for locally served files.
 class SourceGithubHFR extends Source {
 
-  constructor({ fetchManager }) {
+  constructor({ fetchManager, src }) {
     super({ fetchManager });
-
+    this.src = src;
     // One entry per station-month directory request, keyed '<station>/<year>/<month>'.
     // Holds the promise (not the resolved value) so concurrent callers share
     // the same in-flight request instead of each issuing their own.
