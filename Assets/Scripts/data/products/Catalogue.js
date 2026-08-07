@@ -217,6 +217,12 @@ const dataProducts = [
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
       },
+      {
+        Class: SourceErddapBuoys,
+        src: 'https://hebe.icm.csic.es/erddap/index.html',
+        institution: 'ICATMAR',
+        datasetCommonKey: 'BUOY_',
+      }
     ]
   },
 

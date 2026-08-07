@@ -59,4 +59,5 @@
 .platform-status-indicator.active   { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
 .platform-status-indicator.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
 .platform-status-indicator.inactive { background: #757575; }
+.platform-status-indicator.static { background: #757575; }
 .platform-status-indicator.offline  { background: #757575; }

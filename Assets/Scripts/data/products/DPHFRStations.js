@@ -2,40 +2,27 @@ import DP from './DataProduct.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
 import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
 import SourceGithubHFR from '../sources/SourceGithubHFR.js';
+import hfrIcatmarNetwork from '../../../../Data/hfr/hfr-icatmar.js'
 
-// ICATMAR/data (GitHub) only keeps HFR radial files for the last two weeks -
-// confirmed active (commits still landing daily) on 2026-08-06, so a request
-// further back than that would just come back empty.
-const GITHUB_RETENTION_DAYS = 14;
 
-// The ICATMAR station IDs published on the EU HFR Node - shared between
-// getAllStations() (to find ICATMAR's group among every network on the EU
-// HFR Node) and getNumberOfValidPointsPerStations(). SCAL is ICATMAR's too,
-// but GitHub-only (no EU HFR Node dataset), so it's kept out of this list and
-// handled separately wherever that distinction matters.
-const ICATMAR_STATION_IDS = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST'];
+
+
 
 class DPHFRStations extends DP {
 
-  // Precomputed positions file - FetchManager caches it after the first
-  // request, so multiple calls to getHFRStationPositions() only fetch it once.
-  static staticPositionsPath = './Data/staticData.json';
+
+  // Get stations from static file
+  getICATMARHFRStations() {
+    return hfrIcatmarNetwork.stations;
+  }
+
 
   // Returns { network, stations } - network is the shared, network-wide
   // metadata (or undefined if unavailable); stations is
   // [{ name, latitude, longitude, metadata }, ...]. Same shape whether it
   // came from the static file or a live EU HFR Node request, so callers
   // don't need to care which one it was.
-  async getICATMARHFRStations() {
-    // Static file - tried first: cheap (one small local fetch) and avoids
-    // querying ERDDAP at all when the positions are already known. Only
-    // falls through to the live sources below if this file is missing/unreadable.
-    try {
-      const text = await this.fetchManager.fetch(DPHFRStations.staticPositionsPath).then(res => res.text());
-      return JSON.parse(text);
-    } catch (error) {
-      console.error(`No static station positions file (${DPHFRStations.staticPositionsPath}), falling back to live sources:`, error);
-    }
+  async loadICATMARHFRStations() {
 
     // EU HFR Node - one dataset per station, plus the network's own dataset
     // for the shared network-wide metadata.
@@ -69,51 +56,52 @@ class DPHFRStations extends DP {
 
 
 
-  // Every network and station on the EU HFR Node (ICATMAR included, not just
-  // it) - one { network, stations } group per network. ICATMAR's group is
-  // then topped up from GitHub: every ICATMAR station's time_coverage_end is
-  // refreshed to GitHub's latest file timestamp (ERDDAP's own dataset
-  // metadata can lag behind the actual files by days - seen with BEGU), and
-  // SCAL is added in, since it has no EU HFR Node dataset to come from at all.
+  
+
+
+  // Get all stations from all sources
   async getAllStations() {
+    // Get sources
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
-    if (!euHFRSource) return;
-
-    let groups;
-    try {
-      groups = await euHFRSource.getAllStations();
-    } catch (error) {
-      console.error('Error loading EU HFR Node station data:', error);
-      return;
-    }
-
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
-    if (!githubSource) return groups;
-    await githubSource.loadingPromise;
 
-    const icatmarGroup = groups.find(g => g.stations.some(s => ICATMAR_STATION_IDS.includes(s.id)));
-    if (!icatmarGroup) return groups;
+    // Hfr networks with static info
+    let hfrNetworks = [hfrIcatmarNetwork];
 
-    icatmarGroup.stations.forEach(station => {
-      const endDate = githubSource.stations[station.id]?.endDate;
-      if (endDate) station.metadata.time_coverage_end = endDate.toISOString().replace('.000Z', 'Z');
-    });
+    // Load EUHFRSource
+    if (euHFRSource) {
+      try {
+        hfrNetworks = await euHFRSource.getAllStations();
 
-    const scal = githubSource.stations['SCAL'];
-    if (scal?.latitude != undefined) {
-      icatmarGroup.stations.push({
-        id: 'SCAL',
-        latitude: scal.latitude,
-        longitude: scal.longitude,
-        metadata: {
-          ...scal.metadata,
-          time_coverage_start: scal.startDate?.toISOString().replace('.000Z', 'Z'),
-          time_coverage_end: scal.endDate?.toISOString().replace('.000Z', 'Z'),
-        },
-      });
+        // Merge hfrIcatmarNetwork from static file with data from euHFRSource -
+        // static values are kept as-is, live ones only fill in what static is
+        // missing. Replaces the live ICATMAR entry in-place with the merged one.
+        const liveIcatmarIndex = hfrNetworks.findIndex(net => net.stations.some(s => hfrIcatmarNetwork.stations.some(icatmarStation => icatmarStation.id === s.id)));
+        if (liveIcatmarIndex !== -1) {
+          const { merged, notMatchingKeys } = this.mergeICATMARNetwork(hfrNetworks[liveIcatmarIndex]);
+          hfrNetworks[liveIcatmarIndex] = merged;
+          this.notMatchingKeys = notMatchingKeys; // for debugging - not surfaced anywhere yet
+          //console.log(this.notMatchingKeys);
+        }
+      } catch (error) {
+        console.error('Error loading EU HFR Node station data:', error);
+      }
+    }
+    
+    // Load GithubSource
+    if (githubSource) {
+      await githubSource.loadingPromise;
+      // Modify end date of icatmar stations
+      const icatmarNetwork = hfrNetworks.find(net => net.stations.some(s => hfrIcatmarNetwork.stations.some(icatmarStation => icatmarStation.id === s.id)));
+      if (icatmarNetwork){
+        icatmarNetwork.stations.forEach(station => {
+          const endDate = githubSource.stations[station.id]?.endDate;
+          if (endDate) station.metadata.time_coverage_end = endDate.toISOString().replace('.000Z', 'Z');
+        });
+      } 
     }
 
-    return groups;
+    return hfrNetworks;
   }
 
 
@@ -132,7 +120,7 @@ class DPHFRStations extends DP {
   // no ERDDAP dataset at all), and only within GITHUB_RETENTION_DAYS, since
   // that's all the repository keeps.
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
-    stationIds = [...ICATMAR_STATION_IDS, 'SCAL'];
+    stationIds = hfrIcatmarNetwork.stations.map(s => s.id);
     const end = endDate ?? new Date();
 
     let result = {};
@@ -147,7 +135,8 @@ class DPHFRStations extends DP {
 
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
     if (githubSource) {
-      const githubStart = new Date(Math.max(startDate, end - GITHUB_RETENTION_DAYS * 86400000));
+      let repoDaysAvailability = 14; // github only stores the last 14 days of radial data
+      const githubStart = new Date(Math.max(startDate, end - repoDaysAvailability * 86400000));
       if (githubStart <= end) {
         const hours = this.hourlyTimestamps(githubStart, end);
         const missingStations = stationIds.filter(id => hours.some(time => result[id]?.[time] == undefined));
@@ -169,6 +158,48 @@ class DPHFRStations extends DP {
     }
 
     return result;
+  }
+
+
+
+
+
+
+  // Keeps every value already in staticObj; only fills in keys staticObj is
+  // missing, from liveObj. A key present in both with a different value is
+  // NOT overwritten - it's recorded into notMatching instead, for inspection.
+  mergeKeepingStatic(staticObj, liveObj, notMatching) {
+    const merged = { ...staticObj };
+    Object.entries(liveObj ?? {}).forEach(([key, liveValue]) => {
+      if (!(key in staticObj)) merged[key] = liveValue;
+      else if (staticObj[key] !== liveValue) notMatching[key] = { static: staticObj[key], live: liveValue };
+    });
+    return merged;
+  }
+
+  // Merges the live EU HFR Node ICATMAR group into the static hfr-icatmar.js
+  // one (static wins on conflicts - see mergeKeepingStatic). Returns the
+  // merged { network, stations } plus notMatchingKeys ({ network: {}, stations: [] })
+  // listing every key that existed on both sides with a different value.
+  mergeICATMARNetwork(liveGroup) {
+    const notMatchingKeys = { network: {}, stations: [] };
+
+    const network = this.mergeKeepingStatic(hfrIcatmarNetwork.network, liveGroup?.network, notMatchingKeys.network);
+
+    const stations = hfrIcatmarNetwork.stations.map(staticStation => {
+      const liveStation = liveGroup?.stations.find(s => s.id === staticStation.id);
+      if (!liveStation) return staticStation; // e.g. SCAL - not on the EU HFR Node
+
+      const stationNotMatching = {};
+      const { metadata: liveMetadata, ...liveRest } = liveStation;
+      const merged = this.mergeKeepingStatic(staticStation, liveRest, stationNotMatching);
+      merged.metadata = this.mergeKeepingStatic(staticStation.metadata, liveMetadata, stationNotMatching);
+
+      if (Object.keys(stationNotMatching).length) notMatchingKeys.stations.push({ id: staticStation.id, ...stationNotMatching });
+      return merged;
+    });
+
+    return { merged: { network, stations }, notMatchingKeys };
   }
 }
 

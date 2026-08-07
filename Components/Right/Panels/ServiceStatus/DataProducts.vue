@@ -71,23 +71,32 @@ export default {
       this.isLoading = false;
     },
 
-    // SourceErddapEUHFRStations (multiple datasets, one per station) isn't
-    // broken down per-station in the UI yet, just shown as one ERDDAP entry -
-    // revisit once we build out that view.
+    // SourceErddapEUHFRStations/SourceErddapBuoys (multiple datasets, one per
+    // station/sensor) aren't broken down per-dataset in the UI yet, just
+    // shown as one ERDDAP entry - revisit once we build out that view.
     sourceTitle(source) {
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
+      if (source.datasetCommonKey) return `ERDDAP - ${this.erddapServerLabel(source.baseUrl)}`;
       if (source.datasets) return `ERDDAP - ${source.institution}`;
       if (source.repo) return `Github - ${source.repo}`;
       if (source.path || source.paths) return 'Static files';
       return source.constructor.name;
     },
 
-    // ERDDAP datasets link to their info page; the EU HFR Node and Github
-    // sources link to the server/repository itself, since neither is one
-    // single dataset.
+    // e.g. 'https://erddap.icatmar.cat/erddap' -> 'ICATMAR', 'https://hebe.icm.csic.es/erddap' -> 'HEBE'
+    erddapServerLabel(baseUrl) {
+      const host = new URL(baseUrl).hostname;
+      if (host.includes('icatmar')) return 'ICATMAR';
+      if (host.includes('hebe')) return 'HEBE';
+      return host;
+    },
+
+    // ERDDAP datasets link to their info page; the EU HFR Node, buoys and
+    // Github sources link to the server/repository itself, since none of
+    // them is one single dataset.
     sourceUrl(source) {
       if (source.dataset) return `${source.baseUrl}/info/${source.dataset}/index.html`;
-      if (source.datasets) return source.src;
+      if (source.datasetCommonKey || source.datasets) return source.src;
       if (source.repo) return source.src;
       return undefined;
     },
@@ -95,7 +104,7 @@ export default {
     // Static files aren't 'live', so always gray. Otherwise based on how
     // stale endDate is: <=1 day green, <=15 days yellow, older (or no data) gray.
     sourceStatus(source, dpType) {
-      if (source.path || source.paths) return 'inactive';
+      if (source.path || source.paths) return 'static';
       if (!source.endDate) return 'inactive';
       // Not forecast
       if (!(dpType == 'forecast')) {

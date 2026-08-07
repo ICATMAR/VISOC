@@ -119,6 +119,7 @@
 }
 .pd-status-dot.active   { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
 .pd-status-dot.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
+.pd-status-dot.static  { background: none; box-shadow: 0 0 4px #757575; border: solid 1px #bbbbbb;}
 .pd-status-dot.inactive { background: #757575; }
 
 .pd-last-update {

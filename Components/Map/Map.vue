@@ -6,8 +6,8 @@
   <!-- OVERLAYS -->
   <!-- <MapOverlayMockup></MapOverlayMockup> -->
   <MapOverlayHFRStations></MapOverlayHFRStations>
-  <!-- <MapOverlayBuoys></MapOverlayBuoys>
-  <MapOverlayDrifters></MapOverlayDrifters> -->
+  <MapOverlayBuoys></MapOverlayBuoys>
+  <!-- <MapOverlayDrifters></MapOverlayDrifters> -->
 </template>
 
 
