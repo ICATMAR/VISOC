@@ -3,6 +3,7 @@ class GUIManager {
   isMenuOpen = false;
   isDataTimelineOpen = false;
   isPlatformDetailOpen = false;
+  selectedPlatform = null; // { stationId, value }
 
   selectedTime = new Date();
 
@@ -15,7 +16,13 @@ class GUIManager {
   ]
 
 
-  selectedDashboard = 'hfr';
+  _selectedDashboard = 'hfr';
+  get selectedDashboard() { return this._selectedDashboard; }
+  set selectedDashboard(id) {
+    this._selectedDashboard = id;
+    this.isDataTimelineOpen = false;
+    this.isPlatformDetailOpen = false;
+  }
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Icons/allPlatforms.png', image: './Assets/Images/dashboardIcons/allPlatforms.png', isAvailable: true },
 
@@ -40,6 +47,75 @@ class GUIManager {
   ];
 
   defaultTimelineDays = 4;
+
+  // TIMELINE RANGE (common to all DataTimeline views)
+  // timelineDashboardId overrides selectedDashboard for the timeline (used by sub-views like All Platforms > HF radars)
+  timelineDashboardId = null;
+  get timelineRangeOfDays() {
+    const id = this.timelineDashboardId || this.selectedDashboard;
+    const dashboard = this.dashboards.find(d => d.id === id);
+    if (dashboard == undefined || dashboard.latestDaysRange == undefined)
+      return this.defaultTimelineDays;
+    return dashboard.latestDaysRange;
+  }
+
+  // TIMELINE TIMEZONE
+  timelineUseLocalTime = true;
+  get timelineTimezoneLabel() {
+    if (this.timelineUseLocalTime) {
+      const offsetMinutes = -new Date().getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? '+' : '-';
+      const absH = Math.floor(Math.abs(offsetMinutes) / 60);
+      const absM = Math.abs(offsetMinutes) % 60;
+      const str = absM > 0 ? `${absH}:${String(absM).padStart(2, '0')}` : `${absH}`;
+      return `Local time (UTC${sign}${str})`;
+    }
+    return 'UTC';
+  }
+  // Timezone-aware helpers used by all timeline grid components
+  timelineHours(date) {
+    return this.timelineUseLocalTime ? date.getHours() : date.getUTCHours();
+  }
+  timelineDate(date) {
+    return this.timelineUseLocalTime ? date.getDate() : date.getUTCDate();
+  }
+  timelineFormatDay(date, locale) {
+    const options = { weekday: 'long', day: 'numeric' };
+    if (!this.timelineUseLocalTime) options.timeZone = 'UTC';
+    return date.toLocaleString(locale, options);
+  }
+
+  // TIMELINE INTERVAL
+  timelineIntervalMinutes = null; // null = auto (derived from latestDaysRange)
+  get timelineEffectiveIntervalMinutes() {
+    if (this.timelineIntervalMinutes != null)
+      return this.timelineIntervalMinutes;
+    return this.timelineRangeOfDays > 7 ? 1440 : 180;
+  }
+
+  get timelineEndDate() {
+    let date = new Date();
+    date.setMinutes(0, 0, 0);
+    date.setHours(date.getHours() + 1);
+    return date;
+  }
+  get timelineStartDate() {
+    let date = new Date(this.timelineEndDate.getTime());
+    if (this.timelineUseLocalTime) {
+      date.setDate(date.getDate() - this.timelineRangeOfDays);
+      date.setHours(0, 0, 0, 0);
+    } else {
+      date.setUTCDate(date.getUTCDate() - this.timelineRangeOfDays);
+      date.setUTCHours(0, 0, 0, 0);
+    }
+    return date;
+  }
+  get timelineStartTmst() {
+    return this.timelineStartDate.toISOString();
+  }
+  get timelineEndTmst() {
+    return this.timelineEndDate.toISOString();
+  }
 
   // CONSTRUCTOR
   constructor() {

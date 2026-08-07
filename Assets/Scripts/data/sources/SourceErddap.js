@@ -1,0 +1,124 @@
+import Source from './Source.js';
+
+const PROXY_URL = 'https://api.icatmar.cat/proxy/';
+
+class SourceErddap extends Source {
+
+  constructor({ fetchManager, src, dataset, bbox }) {
+    super({ fetchManager });
+    this.src = src;
+    this.dataset = dataset;
+    this.baseUrl = src.replace(/\/index\.html$/, ''); // remove index.html from src
+    this.bbox = bbox;
+
+    this.metadata = undefined;  // NC_GLOBAL attributes (dataset-level)
+    this.recentWindowDays = 2;  // how far back getEndTimestamp() checks for recent data
+
+    this.loadingPromise = this.load();
+  }
+
+  static proxied(url) {
+    return PROXY_URL + '?url=' + encodeURIComponent(url);
+  }
+
+  proxied(url) {
+    return SourceErddap.proxied(url);
+  }
+
+  // ERDDAP's allDatasets.jsonlKVP (list of every dataset on the server): one
+  // JSON object per line, keyed directly by column name (datasetID, minTime,
+  // maxTime, minLatitude, maxLatitude, ...) - no header rows, unlike .csv.
+  // Shared (not tied to a single `dataset`) so other sources on the same
+  // ERDDAP server can reuse it instead of re-fetching/re-parsing it themselves.
+  static async fetchAllDatasets(fetchManager, baseUrl) {
+    const url = `${baseUrl}/tabledap/allDatasets.jsonlKVP`;
+    const text = await fetchManager.fetch(SourceErddap.proxied(url), 1).then(res => res.text());
+    return text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
+  }
+
+  // ERDDAP constraint string for this.bbox ({minLat, minLon, maxLat, maxLon}),
+  // or '' if no bbox is set. A variable can be constrained without being
+  // included in the requested columns, so this works alongside e.g. `?time`.
+  bboxConstraint() {
+    if (!this.bbox) return '';
+    const { minLat, minLon, maxLat, maxLon } = this.bbox;
+    return `&latitude>=${minLat}&latitude<=${maxLat}&longitude>=${minLon}&longitude<=${maxLon}`;
+  }
+
+  async load() {
+    // 1) allDatasets.jsonlKVP - cheap way to try to get this dataset's minTime/maxTime
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const datasetInfo = allDatasets.find(d => d['datasetID'] === this.dataset);
+    if (!datasetInfo) {
+      throw new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
+    }
+
+    // 2) variables + metadata, from the dataset's own info page
+    const infoUrl = `${this.baseUrl}/info/${this.dataset}/index.jsonlKVP`;
+    const infoText = await this.fetchManager.fetch(this.proxied(infoUrl)).then(res => res.text());
+    const { variables, metadata } = this.parseERDDAPMetadata(infoText);
+    this.variables = variables;
+    this.metadata = metadata;
+
+    // 3) startDate/endDate: from allDatasets if present. Otherwise, a full
+    //    historical scan is too slow/expensive for some ERDDAP datasets (e.g.
+    //    NOAA-AOML's OSMC), so we only check for RECENT data instead - startDate
+    //    stays unknown in that case.
+    const startDateStr = datasetInfo['minTime'];
+    const endDateStr = datasetInfo['maxTime'];
+    if (startDateStr && endDateStr) {
+      this.startDate = new Date(startDateStr);
+      this.endDate = new Date(endDateStr);
+    } else {
+      console.log(`Start/end date not found in allDatasets.jsonlKVP for ${this.dataset}. Checking if there is recent data.`);
+      this.endDate = await this.getEndTimestamp();
+      if (this.endDate != undefined) console.log('Latest entry for ' + this.dataset +' is on ' + this.endDate);
+      else console.log('No recent data  in the last ' + this.recentWindowDays + ' days found for ' + this.dataset);
+    }
+  }
+
+  // Midnight UTC, `recentWindowDays` days ago. Rounded to the day (instead of
+  // Date.now()) so the value - and therefore the query URL below - stays
+  // constant all day and only changes once every hour, instead of on every call.
+  // That's what lets FetchManager's cache actually be hit repeatedly.
+  recentWindowStart() {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - this.recentWindowDays);
+    date.setUTCMinutes(0, 0, 0);
+    return date.toISOString();
+  }
+
+  // Timestamp of the most recent data point since recentWindowStart(), or null
+  // if there's none. Only requested if allDatasets.jsonlKVP didn't already give us
+  // max_time. No caching of our own here - FetchManager caches the request
+  // itself for X minutes, so calling this again within that window just
+  // re-parses the same cached response instead of hitting the network.
+  async getEndTimestamp() {
+    const since = this.recentWindowStart();
+    const url = `${this.baseUrl}/tabledap/${this.dataset}.csv?time&time>=${since}${this.bboxConstraint()}&orderBy("time")`;
+
+    const text = await this.fetchManager.fetch(this.proxied(url), 1, 5)
+      .then(res => res.text())
+      .catch(err => {
+        if (err.name === 'TimeoutError') {
+          console.log(`Timed out checking recent data for ${this.dataset}: ${err.message}`);
+          return null;
+        }
+        // ERDDAP returns 404 (not 200 + empty body) when a query matches zero
+        // rows - that just means no recent data, not a real failure.
+        if (err.name === 'HTTPError' && err.status === 404) {
+          console.log(`No recent data found for ${this.dataset}: ${err.message}`);
+          return null;
+        }
+        throw err;
+      });
+    if (text == null) return null;
+
+    const lines = text.trim().split('\n').filter(line => line);
+    const dataLines = lines.slice(2);
+    return dataLines.length ? new Date(dataLines[dataLines.length - 1].split(',')[0]) : null;
+  }
+
+}
+
+export default SourceErddap;

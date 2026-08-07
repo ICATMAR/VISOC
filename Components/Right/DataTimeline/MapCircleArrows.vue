@@ -2,28 +2,27 @@
   <div class="map-arrows-circle">
     <div class="map-arrows-center"></div>
 
-    <!-- Variable name -->
-    <template v-for="(item, index) in data" :key="index">
+    <template v-for="(item, index) in items" :key="index">
+      <!-- Variable name label -->
       <div class="variableName animatedLayer" :style="{
         rotate: (item.angle - 90) + 'deg',
-        '--maxZIndex': data.length,
-        '--duration': (data.length * loopInterval) + 's',
+        '--maxZIndex': items.length,
+        '--duration': (items.length * loopInterval) + 's',
         '--delay': (-index * loopInterval) + 's'
         }">
         <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ $t(item.name) }}</span>
       </div>
-      <!-- Variable value -->
+      <!-- Variable value + arrow -->
       <div class="variableValue horizontal animatedLayer" :style="{
         rotate: (item.angle - 90) + 'deg',
-        '--maxZIndex': data.length,
-        '--duration': (data.length * loopInterval) + 's',
+        '--maxZIndex': items.length,
+        '--duration': (items.length * loopInterval) + 's',
         '--delay': (-index * loopInterval) + 's'
         }">
         <div class="variableArrow"></div>
         <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ item.value }}</span>
       </div>
     </template>
-
 
   </div>
 </template>
@@ -32,45 +31,33 @@
 
 export default {
   name: "MapCircleArrows",
-  created() {
-    
+  props: {
+    wind:    { type: Object, default: null }, // { speed: km/h, dir: degrees }
+    waves:   { type: Object, default: null }, // { height: m,   dir: degrees }
+    current: { type: Object, default: null }, // { speed: m/s,  dir: degrees }
   },
-  mounted() {
-  },
-  data (){
+  data() {
     return {
       loopInterval: 2,
-      data: [
-        {
-          name: 'Wind',
-          value: '15kn',
-          angle: 185,
-        },
-        {
-          name: 'Waves',
-          value: '1.5m, 4s',
-          angle: 190,
-        },
-        {
-          name: 'Currents',
-          value: '0.5m/s',
-          angle: 180,
-        }
-      ],
     }
   },
   methods: {
-    //onclick: function(e){},
     textRotation(angle) {
       return angle > 180 ? '180deg' : '0deg';
     }
   },
   computed: {
-    
+    items() {
+      const result = [];
+      if (this.wind?.speed != null)
+        result.push({ name: 'Wind', value: `${this.wind.speed.toFixed(0)} km/h`, angle: this.wind.dir ?? 0 });
+      if (this.waves?.height != null)
+        result.push({ name: 'Waves', value: `${this.waves.height.toFixed(1)} m`, angle: this.waves.dir ?? 0 });
+      if (this.current?.speed != null)
+        result.push({ name: 'Currents', value: `${this.current.speed.toFixed(1)} m/s`, angle: (this.current.dir + 180) % 360 ?? 0 });
+      return result;
+    }
   },
-  components: {
-    
-  }
 }
 
 </script>
@@ -83,8 +70,10 @@ export default {
   height: 100px;
   border-radius: 50%;
   border: 1px solid #ffffff6b;
-  top: 25%;
-  right: 25%;
+  /* Center the circle on the map center (where the marker dot sits) */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 
   display: flex;
   align-items: center;
@@ -102,7 +91,7 @@ export default {
   position: absolute;
   transform: translateX(calc(50% + 52px));
   background: var(--darkBlue);
-  font-size: x-small;
+  font-size: 0.7rem;
   padding-right: 6px;
   padding-left: 2px;
   border-radius: 0 5px 5px 0;
@@ -110,17 +99,15 @@ export default {
 
 .variableValue {
   position: absolute;
+  font-size: x0.7rem;
   transform: translateX(calc(-50% + 49px));
   background: var(--blue);
-  font-size: x-small;
   padding-right: 2px;
   padding-left: 4px;
   border-radius: 0 4px 4px 0;
 }
 .variableValue > span {
   z-index: 1;
-  /* Reverse the rotation so text stays horizontal */
-  transform: rotate(calc(-1 * var(--direction)));
 }
 
 .variableArrow {
@@ -132,8 +119,6 @@ export default {
   z-index: 0;
 }
 
-
-/* Register the custom property so it works inside @keyframes */
 @property --maxZIndex {
   syntax: '<integer>';
   inherits: true;
@@ -141,18 +126,12 @@ export default {
 }
 
 @keyframes depthLoop {
-  0% {
-    z-index: 0;
-  }
-  100% {
-    z-index: var(--maxZIndex);
-  }
+  0%   { z-index: 0; }
+  100% { z-index: var(--maxZIndex); }
 }
 
 .animatedLayer {
-  /* position: absolute; */
   animation: depthLoop var(--duration) infinite linear;
   animation-delay: var(--delay);
 }
-
 </style>

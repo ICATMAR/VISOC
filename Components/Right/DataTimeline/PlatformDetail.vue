@@ -118,7 +118,7 @@ export default {
   z-index: 1;
   top: 4px;
   right: 4px;
-  font-size: x-small;
+  font-size: 0.7rem;
   background: #80808052;
   padding: 3px;
   border-radius: 5px;
@@ -141,7 +141,7 @@ export default {
 }
 
 .value-container span:first-child {
-  font-size: x-small;
+  font-size: 0.7rem;
 }
 
 .dto-container {

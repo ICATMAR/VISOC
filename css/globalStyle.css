@@ -1,4 +1,6 @@
 @import "mapOverlays.css";
+@import "platformDetails.css";
+@import "dtShared.css";
 
 :root {
   --blue: rgb(20, 120, 167);
@@ -189,6 +191,105 @@ span {
   border-radius: 5px;
   border: 1px solid var(--darkBlue);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* LOADING CENTRAL ELEMENT */
+.loading-circle {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  /* user-select: all;
+  pointer-events: all; */
+}
+
+.loading-circle::before,
+.loading-circle::after {
+  content: '';
+  display: block;
+  background-color: rgb(82 181 217 / 70%);
+  border-radius: 50%;
+  position: absolute;
+  animation: loading-anim 0.5s infinite cubic-bezier(0.165, 0.84, 0.44, 1) alternate;
+}
+
+.loading-circle::after {
+  width: 100%;
+  height: 100%;
+}
+
+.loading-circle::before {
+  width: 50%;
+  height: 50%;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes loading-anim {
+  0% {
+    transform: scale(0.5);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+
+
+
+
+
+
+/* LOADING SPINNER (BOOTSTRAP v4.4)*/
+@-webkit-keyframes spinner-border {
+  to {
+    transform: rotate(360deg)
+  }
+}
+
+@keyframes spinner-border {
+  to {
+    transform: rotate(360deg)
+  }
+}
+
+.spinner-border {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  vertical-align: -.125em;
+  border: .25em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  -webkit-animation: .75s linear infinite spinner-border;
+  animation: .75s linear infinite spinner-border
+}
+
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: .2em
+}
+
+
 
 
 

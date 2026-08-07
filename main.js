@@ -18,8 +18,19 @@ window.location.removeHash = removeHash;
 
 // Load scripts
 import GUIManager from './Assets/Scripts/GUIManager.js';
+import RequestsManager from './Assets/Scripts/RequestsManager.js';
+import FetchManager from './Assets/Scripts/data/FetchManager.js';
+import ServiceStatus from './Assets/Scripts/data/ServiceStatus.js';
+import DataService from './Assets/Scripts/data/DataService.js';
+
+// Globals
+window.MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
+window.NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}
+window.WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
 
 window.GUIManager = Vue.reactive(new GUIManager());
+window.RequestsManager = new RequestsManager(); // Probably will delete, for now no use
+window.DataService = new DataService(FetchManager);
 
 
 // Declare translations
@@ -88,4 +99,6 @@ app.use(i18n);
 
 // Global properties
 app.config.globalProperties.$gui = window.GUIManager;
+app.config.globalProperties.$requests = window.RequestsManager;
+app.config.globalProperties.$dataService = window.DataService;
 app.mount(document.body);

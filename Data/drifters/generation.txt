@@ -1,0 +1,9 @@
+// Data Deriva-1 (time-varying) - change htmlTable for csv in the url
+// https://erddap.icatmar.cat/erddap/tabledap/socat_data_drifters_ICATMAR.htmlTable?buoy_name%2Ctime%2Clatitude%2Clongitude%2Ctemperature&exercise=%22DERIVA-1%22&distinct()
+// --> drifters_deriva1.csv
+// Time-invariant data for Deriva-1 - change htmlTable for jsonlKVP in the url
+// https://erddap.icatmar.cat/erddap/tabledap/socat_data_drifters_ICATMAR.htmlTable?deployment_id%2Cbuoy_name%2Cdrifter_type%2Cinstitution%2Cproject%2Cpi_name%2Cexercise&exercise=%22DERIVA-1%22&distinct()
+// --> drifters_deriva1_timeless.jsonl
+// Metadata drifters - change htmlTable for jsonlKVP in the url
+// https://erddap.icatmar.cat/erddap/info/socat_data_drifters_ICATMAR/index.htmlTable
+// --> drifters_metadata.jsonl

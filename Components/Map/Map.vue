@@ -4,8 +4,10 @@
   <div id="map" ref="OLMap" v-on:drop="onDropFile($event)" v-on:dragover="onDragOver($event)"></div>
 
   <!-- OVERLAYS -->
-  <MapOverlayMockup></MapOverlayMockup>
+  <!-- <MapOverlayMockup></MapOverlayMockup> -->
   <MapOverlayHFRStations></MapOverlayHFRStations>
+  <!-- <MapOverlayBuoys></MapOverlayBuoys>
+  <MapOverlayDrifters></MapOverlayDrifters> -->
 </template>
 
 
@@ -13,6 +15,8 @@
 
 import MapOverlayHFRStations from './MapOverlayHFRStations.vue';
 import MapOverlayMockup from './MapOverlayMockup.vue';
+import MapOverlayBuoys from './MapOverlayBuoys.vue';
+import MapOverlayDrifters from './MapOverlayDrifters.vue';
 
 export default {
   name: "Map",
@@ -37,6 +41,7 @@ export default {
         zoom: 8
       })
     });
+    this.$gui.olMap = this.map;
   },
   methods: {
     onDragOver(e) {
@@ -53,6 +58,8 @@ export default {
   components: {
     MapOverlayMockup,
     MapOverlayHFRStations,
+    MapOverlayBuoys,
+    MapOverlayDrifters,
   }
 }
 

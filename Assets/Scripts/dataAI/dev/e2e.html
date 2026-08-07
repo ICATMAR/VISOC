@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Data layer — end-to-end test</title>
+  <style>
+    body { font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; background: #0f1420; color: #cdd6e4; padding: 18px; }
+    h2 { color: #7fb0ff; margin: 18px 0 4px; font-size: 13px; }
+    .ok   { color: #67e08a; }
+    .fail { color: #ff6b6b; font-weight: bold; }
+    .dim  { color: #8592a6; }
+    #summary { margin-top: 16px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="out"></div>
+
+  <!-- Native ES modules — no build, no Node. Open this via your static server
+       (e.g. http://localhost:PORT/Assets/Scripts/data/dev/e2e.html). -->
+  <script type="module">
+    import { createDataService } from '../index.js';
+    import { erddapMockRoute } from './mockErddap.js';
+    import { ThingKind } from '../model.js';
+
+    const out = document.getElementById('out');
+    let failures = 0;
+
+    const line = (html, cls) => {
+      const div = document.createElement('div');
+      if (cls) div.className = cls;
+      div.innerHTML = html;
+      out.appendChild(div);
+    };
+    const head = (t) => { const h = document.createElement('h2'); h.textContent = t; out.appendChild(h); console.log('\n' + t); };
+    const log = (t) => { line(t, 'dim'); console.log(t); };
+    const ok = (label, cond) => {
+      if (!cond) failures++;
+      line((cond ? '&#10003; ' : '&#10007; FAIL ') + label, cond ? 'ok' : 'fail');
+      console.log((cond ? 'PASS ' : 'FAIL ') + label);
+    };
+
+    // ---- count "network" hits to prove caching / dedup ----
+    let fetchCount = 0;
+    const buoyRoute = erddapMockRoute({
+      dataset: 'buoy_CCRE_meteo',
+      values: {
+        TEMP: (d) => +(18 + 3 * Math.sin(d.getTime() / 8.64e7)).toFixed(2),
+        WSPD: (d) => +(5 + 4 * Math.abs(Math.sin(d.getTime() / 4.3e7))).toFixed(1),
+      },
+    });
+    const buoyRouteCounted = { test: buoyRoute.test, respond: (url) => { fetchCount++; return buoyRoute.respond(url); } };
+
+    // ---- synthetic ERDDAP "distinct deployments" for dynamic drifter discovery ----
+    const drifterRoute = {
+      test: (url) => url.includes('socat_data_drifters_ICATMAR.jsonlKVP'),
+      respond: () => {
+        const now = Date.now();
+        const rows = [
+          { deployment_id: 1, drifter_type: 'SVP',  buoy_name: 'SVP1',  institution: 'ICATMAR', project: 'ICATMAR', pi_name: 'X', exercise: 'DERIVA-1', latitude: 42.10, longitude: 3.30, time: new Date(now - 1 * 3600e3).toISOString() },
+          { deployment_id: 2, drifter_type: 'CODE', buoy_name: 'CODE1', institution: 'ICATMAR', project: 'ICATMAR', pi_name: 'X', exercise: 'DERIVA-1', latitude: 41.50, longitude: 2.90, time: new Date(now - 3 * 3600e3).toISOString() },
+        ];
+        return rows.map((r) => JSON.stringify(r)).join('\n') + '\n';
+      },
+    };
+
+    const $data = createDataService({ mock: true, mockRoutes: [buoyRouteCounted, drifterRoute] });
+
+    const DAY = 24 * 60 * 60 * 1000;
+    const range = { start: new Date(Date.now() - 7 * DAY), end: new Date() };
+
+    try {
+      head('1. Catalog: static buoys');
+      const buoys = await $data.listThings(ThingKind.BUOY);
+      log('buoys: ' + buoys.map((b) => b.id).join(', '));
+      ok('listThings(BUOY) returns 5 buoys', buoys.length === 5);
+
+      head('2. getDefaultDatastream(CCRE, TEMP)');
+      const temp = await $data.getDefaultDatastream('CCRE', 'TEMP', range);
+      const f = temp.observations[0], l = temp.observations[temp.observations.length - 1];
+      log(`observedProperty=${temp.observedProperty} unit=${temp.unit} n=${temp.observations.length}`);
+      log(`first: ${f.phenomenonTime.toISOString()} = ${f.result}`);
+      log(`last : ${l.phenomenonTime.toISOString()} = ${l.result}`);
+      ok('TEMP has ~168 hourly observations', temp.observations.length >= 160 && temp.observations.length <= 172);
+      ok('observations time-ordered', temp.observations.every((o, i, a) => i === 0 || a[i - 1].phenomenonTime <= o.phenomenonTime));
+      const afterFirst = fetchCount;
+      log(`network fetches so far: ${afterFirst}`);
+
+      head('3. Cache + concurrent dedup');
+      await $data.getDefaultDatastream('CCRE', 'TEMP', range);           // cache hit
+      ok('repeat request added 0 fetches (cache)', fetchCount === afterFirst);
+      await Promise.all([ $data.getSeries('CCRE', 'WSPD', range), $data.getSeries('CCRE', 'WSPD', range) ]);
+      const wspd = fetchCount - afterFirst;
+      log(`WSPD added ${wspd} fetches for 2 concurrent calls`);
+      ok('concurrent WSPD calls de-duped (not doubled)', wspd <= 2);
+
+      head('4. StatusProvider (derived from data)');
+      const status = await $data.getStatus('CCRE');
+      log(`state=${status.state} hoursAgo=${status.hoursAgo?.toFixed(2)} lastUpdate=${status.lastUpdate?.toISOString()}`);
+      ok('CCRE is active (fresh data)', status.state === 'active');
+
+      head('5. Dynamic catalog: drifter discovery via ERDDAP');
+      const drifters = await $data.listThings(ThingKind.DRIFTER, range);
+      log('discovered: ' + drifters.map((d) => `${d.id}:${d.properties.drifterType}`).join(', '));
+      ok('discovered 2 drifters', drifters.length === 2);
+      const one = await $data.getThing('1');
+      ok('getThing("1") resolves a discovered drifter', !!one && one.kind === ThingKind.DRIFTER);
+
+      const el = document.createElement('div');
+      el.id = 'summary';
+      el.className = failures ? 'fail' : 'ok';
+      el.textContent = failures ? `${failures} CHECK(S) FAILED` : 'ALL CHECKS PASSED ✓';
+      out.appendChild(el);
+      console.log(failures ? `${failures} FAILED` : 'ALL PASSED');
+    } catch (err) {
+      line('ERROR: ' + (err?.stack || err), 'fail');
+      console.error(err);
+    }
+  </script>
+</body>
+</html>

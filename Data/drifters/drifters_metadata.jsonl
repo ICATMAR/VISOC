@@ -1,0 +1,67 @@
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"cdm_data_type", "Data Type":"String", "Value":"Point"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"Conventions", "Data Type":"String", "Value":"COARDS, CF-1.10, ACDD-1.3"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"featureType", "Data Type":"String", "Value":"Point"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"geospatial_lat_units", "Data Type":"String", "Value":"degrees_north"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"geospatial_lon_units", "Data Type":"String", "Value":"degrees_east"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"infoUrl", "Data Type":"String", "Value":"???"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"institution", "Data Type":"String", "Value":"ICATMAR"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"keywords", "Data Type":"String", "Value":"data, date, drifter, drifter_type, exercise, identifier, institution, latitude, local, longitude, name, pi_name, project, source, temperature, time, type"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"license", "Data Type":"String", "Value":"This dataset by ICATMAR is licensed under a Creative Commons Attribution 4.0\n        International License. You should have received a copy of the license along with this work.\n        If not, see https://creativecommons.org/licenses/by/4.0/."}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"sourceUrl", "Data Type":"String", "Value":"(source database)"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"standard_name_vocabulary", "Data Type":"String", "Value":"CF Standard Name Table v70"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"summary", "Data Type":"String", "Value":"Drifters data"}
+{"Row Type":"attribute", "Variable Name":"NC_GLOBAL", "Attribute Name":"title", "Data Type":"String", "Value":"Drifters Data"}
+{"Row Type":"variable", "Variable Name":"deployment_id", "Attribute Name":"", "Data Type":"long", "Value":""}
+{"Row Type":"attribute", "Variable Name":"deployment_id", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Unknown"}
+{"Row Type":"attribute", "Variable Name":"deployment_id", "Attribute Name":"long_name", "Data Type":"String", "Value":"Deployment ID"}
+{"Row Type":"variable", "Variable Name":"buoy_name", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"buoy_name", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Unknown"}
+{"Row Type":"attribute", "Variable Name":"buoy_name", "Attribute Name":"long_name", "Data Type":"String", "Value":"Buoy Name"}
+{"Row Type":"variable", "Variable Name":"drifter_type", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"drifter_type", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Unknown"}
+{"Row Type":"attribute", "Variable Name":"drifter_type", "Attribute Name":"long_name", "Data Type":"String", "Value":"Drifter Type"}
+{"Row Type":"variable", "Variable Name":"time", "Attribute Name":"", "Data Type":"double", "Value":""}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"_CoordinateAxisType", "Data Type":"String", "Value":"Time"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"axis", "Data Type":"String", "Value":"T"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Time"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"long_name", "Data Type":"String", "Value":"Date Time"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"source_name", "Data Type":"String", "Value":"date_time"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"standard_name", "Data Type":"String", "Value":"time"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"time_origin", "Data Type":"String", "Value":"01-JAN-1970 00:00:00"}
+{"Row Type":"attribute", "Variable Name":"time", "Attribute Name":"units", "Data Type":"String", "Value":"seconds since 1970-01-01T00:00:00Z"}
+{"Row Type":"variable", "Variable Name":"institution", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"institution", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Unknown"}
+{"Row Type":"attribute", "Variable Name":"institution", "Attribute Name":"long_name", "Data Type":"String", "Value":"Institution"}
+{"Row Type":"variable", "Variable Name":"project", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"project", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Identifier"}
+{"Row Type":"attribute", "Variable Name":"project", "Attribute Name":"long_name", "Data Type":"String", "Value":"Project"}
+{"Row Type":"variable", "Variable Name":"pi_name", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"pi_name", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Identifier"}
+{"Row Type":"attribute", "Variable Name":"pi_name", "Attribute Name":"long_name", "Data Type":"String", "Value":"Pi Name"}
+{"Row Type":"variable", "Variable Name":"exercise", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"exercise", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Unknown"}
+{"Row Type":"attribute", "Variable Name":"exercise", "Attribute Name":"long_name", "Data Type":"String", "Value":"Exercise"}
+{"Row Type":"variable", "Variable Name":"latitude", "Attribute Name":"", "Data Type":"double", "Value":""}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"_CoordinateAxisType", "Data Type":"String", "Value":"Lat"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"axis", "Data Type":"String", "Value":"Y"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"colorBarMaximum", "Data Type":"double", "Value":"90.0"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"colorBarMinimum", "Data Type":"double", "Value":"-90.0"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Location"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"long_name", "Data Type":"String", "Value":"Latitude"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"standard_name", "Data Type":"String", "Value":"latitude"}
+{"Row Type":"attribute", "Variable Name":"latitude", "Attribute Name":"units", "Data Type":"String", "Value":"degrees_north"}
+{"Row Type":"variable", "Variable Name":"longitude", "Attribute Name":"", "Data Type":"double", "Value":""}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"_CoordinateAxisType", "Data Type":"String", "Value":"Lon"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"axis", "Data Type":"String", "Value":"X"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"colorBarMaximum", "Data Type":"double", "Value":"180.0"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"colorBarMinimum", "Data Type":"double", "Value":"-180.0"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Location"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"long_name", "Data Type":"String", "Value":"Longitude"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"standard_name", "Data Type":"String", "Value":"longitude"}
+{"Row Type":"attribute", "Variable Name":"longitude", "Attribute Name":"units", "Data Type":"String", "Value":"degrees_east"}
+{"Row Type":"variable", "Variable Name":"location", "Attribute Name":"", "Data Type":"String", "Value":""}
+{"Row Type":"attribute", "Variable Name":"location", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Location"}
+{"Row Type":"attribute", "Variable Name":"location", "Attribute Name":"long_name", "Data Type":"String", "Value":"Location"}
+{"Row Type":"variable", "Variable Name":"temperature", "Attribute Name":"", "Data Type":"double", "Value":""}
+{"Row Type":"attribute", "Variable Name":"temperature", "Attribute Name":"ioos_category", "Data Type":"String", "Value":"Temperature"}
+{"Row Type":"attribute", "Variable Name":"temperature", "Attribute Name":"long_name", "Data Type":"String", "Value":"Temperature"}

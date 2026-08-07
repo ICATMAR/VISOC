@@ -1,0 +1,292 @@
+/* ================================================================
+   Shared styles for Platform Detail components (HFR, Buoys, etc.)
+   Imported via globalStyle.css → applies globally, no scoping needed
+   ================================================================ */
+
+/* Outer 3-column container: [Map] [Info] [Media] */
+.pd-container {
+  /* .horizontal utility class provides display:flex; flex-direction:row */
+  align-items: flex-start;
+  gap: 15px;
+  height: 180px;
+  /* No overflow:hidden — MapCircleArrows labels must be able to overflow */
+}
+
+/* ---- Map column (left) ---- */
+.pd-map {
+  width: 180px;
+  height: 180px;
+  flex-shrink: 0;
+}
+
+/* Platform marker inside OL Overlay — matches Map.vue icon style */
+.pd-map-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 6px black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.pd-map-icon img {
+  width: 16px;
+  height: 16px;
+}
+
+/* Small dot marking the selected / latest point on a trajectory map */
+.pd-map-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+  border: 1px solid white;
+  box-shadow: 0 0 4px black;
+  pointer-events: none;
+}
+
+/* ---- Info column (center) ---- */
+.pd-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 0 0 0;
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;    /* take full container height so button reaches bottom */
+  overflow: hidden;
+}
+
+/* Line 1: platform type · depth · lat/lon [copy] */
+.pd-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+  flex-wrap: nowrap;
+}
+
+.pd-coords {
+  user-select: text;
+  cursor: text;
+  white-space: nowrap;
+}
+
+.pd-copy-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.7rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.pd-copy-btn:hover { color: rgba(255, 255, 255, 0.8); }
+
+/* Line 2a: station name */
+.pd-station-name {
+  font-size: medium;
+  font-weight: bold;
+  color: white;
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Line 2b: status dot + label */
+.pd-status {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: none;
+}
+
+.pd-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pd-status-dot.active   { background: #4caf50; box-shadow: 0 0 4px #4caf5088; }
+.pd-status-dot.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
+.pd-status-dot.inactive { background: #757575; }
+
+.pd-last-update {
+  opacity: 0.65;
+}
+
+/* Line 3: selected cell date + time-reference toggle */
+.pd-date-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.pd-date {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-shadow: none;
+}
+
+.pd-time-toggle {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-shadow: none;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pd-time-toggle:hover { color: rgba(255, 255, 255, 0.75); }
+
+/* Line 4: values – horizontally scrollable row */
+.pd-values-wrapper {
+  max-height: 52px;
+  overflow: hidden;
+}
+
+.pd-values-scroll {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  cursor: grab;
+  user-select: none;
+}
+.pd-values-scroll.is-dragging { cursor: grabbing; }
+
+.pd-value-item {
+  display: flex;
+  flex-direction: column;
+  background: lightgreen;
+  border-radius: 7px;
+  padding: 3px 7px;
+  flex-shrink: 0;
+}
+
+.pd-value-label {
+  font-size: x0.7rem;
+  color: rgba(0, 0, 0, 0.6);
+  text-shadow: none;
+}
+
+.pd-value-number {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: black;
+  text-shadow: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.pd-no-data {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.35);
+  text-shadow: none;
+  align-self: center;
+}
+
+/* ---- Switch-to-dashboard button ---- */
+/* Layout: [●icon circle] [blue label body] */
+/* The circle is 4px taller than the label body */
+.pd-switch-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: auto;    /* stick to bottom of pd-info */
+  margin-bottom: 10px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  align-self: flex-start;
+  gap: 0;
+}
+
+.pd-switch-btn-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--lightBlue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.pd-switch-btn-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.pd-switch-btn-label {
+  background: var(--blue);
+  color: white;
+  text-shadow: none;
+  border-radius: 0 8px 8px 0;
+  padding: 0 10px 0 12px;
+  font-size: 0.7rem;
+  height: 24px;          /* 4px less than the 28px circle */
+  display: flex;
+  align-items: center;
+  margin-left: -6px;     /* slide under the circle */
+  white-space: nowrap;
+}
+
+/* ---- Media column (right) – circular image / gif ---- */
+.pd-media-container {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pd-circular-media {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 4px black;
+  margin: 15px 10px;
+}
+
+.pd-circular-fallback {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: var(--darkBlue);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 15px 10px;
+  gap: 6px;
+}
+
+/* Close button – positioned relative to an ancestor with position:relative */
+.pd-close-btn {
+  position: absolute;
+  z-index: 10;
+  top: -9px;
+  left: -9px;
+}

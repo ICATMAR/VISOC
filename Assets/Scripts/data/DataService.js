@@ -1,0 +1,42 @@
+import FetchManager from './FetchManager.js';
+import ServiceStatus from './ServiceStatus.js';
+import Catalogue from './products/Catalogue.js';
+
+class DataService {
+
+  constructor(FetchManager) {
+    this.serviceStatus = new ServiceStatus(FetchManager);
+    this.catalogue = Catalogue;
+
+    const drifters = Catalogue.find(p => p.name === 'Drifters');
+    this.drifters = new drifters.Class(drifters, FetchManager);
+
+    const hfrnetwork = Catalogue.find(p => p.name === 'High-frequency radar network');
+    this.hfrnetwork = new hfrnetwork.Class(hfrnetwork, FetchManager);
+
+    const hfrstations = Catalogue.find(p => p.name === 'High-frequency radar stations');
+    this.hfrstations = new hfrstations.Class(hfrstations, FetchManager);
+
+    // this.hfrstations.getICATMARHFRStations().then(stations => console.log(stations));
+    // this.hfrstations.getAllStations().then(stations => console.log(stations));
+    // this.hfrstations.getNumberOfValidPointsPerStations(undefined, new Date(2026, 7, 1)).then(console.log);
+
+    const buoys = Catalogue.find(p => p.name === 'Buoys');
+    this.buoys = new buoys.Class(buoys, FetchManager);
+
+    const ssforecast = Catalogue.find(p => p.name === 'Sea surface forecast');
+    this.ssforecast = new ssforecast.Class(ssforecast, FetchManager);
+
+    this.dataProducts = [
+      { name: drifters.name, product: this.drifters },
+      { name: hfrnetwork.name, product: this.hfrnetwork },
+      { name: hfrstations.name, product: this.hfrstations },
+      { name: buoys.name, product: this.buoys },
+      { name: ssforecast.name, product: this.ssforecast },
+    ];
+  }
+
+}
+
+
+export default DataService;
