@@ -6,7 +6,9 @@ const buoys =  [
         "longitude": 3.23671,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by Generalitat de Catalunya",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 1.8,
+        "depth": 66
     },
     {
         "id": "MONTGO",        
@@ -15,7 +17,9 @@ const buoys =  [
         "longitude": 3.21817,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by Generalitat de Catalunya",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 1.6,
+        "depth": 70
     },
     {
         "id": "NORD_CAP_DE_CREUS",        
@@ -24,7 +28,9 @@ const buoys =  [
         "longitude": 3.229,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by Generalitat de Catalunya",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 0.5,
+        "depth": 73
     },
     {
         "id": "SOMO",        
@@ -33,7 +39,9 @@ const buoys =  [
         "longitude": 2.2162,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by ICATMAR and ICM-CSIC. If used,\n                please cite: ICATMAR (year), Boia Somorrostro, https://www.icatmar.cat",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 1.9,
+        "depth": 40
     },
     {
         "id": "SUD_CAP_DE_CREUS",        
@@ -42,7 +50,9 @@ const buoys =  [
         "longitude": 3.2686,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by Generalitat de Catalunya",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 0.24,
+        "depth": 78
     },
     {
         "id": "CDCR",        
@@ -51,7 +61,9 @@ const buoys =  [
         "longitude": 3.3495,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by ICATMAR and ICM-CSIC. If used, please cite: ICATMAR (year), Boia Cap de Creus, https://www.icatmar.cat",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 1.24,
+        "depth": 100
     },
     {
         "id": "TORT",        
@@ -60,7 +72,9 @@ const buoys =  [
         "longitude": 0.985183,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by ICATMAR and ICM-CSIC. If used, please cite: ICATMAR (year), Boia Cap de Tortosa, https://www.icatmar.cat",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 6.09,
+        "depth": 66
     },
     {
         "id": "TARR",        
@@ -69,7 +83,9 @@ const buoys =  [
         "longitude": 1.346883,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by ICATMAR and ICM-CSIC. If used, please cite: ICATMAR (year), Boia Tarragona, https://www.icatmar.cat",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 3.06,
+        "depth": 70
     },
     {
         "id": "TORD",        
@@ -78,7 +94,9 @@ const buoys =  [
         "longitude": 2.7698,
         "institution": "ICATMAR",
         "acknowledgement": "Deployed and maintained by ICATMAR and ICM-CSIC. If used, please cite: ICATMAR (year), Boia Tordera, https://www.icatmar.cat",
-        "license": "CC-BY-4.0"
+        "license": "CC-BY-4.0",
+        "distanceToCoast": 2.74,
+        "depth": 86
     }
 ];
 
