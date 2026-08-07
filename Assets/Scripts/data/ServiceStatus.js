@@ -65,8 +65,9 @@ class ServiceStatus {
       const res = await this.fetchManager.fetch(url, ttl);
       const text = await res.text();
       return validate ? validate(text) : res.ok;
-    } catch {
-      return false;
+    } catch (e) {
+      // For some reason MSM url is turned into http?
+      return e;
     }
   }
 
