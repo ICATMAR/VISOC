@@ -81,7 +81,7 @@ class DPHFRStations extends DP {
           const { merged, notMatchingKeys } = this.mergeICATMARNetwork(hfrNetworks[liveIcatmarIndex]);
           hfrNetworks[liveIcatmarIndex] = merged;
           this.notMatchingKeys = notMatchingKeys; // for debugging - not surfaced anywhere yet
-          console.log(this.notMatchingKeys);
+          //console.log(this.notMatchingKeys);
         }
       } catch (error) {
         console.error('Error loading EU HFR Node station data:', error);
