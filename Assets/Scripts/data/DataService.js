@@ -24,6 +24,8 @@ class DataService {
     const buoys = Catalogue.find(p => p.name === 'Buoys');
     this.buoys = new buoys.Class(buoys, FetchManager);
 
+    this.buoys.loadBuoys().then(console.log);
+
     const ssforecast = Catalogue.find(p => p.name === 'Sea surface forecast');
     this.ssforecast = new ssforecast.Class(ssforecast, FetchManager);
 
