@@ -115,7 +115,7 @@ const dataProducts = [
       {
         Class: SourceErddap,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
-        dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3',
+        dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
         institution: 'EU HFR Node',
       },
       // Static file
