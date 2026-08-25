@@ -24,8 +24,12 @@
         </tr>
         <!-- Individual station availability bars -->
         <template v-for="station in stations" :key="station.name">
+          <!-- Still waiting on this station's own promise to resolve -->
+          <tr v-if="station.loading">
+            <td :colspan="cells.length" class="message-cell"><span class="spinner-border"></span></td>
+          </tr>
           <!-- No EU HFR Node dataset for this station (e.g. SCAL) - show a placeholder message instead of bars -->
-          <tr v-if="station.noData">
+          <tr v-else-if="station.noData">
             <td :colspan="cells.length" class="message-cell">{{ $t('No data for ') + station.name }}</td>
           </tr>
           <tr v-else
@@ -80,24 +84,32 @@ export default {
     }
   },
   methods: {
+    // getNumberOfValidPointsPerStations() resolves to an array of per-station
+    // promises rather than one Promise<object> - each station's bars are
+    // filled in as soon as ITS promise resolves, instead of every station
+    // waiting on the slowest one.
     async loadStations() {
       const stationIds = this.stations.map(s => s.name);
-      const result = await this.$dataService.hfrstations.getNumberOfValidPointsPerStations(
+      this.stations.forEach(s => { s.loading = true; });
+
+      const promises = await this.$dataService.hfrstations.getNumberOfValidPointsPerStations(
         stationIds, this.$gui.timelineStartDate, this.$gui.timelineEndDate
       );
 
       const startMs = this.$gui.timelineStartDate.getTime();
-      for (const station of this.stations) {
-        const validPoints = result?.[station.name];
-        if (!validPoints) { station.noData = true; continue; } // e.g. SCAL - no EU HFR Node dataset
+      promises.forEach(promise => promise.then(({ id, points }) => {
+        const station = this.stations.find(s => s.name === id);
+        if (!station) return;
+        station.loading = false;
+        if (points == null) { station.noData = true; return; } // e.g. SCAL - no EU HFR Node dataset
 
-        Object.entries(validPoints).forEach(([timeStr, count]) => {
+        Object.entries(points).forEach(([timeStr, count]) => {
           const hourIndex = Math.round((new Date(timeStr).getTime() - startMs) / (1000 * 3600));
           if (hourIndex < 0) return;
           station.hourlyData[hourIndex] = count;
           if (count > station.maxValue) station.maxValue = count;
         });
-      }
+      }));
     },
     totalsValue(cellIndex, subIndex) {
       return this.totals.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
@@ -234,6 +246,7 @@ export default {
   margin-left: 5%;
   background: var(--blue);
   border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease-out;
 }
 
 /* Style A (TOTALS): faint background reveals the empty space → progress-bar feel */

@@ -195,60 +195,65 @@ class SourceErddapEUHFRStations extends Source {
 
 
 
-  // Per-hour count of valid (QC-passing, non-NaN RDVA) radial vectors for
-  // each given station, within [startDate, endDate] (endDate defaults to
-  // now). Only works against a dataset's _table variant - ERDDAP's
-  // orderByCount() aggregation isn't supported on griddap-backed datasets.
-  // Caches results in this.stations[id].validPoints (keyed by timestamp),
-  // and skips the request entirely if that range is already cached.
-  async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
-    await this.loadingPromise; // this.stations isn't populated until load() resolves
+  // Per-hour count of valid (QC-passing, non-NaN RDVA) radial vectors for ONE
+  // station, within [startDate, endDate] (endDate defaults to now). Only
+  // works against a dataset's _table variant - ERDDAP's orderByCount()
+  // aggregation isn't supported on griddap-backed datasets. Caches results in
+  // this.stations[id].validPoints (keyed by timestamp), and skips the
+  // request entirely if that range is already cached.
+  async getNumberOfValidPointsPerStation(id, startDate, endDate) {
     const end = endDate ?? new Date();
+    const station = this.stations[id];
+    if (!station) return { id, points: undefined };
 
-    const entries = await Promise.all(stationIds.map(async id => {
-      const station = this.stations[id];
-      if (!station) return [id, undefined];
+    // Limit the request to what this station actually covers.
+    const rangeStart = station.startDate && station.startDate > startDate ? station.startDate : startDate;
+    const rangeEnd = station.endDate && station.endDate < end ? station.endDate : end;
 
-      // Limit the request to what this station actually covers.
-      const rangeStart = station.startDate && station.startDate > startDate ? station.startDate : startDate;
-      const rangeEnd = station.endDate && station.endDate < end ? station.endDate : end;
+    if (!station.validPoints) station.validPoints = {};
+    if (rangeStart > rangeEnd) return { id, points: station.validPoints }; // no overlap with this station's coverage
 
-      if (!station.validPoints) station.validPoints = {};
-      if (rangeStart > rangeEnd) return [id, station.validPoints]; // no overlap with this station's coverage
+    // Already covered by a previous call - nothing new to fetch.
+    const range = station.validPointsRange;
+    if (range && rangeStart >= range.start && rangeEnd <= range.end) return { id, points: station.validPoints };
 
-      // Already covered by a previous call - nothing new to fetch.
-      const range = station.validPointsRange;
-      if (range && rangeStart >= range.start && rangeEnd <= range.end) return [id, station.validPoints];
+    const dataset = station.dataset.endsWith('_table') ? station.dataset : `${station.dataset}_table`;
+    const url = `${this.baseUrl}/tabledap/${dataset}.csv?time,RDVA`
+      + `&time>=${rangeStart.toISOString()}&time<=${rangeEnd.toISOString()}`
+      + `&RDVA!=NaN&orderByCount("time")`;
 
-      const dataset = station.dataset.endsWith('_table') ? station.dataset : `${station.dataset}_table`;
-      const url = `${this.baseUrl}/tabledap/${dataset}.csv?time,RDVA`
-        + `&time>=${rangeStart.toISOString()}&time<=${rangeEnd.toISOString()}`
-        + `&RDVA!=NaN&orderByCount("time")`;
+    const text = await this.fetchManager.fetch(SourceErddap.proxied(url), 1)
+      .then(res => res.text())
+      .catch(err => {
+        if (err.name === 'HTTPError' && err.status === 404) return null; // no matching rows
+        throw err;
+      });
 
-      const text = await this.fetchManager.fetch(SourceErddap.proxied(url), 1)
-        .then(res => res.text())
-        .catch(err => {
-          if (err.name === 'HTTPError' && err.status === 404) return null; // no matching rows
-          throw err;
-        });
+    if (text != null) {
+      const lines = text.trim().split('\n').filter(Boolean).slice(2); // skip names/units header rows
+      lines.forEach(line => {
+        const [time, count] = line.split(',');
+        station.validPoints[time] = Number(count);
+      });
+    }
 
-      if (text != null) {
-        const lines = text.trim().split('\n').filter(Boolean).slice(2); // skip names/units header rows
-        lines.forEach(line => {
-          const [time, count] = line.split(',');
-          station.validPoints[time] = Number(count);
-        });
-      }
+    station.validPointsRange = {
+      start: range ? new Date(Math.min(range.start, rangeStart)) : rangeStart,
+      end: range ? new Date(Math.max(range.end, rangeEnd)) : rangeEnd,
+    };
 
-      station.validPointsRange = {
-        start: range ? new Date(Math.min(range.start, rangeStart)) : rangeStart,
-        end: range ? new Date(Math.max(range.end, rangeEnd)) : rangeEnd,
-      };
+    return { id, points: station.validPoints };
+  }
 
-      return [id, station.validPoints];
-    }));
-
-    return Object.fromEntries(entries);
+  // Array of per-station promises (NOT a single Promise<object> resolved via
+  // Promise.all) - lets a caller process each station's result as soon as IT
+  // resolves, instead of waiting for the slowest one before touching any of
+  // them. Only async to await loadingPromise first, since this.stations
+  // isn't populated before load() resolves; building the array itself is
+  // synchronous once that's done.
+  async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
+    await this.loadingPromise;
+    return stationIds.map(id => this.getNumberOfValidPointsPerStation(id, startDate, endDate));
   }
 
 }

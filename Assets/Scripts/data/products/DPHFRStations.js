@@ -114,50 +114,52 @@ class DPHFRStations extends DP {
     return hours;
   }
 
-  // Get number of points per hour (only ICATMAR now). ERDDAP is queried
-  // first; GitHub then fills in only whatever ERDDAP's result is missing for
-  // a station (ERDDAP occasionally lags behind the actual files, and SCAL has
-  // no ERDDAP dataset at all), and only within GITHUB_RETENTION_DAYS, since
-  // that's all the repository keeps.
+  // Get number of points per hour (only ICATMAR now). Returns an array of
+  // per-station promises (not a single Promise<object>), so a caller (e.g.
+  // DTAPHFR.vue) can process each station's result as soon as it resolves
+  // instead of waiting for the slowest one. Each station's own promise
+  // resolves with ERDDAP's result first, then - independently of every other
+  // station's promise - fills in whatever hours ERDDAP's result is missing
+  // from GitHub (ERDDAP occasionally lags behind the actual files, and SCAL
+  // has no ERDDAP dataset at all), within the repo's retention window only.
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
     stationIds = hfrIcatmarNetwork.stations.map(s => s.id);
     const end = endDate ?? new Date();
 
-    let result = {};
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
+    let erddapPromises = stationIds.map(id => Promise.resolve({ id, points: {} }));
     if (euHFRSource) {
       try {
-        result = await euHFRSource.getNumberOfValidPointsPerStations(stationIds, startDate, end);
+        erddapPromises = await euHFRSource.getNumberOfValidPointsPerStations(stationIds, startDate, end);
       } catch (error) {
         console.error('Error loading EU HFR Node station data:', error);
       }
     }
 
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
-    if (githubSource) {
-      let repoDaysAvailability = 14; // github only stores the last 14 days of radial data
-      const githubStart = new Date(Math.max(startDate, end - repoDaysAvailability * 86400000));
-      if (githubStart <= end) {
-        const hours = this.hourlyTimestamps(githubStart, end);
-        const missingStations = stationIds.filter(id => hours.some(time => result[id]?.[time] == undefined));
+    const repoDaysAvailability = 14; // github only stores the last 14 days of radial data
+    const githubStart = new Date(Math.max(startDate, end - repoDaysAvailability * 86400000));
+    const hours = githubSource && githubStart <= end ? this.hourlyTimestamps(githubStart, end) : [];
 
-        if (missingStations.length) {
-          try {
-            const fromGithub = await githubSource.getNumberOfValidPointsPerStations(missingStations, githubStart, end);
-            missingStations.forEach(id => {
-              const points = result[id] ?? (result[id] = {});
-              hours.forEach(time => {
-                if (points[time] == undefined && fromGithub[id]?.[time] != undefined) points[time] = fromGithub[id][time];
-              });
-            });
-          } catch (error) {
-            console.error('Error loading GitHub HFR station data:', error);
-          }
-        }
-      }
-    }
+    return erddapPromises.map((promise, i) => {
+      const id = stationIds[i];
+      return promise
+        .then(async result => {
+          const points = result?.points ?? {};
+          if (!hours.some(time => points[time] == undefined)) return { id, points };
 
-    return result;
+          const fromGithub = await githubSource.getNumberOfValidPointsPerStations([id], githubStart, end);
+          const githubPoints = fromGithub[id] ?? {};
+          hours.forEach(time => {
+            if (points[time] == undefined && githubPoints[time] != undefined) points[time] = githubPoints[time];
+          });
+          return { id, points };
+        })
+        .catch(error => {
+          console.error(`Error loading number of valid points for station ${id}:`, error);
+          return { id, points: {} };
+        });
+    });
   }
 
 

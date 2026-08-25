@@ -277,6 +277,7 @@ export default {
   padding-left: 5px;
 }
 
+
 .active-var {
   font-weight: bold;
 }
