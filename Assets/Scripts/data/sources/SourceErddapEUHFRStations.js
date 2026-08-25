@@ -85,8 +85,10 @@ class SourceErddapEUHFRStations extends Source {
 
 
   // Discovers ICATMAR's station datasets dynamically (not the fixed "_table"
-  // list load() uses from the catalogue) - the plain, non-table variant is
-  // what actually carries site_lat/site_lon as NC_GLOBAL attributes.
+  // list load() uses from the catalogue). Uses the _table variant - since a
+  // fix on the EU HFR Node side, ICATMAR's _table datasets now also carry
+  // site_lat/site_lon as NC_GLOBAL attributes (this is currently confirmed
+  // for ICATMAR only - see getAllStations() for other networks).
   // Populates this.stations with them (same shape as load()), so other code
   // can read that metadata straight off this source afterward. Returns
   // { network, stations } - the same shape Data/staticData.js is stored in,
@@ -103,7 +105,7 @@ class SourceErddapEUHFRStations extends Source {
 
     const stationDatasets = icatmarDatasets.filter(d => {
       const id = d['datasetID'];
-      return !id.endsWith('_table') && !id.includes('Total');
+      return id.includes('_table') && !id.includes('Total');
     });
 
     const stations = await Promise.all(stationDatasets.map(async d => {
@@ -143,18 +145,23 @@ class SourceErddapEUHFRStations extends Source {
   async getAllStations() {
     const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
 
-    // Group dataset IDs by network, splitting each into its Total dataset
-    // and its station datasets. Only the non-table variant is kept - that's
-    // what carries site_lat/site_lon (same as getICATMARHFRStations()).
+    // Group dataset IDs by network, splitting each into its Total dataset and
+    // its station datasets. Station datasets: ICATMAR's _table variant now
+    // also carries site_lat/site_lon (a recent EU HFR Node fix), so it's
+    // preferred there; every other network keeps the plain variant, since
+    // that fix isn't confirmed for them yet.
     const byNetwork = new Map(); // network name -> { total, stationDatasets: [] }
     allDatasets.forEach(d => {
       const parsed = this.parseDatasetId(d['datasetID']);
-      if (!parsed || parsed.isTable) return;
+      if (!parsed) return;
 
       if (!byNetwork.has(parsed.network)) byNetwork.set(parsed.network, { total: undefined, stationDatasets: [] });
       const entry = byNetwork.get(parsed.network);
-      if (parsed.isTotal) entry.total = d['datasetID'];
-      else entry.stationDatasets.push(d['datasetID']);
+
+      if (parsed.isTotal) { entry.total = d['datasetID']; return; }
+
+      const preferTable = parsed.network === 'ICATMAR';
+      if (parsed.isTable === preferTable) entry.stationDatasets.push(d['datasetID']);
     });
 
     return Promise.all([...byNetwork.entries()].map(async ([networkName, { total, stationDatasets }]) => {
