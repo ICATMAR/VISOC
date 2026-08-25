@@ -42,10 +42,11 @@ export default {
     }
   },
   methods: {
-    // getAllStations() groups stations by network - flattened here since the
-    // map just shows every station regardless of which network it's on.
+    // getAllNetworks() groups stations by network (each { total, stations })
+    // - flattened here since the map just shows every station regardless of
+    // which network it's on.
     async loadStations() {
-      const groups = await this.$dataService.hfrstations.getAllStations();
+      const groups = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
       this.stations = groups.flatMap(g => g.stations);
 
       await this.$nextTick(); // wait for the v-for to render before refs exist

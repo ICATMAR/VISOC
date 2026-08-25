@@ -88,20 +88,20 @@ class SourceErddapEUHFR extends Source {
   // list load() uses from the catalogue). Uses the _table variant - since a
   // fix on the EU HFR Node side, ICATMAR's _table datasets now also carry
   // site_lat/site_lon as NC_GLOBAL attributes (this is currently confirmed
-  // for ICATMAR only - see getAllStations() for other networks).
+  // for ICATMAR only - see getAllNetworks() for other networks).
   // Populates this.stations with them (same shape as load()), so other code
   // can read that metadata straight off this source afterward. Returns
-  // { network, stations } - the same shape Data/staticData.js is stored in,
-  // so callers don't need to care whether positions came from the static
-  // file or a live request.
+  // { total, stations } - the same shape Data/hfr/hfr-icatmar.js is stored
+  // in, so callers don't need to care whether data came from the static file
+  // or a live request.
   async getICATMARHFRStations() {
     const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
     const icatmarDatasets = allDatasets.filter(d => d['datasetID'].includes('ICATMAR'));
 
-    // The network's own dataset - its NC_GLOBAL attributes are shared by
-    // every station, so they're kept once here instead of per-station.
+    // The network's own Total dataset - its NC_GLOBAL attributes are shared
+    // by every station, so they're kept once here instead of per-station.
     const totalDataset = icatmarDatasets.find(d => d['datasetID'].includes('Total'));
-    const network = totalDataset ? await this.fetchMetadata(totalDataset['datasetID'], NETWORK_METADATA_KEYS) : undefined;
+    const total = totalDataset ? await this.fetchMetadata(totalDataset['datasetID'], NETWORK_METADATA_KEYS) : undefined;
 
     const stationDatasets = icatmarDatasets.filter(d => {
       const id = d['datasetID'];
@@ -131,18 +131,17 @@ class SourceErddapEUHFR extends Source {
       };
     }));
 
-    return { network, stations: stations.filter(s => !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
+    return { total, stations: stations.filter(s => !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
   }
 
 
-  // Every network and station on this EU HFR Node - ICATMAR included, not
-  // treated specially. For browsing everything this ERDDAP server has, not
-  // scoped to one network like getICATMARHFRStations() is. Populates
-  // this.stations the same way load()/getICATMARHFRStations() do (keyed by
-  // '<network>-<station>' here, since station codes are no longer guaranteed
-  // unique across networks). Returns one { network, stations } group per
-  // network - same per-group shape as getICATMARHFRStations() returns.
-  async getAllStations() {
+  // Every network (each { total, stations }) on this EU HFR Node - ICATMAR
+  // included, not treated specially. For browsing everything this ERDDAP
+  // server has, not scoped to one network like getICATMARHFRStations() is.
+  // Populates this.stations the same way load()/getICATMARHFRStations() do
+  // (keyed by '<network>-<station>' here, since station codes are no longer
+  // guaranteed unique across networks).
+  async getAllNetworks() {
     const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
 
     // Group dataset IDs by network, splitting each into its Total dataset and
@@ -150,22 +149,22 @@ class SourceErddapEUHFR extends Source {
     // also carries site_lat/site_lon (a recent EU HFR Node fix), so it's
     // preferred there; every other network keeps the plain variant, since
     // that fix isn't confirmed for them yet.
-    const byNetwork = new Map(); // network name -> { total, stationDatasets: [] }
+    const byNetwork = new Map(); // network name -> { totalDataset, stationDatasets: [] }
     allDatasets.forEach(d => {
       const parsed = this.parseDatasetId(d['datasetID']);
       if (!parsed) return;
 
-      if (!byNetwork.has(parsed.network)) byNetwork.set(parsed.network, { total: undefined, stationDatasets: [] });
+      if (!byNetwork.has(parsed.network)) byNetwork.set(parsed.network, { totalDataset: undefined, stationDatasets: [] });
       const entry = byNetwork.get(parsed.network);
 
-      if (parsed.isTotal) { entry.total = d['datasetID']; return; }
+      if (parsed.isTotal) { entry.totalDataset = d['datasetID']; return; }
 
       const preferTable = parsed.network === 'ICATMAR';
       if (parsed.isTable === preferTable) entry.stationDatasets.push(d['datasetID']);
     });
 
-    return Promise.all([...byNetwork.entries()].map(async ([networkName, { total, stationDatasets }]) => {
-      const network = total ? await this.fetchMetadata(total, NETWORK_METADATA_KEYS) : undefined;
+    return Promise.all([...byNetwork.entries()].map(async ([networkName, { totalDataset, stationDatasets }]) => {
+      const total = totalDataset ? await this.fetchMetadata(totalDataset, NETWORK_METADATA_KEYS) : undefined;
 
       const stations = await Promise.all(stationDatasets.map(async dataset => {
         const infoUrl = `${this.baseUrl}/info/${dataset}/index.jsonlKVP`;
@@ -189,7 +188,7 @@ class SourceErddapEUHFR extends Source {
         };
       }));
 
-      return { network, stations: stations.filter(s => !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
+      return { total, stations: stations.filter(s => !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
     }));
   }
 

@@ -21,7 +21,7 @@ class DataService {
     this.hfrtotals = new hfrtotals.Class(hfrtotals, FetchManager);
 
     // this.hfrstations.getICATMARHFRStations().then(stations => console.log(stations));
-    // this.hfrstations.getAllStations().then(stations => console.log(stations));
+    // this.hfrnetwork.getAllNetworks(this.hfrstations).then(networks => console.log(networks));
     // this.hfrstations.getNumberOfValidPointsPerStations(undefined, new Date(2026, 7, 1)).then(console.log);
 
     const buoys = Catalogue.find(p => p.name === 'Buoys');
