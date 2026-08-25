@@ -12,7 +12,7 @@
 
       <!-- Line 1: product type -->
       <div class="pd-header">
-        <span>{{ $t('Sea water velocities data product') }}</span>
+        <span>{{ $t('Sea water velocities') }}</span>
       </div>
 
       <!-- Line 2: network name -->
