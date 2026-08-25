@@ -180,27 +180,25 @@ export default {
       if (newP?.date) return;
       const newId = newP?.stationId;
       const oldId = oldP?.stationId;
-      // Never cross-sync when TOTALS is involved
-      if (newId === 'TOTALS' || oldId === 'TOTALS') return;
-      // Double-click fix: same station, map click cleared the date → restore from selectedBar
+      // Double-click fix: same entity, map click cleared the date → restore from selectedBar
       if (newId && newId === oldId && !newP.date && oldP?.date) {
-        const s = this.stations.find(st => st.name === newId);
-        if (s) {
-          const value = this.getHourlyValue(s, this.selectedBar.cellIndex, this.selectedBar.subIndex);
+        const entry = newId === 'TOTALS' ? this.totals : this.stations.find(st => st.name === newId);
+        if (entry) {
+          const value = this.getHourlyValue(entry, this.selectedBar.cellIndex, this.selectedBar.subIndex);
           this.$gui.selectedPlatform = { stationId: newId, value, date: oldP.date };
         }
         return;
       }
       if (!newId || !oldId || newId === oldId) return;
-      const newStation = this.stations.find(s => s.name === newId);
-      if (!newStation) return;
+      const newEntry = newId === 'TOTALS' ? this.totals : this.stations.find(s => s.name === newId);
+      if (!newEntry) return;
       const oldDate = oldP?.date;
       if (!oldDate) return;
       const elapsedHours = (oldDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600);
       const absHour = Math.floor(elapsedHours);
       const subIndex = absHour % this.barsPerCell;
       const cellIndex = Math.floor(absHour / this.barsPerCell);
-      const value = this.getHourlyValue(newStation, cellIndex, subIndex);
+      const value = this.getHourlyValue(newEntry, cellIndex, subIndex);
       this.$gui.selectedPlatform = { stationId: newId, value, date: oldDate };
       this.selectedBar = { stationName: newId, cellIndex, subIndex };
     },
