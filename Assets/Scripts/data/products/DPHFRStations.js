@@ -1,6 +1,6 @@
 import DP from './DataProduct.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
-import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
+import SourceErddapEUHFR from '../sources/SourceErddapEUHFR.js';
 import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 import hfrIcatmarNetwork from '../../../../Data/hfr/hfr-icatmar.js'
 
@@ -26,7 +26,7 @@ class DPHFRStations extends DP {
 
     // EU HFR Node - one dataset per station, plus the network's own dataset
     // for the shared network-wide metadata.
-    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
     if (euHFRSource) {
       try {
         return await euHFRSource.getICATMARHFRStations();
@@ -62,7 +62,7 @@ class DPHFRStations extends DP {
   // Get all stations from all sources
   async getAllStations() {
     // Get sources
-    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
 
     // Hfr networks with static info
@@ -126,7 +126,7 @@ class DPHFRStations extends DP {
     stationIds = hfrIcatmarNetwork.stations.map(s => s.id);
     const end = endDate ?? new Date();
 
-    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFRStations);
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
     let erddapPromises = stationIds.map(id => Promise.resolve({ id, points: {} }));
     if (euHFRSource) {
       try {

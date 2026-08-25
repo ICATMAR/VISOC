@@ -71,7 +71,7 @@ export default {
       this.isLoading = false;
     },
 
-    // SourceErddapEUHFRStations/SourceErddapBuoys (multiple datasets, one per
+    // SourceErddapEUHFR/SourceErddapBuoys (multiple datasets, one per
     // station/sensor) aren't broken down per-dataset in the UI yet, just
     // shown as one ERDDAP entry - revisit once we build out that view.
     sourceTitle(source) {

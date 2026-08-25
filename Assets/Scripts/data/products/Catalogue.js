@@ -2,13 +2,14 @@ import SourceErddap from '../sources/SourceErddap.js';
 import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
-import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
+import SourceErddapEUHFR from '../sources/SourceErddapEUHFR.js';
 import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 import SourceErddapBuoys from '../sources/SourceErddapBuoys.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
 import DPHFRStations from './DPHFRStations.js';
+import DPHFRTotals from './DPHFRTotals.js';
 import DPBuoys from './DPBuoys.js';
 import DPSSForecast from './DPSSForecast.js';
 
@@ -89,6 +90,19 @@ const dataProducts = [
     description: "Surface currents from the ICATMAR's high-frequency radar network",
     type: 'near-real-time',
     sources: [
+      // Its sources are DPHFRTotals and DPHFRStations! TODO
+    ]
+  },
+
+  // High-frequency radar totals (the network's combined product, as opposed
+  // to its individual stations) - own product so DPHFRNetwork can compose it
+  // with DPHFRStations without either owning the other's sources.
+  {
+    name: 'High-frequency radar totals',
+    Class: DPHFRTotals,
+    description: "Surface currents from the ICATMAR's high-frequency radar network (combined stations)",
+    type: 'near-real-time',
+    sources: [
       // Recent
       {
         Class: SourceErddap,
@@ -113,10 +127,18 @@ const dataProducts = [
       },
       // EU HFR Node
       {
-        Class: SourceErddap,
+        Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
-        dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
         institution: 'EU HFR Node',
+        datasets: [
+          'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
+        ],
+      },
+      // Github
+      {
+        Class: SourceGithubHFR,
+        institution: 'ICATMAR',
+        src: 'https://github.com/ICATMAR/data/'
       },
       // Static file
       {
@@ -137,7 +159,7 @@ const dataProducts = [
           HEAD: {code: 'HCDT'}
         }
       }
-    ]
+    ],
   },
 
 
@@ -155,7 +177,7 @@ const dataProducts = [
         institution: 'ICATMAR',
       },
       {
-        Class: SourceErddapEUHFRStations,
+        Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         institution: 'EU HFR Node',
         datasets: [

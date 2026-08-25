@@ -14,7 +14,7 @@ function pick(metadata, keys) {
   return picked;
 }
 
-class SourceErddapEUHFRStations extends Source {
+class SourceErddapEUHFR extends Source {
 
   constructor({ fetchManager, src, datasets, mapping }) {
     super({ fetchManager });
@@ -200,34 +200,56 @@ class SourceErddapEUHFRStations extends Source {
     return pick(metadata, keys);
   }
 
+  // Discovers and caches the ICATMAR network's own Total dataset - its id and
+  // coverage (this.total), needed by getNumberOfValidPointsForTotal(). Doesn't
+  // touch per-station datasets (see getICATMARHFRStations() for those).
+  async loadTotal() {
+    if (this.total) return this.total;
 
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const totalDatasetId = allDatasets.find(d => d['datasetID'].includes('ICATMAR') && d['datasetID'].includes('Total'))?.['datasetID'];
+    if (!totalDatasetId) return undefined;
 
-  // Per-hour count of valid (QC-passing, non-NaN RDVA) radial vectors for ONE
-  // station, within [startDate, endDate] (endDate defaults to now). Only
+    const infoUrl = `${this.baseUrl}/info/${totalDatasetId}/index.jsonlKVP`;
+    const infoText = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
+    const { metadata } = this.parseERDDAPMetadata(infoText);
+
+    this.total = {
+      dataset: totalDatasetId,
+      startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
+      endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+    };
+    return this.total;
+  }
+
+  // Per-hour count of valid (non-NaN, per countVariable) points for one
+  // dataset, within [startDate, endDate] (endDate defaults to now). Only
   // works against a dataset's _table variant - ERDDAP's orderByCount()
-  // aggregation isn't supported on griddap-backed datasets. Caches results in
-  // this.stations[id].validPoints (keyed by timestamp), and skips the
-  // request entirely if that range is already cached.
-  async getNumberOfValidPointsPerStation(id, startDate, endDate) {
+  // aggregation isn't supported on griddap-backed datasets. Shared by
+  // getNumberOfValidPointsPerStation() (countVariable 'RDVA', per station)
+  // and getNumberOfValidPointsForTotal() (countVariable 'u', for the Total) -
+  // same mechanism, only the dataset/count column differ. `entry` is the
+  // { dataset, startDate, endDate, validPoints, validPointsRange } object to
+  // read/cache into (a station, or this.total) - cached results are kept in
+  // entry.validPoints (keyed by timestamp), and the request is skipped
+  // entirely if that range is already cached.
+  async fetchValidPointsCount(entry, countVariable, startDate, endDate) {
     const end = endDate ?? new Date();
-    const station = this.stations[id];
-    if (!station) return { id, points: undefined };
 
-    // Limit the request to what this station actually covers.
-    const rangeStart = station.startDate && station.startDate > startDate ? station.startDate : startDate;
-    const rangeEnd = station.endDate && station.endDate < end ? station.endDate : end;
+    const rangeStart = entry.startDate && entry.startDate > startDate ? entry.startDate : startDate;
+    const rangeEnd = entry.endDate && entry.endDate < end ? entry.endDate : end;
 
-    if (!station.validPoints) station.validPoints = {};
-    if (rangeStart > rangeEnd) return { id, points: station.validPoints }; // no overlap with this station's coverage
+    if (!entry.validPoints) entry.validPoints = {};
+    if (rangeStart > rangeEnd) return entry.validPoints; // no overlap with this entry's coverage
 
     // Already covered by a previous call - nothing new to fetch.
-    const range = station.validPointsRange;
-    if (range && rangeStart >= range.start && rangeEnd <= range.end) return { id, points: station.validPoints };
+    const range = entry.validPointsRange;
+    if (range && rangeStart >= range.start && rangeEnd <= range.end) return entry.validPoints;
 
-    const dataset = station.dataset.endsWith('_table') ? station.dataset : `${station.dataset}_table`;
-    const url = `${this.baseUrl}/tabledap/${dataset}.csv?time,RDVA`
+    const dataset = entry.dataset.endsWith('_table') ? entry.dataset : `${entry.dataset}_table`;
+    const url = `${this.baseUrl}/tabledap/${dataset}.csv?time,${countVariable}`
       + `&time>=${rangeStart.toISOString()}&time<=${rangeEnd.toISOString()}`
-      + `&RDVA!=NaN&orderByCount("time")`;
+      + `&${countVariable}!=NaN&orderByCount("time")`;
 
     const text = await this.fetchManager.fetch(SourceErddap.proxied(url), 1)
       .then(res => res.text())
@@ -240,16 +262,25 @@ class SourceErddapEUHFRStations extends Source {
       const lines = text.trim().split('\n').filter(Boolean).slice(2); // skip names/units header rows
       lines.forEach(line => {
         const [time, count] = line.split(',');
-        station.validPoints[time] = Number(count);
+        entry.validPoints[time] = Number(count);
       });
     }
 
-    station.validPointsRange = {
+    entry.validPointsRange = {
       start: range ? new Date(Math.min(range.start, rangeStart)) : rangeStart,
       end: range ? new Date(Math.max(range.end, rangeEnd)) : rangeEnd,
     };
 
-    return { id, points: station.validPoints };
+    return entry.validPoints;
+  }
+
+  // Per-hour count of valid (QC-passing, non-NaN RDVA) radial vectors for ONE
+  // station, within [startDate, endDate] (endDate defaults to now).
+  async getNumberOfValidPointsPerStation(id, startDate, endDate) {
+    const station = this.stations[id];
+    if (!station) return { id, points: undefined };
+    const points = await this.fetchValidPointsCount(station, 'RDVA', startDate, endDate);
+    return { id, points };
   }
 
   // Array of per-station promises (NOT a single Promise<object> resolved via
@@ -263,6 +294,17 @@ class SourceErddapEUHFRStations extends Source {
     return stationIds.map(id => this.getNumberOfValidPointsPerStation(id, startDate, endDate));
   }
 
+  // Per-hour count of valid (non-NaN eastward-velocity 'u') grid points for
+  // the ICATMAR network's Total dataset, within [startDate, endDate]. Same
+  // _table/orderByCount mechanism as getNumberOfValidPointsPerStation(), just
+  // against the Total dataset and its own count variable.
+  async getNumberOfValidPointsForTotal(startDate, endDate) {
+    await this.loadTotal();
+    if (!this.total) return { id: 'TOTALS', points: undefined };
+    const points = await this.fetchValidPointsCount(this.total, 'u', startDate, endDate);
+    return { id: 'TOTALS', points };
+  }
+
 }
 
-export default SourceErddapEUHFRStations;
+export default SourceErddapEUHFR;
