@@ -148,11 +148,18 @@ class DPHFRStations extends DP {
           const points = result?.points ?? {};
           if (!hours.some(time => points[time] == undefined)) return { id, points };
 
-          const fromGithub = await githubSource.getNumberOfValidPointsPerStations([id], githubStart, end);
-          const githubPoints = fromGithub[id] ?? {};
-          hours.forEach(time => {
-            if (points[time] == undefined && githubPoints[time] != undefined) points[time] = githubPoints[time];
-          });
+          // A GitHub failure shouldn't wipe out what ERDDAP already gave us -
+          // just skip filling the gaps and return ERDDAP's points as-is.
+          try {
+            const fromGithub = await githubSource.getNumberOfValidPointsPerStations([id], githubStart, end);
+            const githubPoints = fromGithub[id] ?? {};
+            hours.forEach(time => {
+              if (points[time] == undefined && githubPoints[time] != undefined) points[time] = githubPoints[time];
+            });
+          } catch (error) {
+            console.error(`Error loading GitHub HFR station data for ${id}:`, error);
+          }
+
           return { id, points };
         })
         .catch(error => {
