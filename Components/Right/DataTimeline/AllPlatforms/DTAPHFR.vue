@@ -3,9 +3,13 @@
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <!-- TOTALS row at top, separated from station rows by border -->
-        <!-- No live source for totals yet - show a placeholder message instead of bars -->
-        <tr v-if="totals.unavailable">
-          <td :colspan="cells.length" class="message-cell totals-bar-cell">{{ $t('API feature missing for totals (combination of stations)') }}</td>
+        <!-- Still waiting on the network Total's own promise to resolve -->
+        <tr v-if="totals.loading">
+          <td :colspan="cells.length" class="message-cell totals-bar-cell"><span class="spinner-border"></span></td>
+        </tr>
+        <!-- No data at all for the network Total - show a placeholder message instead of bars -->
+        <tr v-else-if="totals.noData">
+          <td :colspan="cells.length" class="message-cell totals-bar-cell">{{ $t('No data for TOTALS') }}</td>
         </tr>
         <tr v-else :class="{ 'row-selected': isRowSelected('TOTALS') }"
           @mouseenter="hoveredStation = 'TOTALS'" @mouseleave="hoveredStation = null">
@@ -69,8 +73,7 @@ export default {
     return {
       hoveredStation: null,
       selectedBar: null,
-      // No live source for network-wide totals yet - shown as unavailable, see template.
-      totals: { name: 'TOTALS', hourlyData: [], activeStations: [], maxValue: 0, unavailable: true },
+      totals: { name: 'TOTALS', hourlyData: [], maxValue: 0 },
       stations: [
         { name: 'CNET', hourlyData: [], maxValue: 0 },
         { name: 'CREU', hourlyData: [], maxValue: 0 },
@@ -84,51 +87,47 @@ export default {
     }
   },
   methods: {
-    // getNumberOfValidPointsPerStations() resolves to an array of per-station
-    // promises rather than one Promise<object> - each station's bars are
-    // filled in as soon as ITS promise resolves, instead of every station
-    // waiting on the slowest one.
+    // getNumberOfValidPointsPerNetwork() resolves to an array of per-entity
+    // promises (one per station, plus one for TOTALS), not a single
+    // Promise<object> - each row's bars are filled in as soon as ITS own
+    // promise resolves, instead of everything waiting on the slowest one.
     async loadStations() {
-      const stationIds = this.stations.map(s => s.name);
       this.stations.forEach(s => { s.loading = true; });
+      this.totals.loading = true;
 
-      const promises = await this.$dataService.hfrstations.getNumberOfValidPointsPerStations(
-        stationIds, this.$gui.timelineStartDate, this.$gui.timelineEndDate
+      const promises = await this.$dataService.hfrnetwork.getNumberOfValidPointsPerNetwork(
+        this.$dataService.hfrstations, this.$dataService.hfrtotals,
+        this.$gui.timelineStartDate, this.$gui.timelineEndDate
       );
 
       const startMs = this.$gui.timelineStartDate.getTime();
       promises.forEach(promise => promise.then(({ id, points }) => {
-        const station = this.stations.find(s => s.name === id);
-        if (!station) return;
-        station.loading = false;
-        if (points == null) { station.noData = true; return; } // e.g. SCAL - no EU HFR Node dataset
+        const entry = id === 'TOTALS' ? this.totals : this.stations.find(s => s.name === id);
+        if (!entry) return;
+        entry.loading = false;
+        if (points == null) { entry.noData = true; return; } // e.g. SCAL - no EU HFR Node dataset
 
         Object.entries(points).forEach(([timeStr, count]) => {
           const hourIndex = Math.round((new Date(timeStr).getTime() - startMs) / (1000 * 3600));
           if (hourIndex < 0) return;
-          station.hourlyData[hourIndex] = count;
-          if (count > station.maxValue) station.maxValue = count;
+          entry.hourlyData[hourIndex] = count;
+          if (count > entry.maxValue) entry.maxValue = count;
         });
       }));
     },
     totalsValue(cellIndex, subIndex) {
       return this.totals.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
     },
-    totalsActiveStations(cellIndex, subIndex) {
-      return this.totals.activeStations[cellIndex * this.barsPerCell + subIndex] ?? 0;
-    },
     totalsTitle(cellIndex, subIndex) {
       const pts = this.totalsValue(cellIndex, subIndex);
-      const active = this.totalsActiveStations(cellIndex, subIndex);
       if (!pts) return this.$t('No data available');
-      return `${pts} valid points · ${active} active stations`;
+      return `${pts} valid points`;
     },
     totalsClicked(cellIndex, subIndex, cellDate) {
       const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
       this.$gui.selectedPlatform = {
         stationId: 'TOTALS',
         value: this.totalsValue(cellIndex, subIndex),
-        activeStations: this.totalsActiveStations(cellIndex, subIndex),
         date,
       };
       this.selectedBar = { stationName: 'TOTALS', cellIndex, subIndex };

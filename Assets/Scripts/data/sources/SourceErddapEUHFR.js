@@ -227,7 +227,7 @@ class SourceErddapEUHFR extends Source {
   // works against a dataset's _table variant - ERDDAP's orderByCount()
   // aggregation isn't supported on griddap-backed datasets. Shared by
   // getNumberOfValidPointsPerStation() (countVariable 'RDVA', per station)
-  // and getNumberOfValidPointsForTotal() (countVariable 'u', for the Total) -
+  // and getNumberOfValidPointsForTotal() (countVariable 'EWCT', for the Total) -
   // same mechanism, only the dataset/count column differ. `entry` is the
   // { dataset, startDate, endDate, validPoints, validPointsRange } object to
   // read/cache into (a station, or this.total) - cached results are kept in
@@ -294,14 +294,14 @@ class SourceErddapEUHFR extends Source {
     return stationIds.map(id => this.getNumberOfValidPointsPerStation(id, startDate, endDate));
   }
 
-  // Per-hour count of valid (non-NaN eastward-velocity 'u') grid points for
+  // Per-hour count of valid (non-NaN eastward-velocity 'EWCT') grid points for
   // the ICATMAR network's Total dataset, within [startDate, endDate]. Same
   // _table/orderByCount mechanism as getNumberOfValidPointsPerStation(), just
   // against the Total dataset and its own count variable.
   async getNumberOfValidPointsForTotal(startDate, endDate) {
     await this.loadTotal();
     if (!this.total) return { id: 'TOTALS', points: undefined };
-    const points = await this.fetchValidPointsCount(this.total, 'u', startDate, endDate);
+    const points = await this.fetchValidPointsCount(this.total, 'EWCT', startDate, endDate);
     return { id: 'TOTALS', points };
   }
 
