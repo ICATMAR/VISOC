@@ -46,15 +46,41 @@ export default {
     // - flattened here since the map just shows every station regardless of
     // which network it's on.
     async loadStations() {
-      const groups = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
-      this.stations = groups.flatMap(g => g.stations);
-
+      // Copied, so the live merge below writes to these and not to the static
+      // file's own objects - that module is shared with everything else reading it.
+      this.stations = this.$dataService.hfrnetwork.getIcatmarNetwork().stations.map(station => ({ ...station }));
       await this.$nextTick(); // wait for the v-for to render before refs exist
       this.createOverlays();
+      // Get live data for all networks, so that the status of each station can be determined.
+      const networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
+
+      // Create new stations or merge static ones. The static ones already have
+      // an overlay each, so they are updated in place - same objects, same
+      // positions - instead of being replaced by the live copies; the stations
+      // only the live sources know about (the other networks on the EU HFR
+      // Node) are appended, and get their overlay once the v-for has rendered
+      // them.
+      const newStations = [];
+      networks.flatMap(network => network.stations).forEach(live => {
+        const station = this.stations.find(s => s.id === live.id);
+        // Nothing static is lost by assigning: getAllNetworks() has already
+        // merged the two for the ICATMAR network, static winning (see
+        // mergeKeepingStatic), so what arrives here is static plus whatever
+        // only the live sources know - the fresh time_coverage_end above all.
+        if (station) Object.assign(station, live);
+        else newStations.push(live);
+      });
+      if (newStations.length === 0) return;
+
+      this.stations = [...this.stations, ...newStations];
+      await this.$nextTick();
+      this.createOverlays(newStations); // only the new ones - the rest already have theirs
     },
-    createOverlays() {
-      for (let i = 0; i < this.stations.length; i++) {
-        let station = this.stations[i];
+    // Defaults to every station, but takes a subset so stations that arrive
+    // later don't get a second overlay stacked on the one they already have.
+    createOverlays(stations = this.stations) {
+      for (let i = 0; i < stations.length; i++) {
+        let station = stations[i];
         const olOverlay = new ol.Overlay({
           element: this.$refs[station.id]?.[0],
           positioning: 'center-center',

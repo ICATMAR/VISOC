@@ -5,6 +5,12 @@ import hfrIcatmarNetwork from '../../../../Data/hfr/hfr-icatmar.js'
 
 class DPHFRNetwork extends DP {
 
+
+  // Get ICATMAR HFR network from static file
+  getIcatmarNetwork() {
+    return hfrIcatmarNetwork;
+  }
+
   // Get all networks (each { total, stations }) from all sources.
   // DPHFRNetwork has no sources of its own - station discovery belongs to
   // DPHFRStations (its EU HFR Node source already carries every ICATMAR
