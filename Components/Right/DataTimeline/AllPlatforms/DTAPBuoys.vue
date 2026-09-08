@@ -45,20 +45,17 @@ const WIND_MAX_KMH = 30 * 1.852; // 30 knots → km/h
 
 export default {
   name: "DTAPBuoys",
+  // Row list comes from the real buoy catalogue now, not the 5-buoy mock -
+  // static first (synchronous, so there's something to show immediately),
+  // refined once the live sources (ERDDAP/MSM/SOMO) resolve and can add
+  // buoys the static file doesn't know about, same two-step pattern as
+  // MapOverlayBuoys.vue. Row CONTENT (the bars themselves) is still the mock
+  // generator - that part is unchanged, and works for any id.
   created() {
-    const totalHours = Math.round(
-      (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
-    );
-    for (const b of this.$requests.buoyStations) {
-      const d = this.$requests.generateBuoyHourlyData(b.id, totalHours);
-      this.buoys.push({
-        name: b.id,
-        VHM0: d.VHM0, VMDR: d.VMDR,
-        WSPD: d.WSPD, WDIR: d.WDIR,
-        HCSP: d.HCSP, HCDT: d.HCDT,
-        TEMP: d.TEMP, PSAL: d.PSAL,
-      });
-    }
+    this.buildRows(this.$dataService.buoys.getBuoys());
+    this.$dataService.buoys.loadBuoys()
+      .then(buoys => this.buildRows(buoys))
+      .catch(error => console.error('Error loading buoys for the timeline:', error));
   },
   data() {
     return {
@@ -68,6 +65,21 @@ export default {
     }
   },
   methods: {
+    buildRows(buoys) {
+      const totalHours = Math.round(
+        (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
+      );
+      this.buoys = buoys.map(buoy => {
+        const d = this.$requests.generateBuoyHourlyData(buoy.id, totalHours);
+        return {
+          name: buoy.id,
+          VHM0: d.VHM0, VMDR: d.VMDR,
+          WSPD: d.WSPD, WDIR: d.WDIR,
+          HCSP: d.HCSP, HCDT: d.HCDT,
+          TEMP: d.TEMP, PSAL: d.PSAL,
+        };
+      });
+    },
     hasData(buoy, cellIndex, subIndex) {
       const i = cellIndex * this.barsPerCell + subIndex;
       return buoy.VHM0[i] != null || buoy.WSPD[i] != null;
