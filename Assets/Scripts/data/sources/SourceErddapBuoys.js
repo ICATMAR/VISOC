@@ -15,6 +15,7 @@ const BUOY_IDS = {
 };
 
 const SENSOR_IDS = {
+  WAVE: 'WAVES',    // both spellings are in use, and they are the same sensor
   YOUN: 'RM_YOUNG', // the MSM API spells the same anemometer out in full
 };
 
@@ -83,7 +84,13 @@ class SourceErddapBuoys extends SourceBuoys {
           license: metadata['license'],
         });
       }
-      buoysByName.get(name).sensors.push(sensor);
+      // Two datasets can describe the same sensor - both spellings of the wave
+      // sensor land on WAVES (see SENSOR_IDS) - so they are folded into one
+      // entry rather than showing up twice on the buoy.
+      const sensors = buoysByName.get(name).sensors;
+      const existing = sensors.find(s => s.id === sensor.id);
+      if (existing) SourceErddapBuoys.mergeSensor(existing, sensor);
+      else sensors.push(sensor);
     });
 
     // Each buoy's own startDate/endDate - earliest/latest among its sensors.
@@ -92,6 +99,19 @@ class SourceErddapBuoys extends SourceBuoys {
     const { startDate, endDate } = this.dateRange();
     this.startDate = startDate;
     this.endDate = endDate;
+  }
+
+  // Folds a second dataset's view of a sensor into the first: its variables
+  // are added (the first dataset's win on a name they share), and the coverage
+  // grows to whichever of the two starts earliest and ends latest. The first
+  // one's metadata is kept as-is - it is one instrument, described twice.
+  static mergeSensor(sensor, other) {
+    console.warn(`SourceErddapBuoys: merging sensor ${sensor.id} with another dataset's view of it ${other.id}`);
+    Object.entries(other.variables).forEach(([name, attributes]) => {
+      if (sensor.variables[name] == undefined) sensor.variables[name] = attributes;
+    });
+    if (other.startDate && (!sensor.startDate || other.startDate < sensor.startDate)) sensor.startDate = other.startDate;
+    if (other.endDate && (!sensor.endDate || other.endDate > sensor.endDate)) sensor.endDate = other.endDate;
   }
 
   // ERDDAP suffixes a dataset's variables with its own sensor name - the WAVE

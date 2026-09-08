@@ -5,8 +5,14 @@ import buoys from '../../../../Data/buoys/buoys.js'
 // Fields that are merged one for one across sources - everything else on a
 // buoy (its id, its sensors, its dates) is merged by rules of its own below.
 const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth'];
-// Same, for a sensor
-const SENSOR_FIELDS = ['variables', 'metadata', 'url'];
+// Same, for a sensor - kept atomic (first source wins outright), unlike
+// 'variables' below which is merged key by key instead. 'metadata' is
+// deliberately atomic: ERDDAP's dataset-level attributes (institution,
+// nominal position, time_coverage_*) are what the app wants to show, and the
+// catalogue lists the ERDDAP sources before the others for exactly that
+// reason - a source with only file-format metadata (SourceGithubSOMO's TOA5
+// header: logger model/serial, program name) shouldn't paper over that.
+const SENSOR_FIELDS = ['metadata', 'url'];
 // Fields the static file owns outright, rather than only filling in when no
 // source knows them: it is the curated catalogue of display names, and the
 // sources' own labels are neither consistent nor meant to be read (the MSM API
@@ -68,10 +74,11 @@ class DPBuoys extends DP {
         if (!this.providers.has(buoy.id)) this.providers.set(buoy.id, []);
         this.providers.get(buoy.id).push(source);
 
-        // Standard codes are worked out here, per source: the mapping that
-        // turns 'Corr_WindS' into WSPD is the catalogue's, and each source has
-        // its own.
-        const sensors = buoy.sensors.map(sensor => ({ ...sensor, codes: this.sensorCodes(source, sensor) }));
+        // Standardized here, per source - the mapping that turns 'Corr_WindS'
+        // into WSPD is the catalogue's, and each source has its own. This is
+        // what makes the merge below collapse SOMO's raw RH and ERDDAP's
+        // already-standard RELH into one RELH entry instead of two.
+        const sensors = buoy.sensors.map(sensor => ({ ...sensor, variables: this.standardizeVariables(source, sensor) }));
 
         const merged = buoysById.get(buoy.id);
         if (!merged) buoysById.set(buoy.id, { ...buoy, sensors });
@@ -113,18 +120,33 @@ class DPBuoys extends DP {
       // what it doesn't know yet.
       fillMissing(existing, sensor, SENSOR_FIELDS);
       widenDates(existing, sensor);
-      // Codes are the exception: one source can publish a variable another
-      // doesn't, so they add up instead of being filled in.
-      existing.codes = [...new Set([...(existing.codes ?? []), ...(sensor.codes ?? [])])];
+      // variables is the exception to "first source wins": one source can
+      // publish a standard code another doesn't (e.g. ERDDAP's tabledap
+      // columns are a subset of the SOMO logger's own), so they add up
+      // instead of being filled in. Keyed by standard code (see
+      // standardizeVariables), so a code both sources declare - SOMO's raw RH
+      // and ERDDAP's already-standard RELH, once both are resolved - lands on
+      // one entry instead of two; whichever source's attributes were recorded
+      // first are kept.
+      existing.variables = { ...(sensor.variables ?? {}), ...(existing.variables ?? {}) };
     });
   }
 
-  // The names a sensor's records come back under once standardized: the
-  // standard code of every variable the catalogue maps, and the raw name of
-  // everything it doesn't cover (nothing is dropped for being unmapped).
-  sensorCodes(source, sensor) {
-    const names = Object.keys(sensor.variables ?? {});
-    return [...new Set(names.map(name => this.standardCode(source, name, sensor.id)))];
+  // A sensor's variables, re-keyed from the source's raw names to standard
+  // codes (the raw name of anything the catalogue doesn't map, same as
+  // DataProduct.standardCode() - nothing is dropped for being unmapped). Each
+  // code keeps its raw column's own attributes (units, aggregation, ...).
+  // Two raw names that resolve to the same code - SOMO's RH and ERDDAP's
+  // already-standard RELH, say - collapse into one entry; the first one seen
+  // keeps its attributes, so the merge in mergeBuoy only ever adds entries,
+  // never overwrites.
+  standardizeVariables(source, sensor) {
+    const variables = {};
+    Object.entries(sensor.variables ?? {}).forEach(([name, attributes]) => {
+      const code = this.standardCode(source, name, sensor.id);
+      if (variables[code] == undefined) variables[code] = attributes;
+    });
+    return variables;
   }
 
   // Measurements for one buoy within [startDate, endDate], in standard codes:

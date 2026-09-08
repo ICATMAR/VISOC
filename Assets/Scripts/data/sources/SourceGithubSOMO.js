@@ -36,6 +36,17 @@ const SENSORS = [
   { id: 'CTD', file: 'SBE37_SMPO.dat' },
 ];
 
+// This server's own columns (everything but TIMESTAMP - see parseTOA5),
+// hardcoded from the tables' own headers rather than read from the catalogue's
+// mapping: standardizing is the product's job, not the source's (see
+// Source.js), and the mapping doesn't cover every raw column anyway (RECORD,
+// HASL, AD, WBT, ... pass through unmapped). Used only as a placeholder - see
+// the comment on the constructor's this.buoys below.
+const KNOWN_VARIABLES = {
+  METEO: ['RECORD', 'Latitude', 'Longitude', 'HASL', 'Rel_WindDir', 'Corr_WindDir', 'Corr_WindS', 'WindDir_True', 'Rel_WS', 'BP', 'RH', 'AirTemp', 'DP', 'AD', 'WBT'],
+  CTD: ['RECORD', 'SBE37Sn', 'SBE37Temp', 'SBE37Cond', 'SBE37Pres', 'SBE37OXY', 'SBE37Sal', 'SBE37Date', 'SBE37Time'],
+};
+
 const FILE_TTL = 5;      // minutes a downloaded table is cached for
 const FILE_TIMEOUT = 60;  // seconds - these are MB-sized files
 
@@ -119,7 +130,20 @@ class SourceGithubSOMO extends SourceBuoys {
 
     this.buoys = [{
       id: BUOY_ID,
-      sensors: SENSORS.map(sensor => ({ ...sensor, url: BASE_URL + sensor.file })),
+      // variables starts out as KNOWN_VARIABLES rather than empty: load() only
+      // HEADs the tables (see below), and getBuoyData() - which is what
+      // actually discovers the real columns, with their units - only runs when
+      // someone asks for measurements. Without a placeholder, DPBuoys would
+      // merge this sensor in with zero known variables whenever it runs before
+      // that first fetch (e.g. building the buoy list right after load()) -
+      // most visibly if ERDDAP is down too, since then nothing else covers it.
+      // Replaced wholesale, attributes and all, the moment loadTable() parses
+      // the real table (see there).
+      sensors: SENSORS.map(sensor => ({
+        ...sensor,
+        url: BASE_URL + sensor.file,
+        variables: Object.fromEntries((KNOWN_VARIABLES[sensor.id] ?? []).map(name => [name, {}])),
+      })),
       // latitude/longitude/dates are discovered, see load() and loadTable()
     }];
 

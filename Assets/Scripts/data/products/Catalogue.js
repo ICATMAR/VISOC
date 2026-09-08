@@ -302,6 +302,10 @@ const dataProducts = [
           ADCP: {
             temperature: {code: 'TEMP'},
           },
+          GPS: {
+            LAT: {code: 'latitude'},
+            LON: {code: 'longitude'},
+          },
         },
       },
       {
@@ -319,12 +323,17 @@ const dataProducts = [
           // Meteo
           Latitude: {code: 'latitude'},
           Longitude: {code: 'longitude'},
-          Corr_WindDir: {code: 'WDIR'},
+          WindDir_True: {code: 'WDIR'},
           Corr_WindS: {code: 'WSPD'},
           BP: {code: 'ATMS'},    // hPa = mbar, ATMS' own unit
           RH: {code: 'RELH'},
           AirTemp: {code: 'DRYT'},
           DP: {code: 'DEWT'},
+          Rel_WindDir: {code: 'WRDR'},
+          Corr_WindDir: {code: 'WCDR'},
+          Rel_WS: {code: 'WRSP'},
+          HASL: {code: 'HEIGHT'},
+
           // SBE37 CTD
           SBE37Temp: {code: 'TEMP'},
           SBE37Cond: {code: 'CNDC'},
