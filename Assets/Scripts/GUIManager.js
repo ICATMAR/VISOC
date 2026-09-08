@@ -1,3 +1,5 @@
+import COLOR_LEGENDS from '../../styles/colorLegends.js';
+
 class GUIManager {
 
   isMenuOpen = false;
@@ -129,6 +131,15 @@ class GUIManager {
     if (this.isMenuOpen) {
       this.isDataTimelineOpen = false;
     }
+  }
+
+  // Timeline cell colour scale for a standard variable code (see
+  // styles/colorLegends.js) - an array of [t, [r,g,b]] stops, t normalized
+  // 0..1 over the variable's own range. Falls back to BLANK (a no-op white
+  // scale) for a code with no dedicated palette, so a caller never has to
+  // check for undefined first.
+  colorLegend(code) {
+    return COLOR_LEGENDS[code] ?? COLOR_LEGENDS.BLANK;
   }
 }
 
