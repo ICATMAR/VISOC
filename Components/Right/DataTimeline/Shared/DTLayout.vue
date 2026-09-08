@@ -271,10 +271,14 @@ export default {
   color: black;
   text-shadow: none;
   height: 23px;
-  display: flex;
+  display: flow-root;
   align-items: flex-end;
-  justify-content: flex-end;
+  align-content: center;
   padding-left: 5px;
+  max-width: 110px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 
