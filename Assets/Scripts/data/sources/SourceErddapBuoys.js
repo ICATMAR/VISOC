@@ -20,6 +20,10 @@ const SENSOR_IDS = {
 };
 
 const DATA_TIMEOUT = 60; // seconds for one tabledap query
+// Minutes a tabledap response is reused for. Has to be a real number rather
+// than left open: DPBuoys re-asks for the block that is still filling on every
+// poll, and this is what decides how often that becomes an actual request.
+const DATA_TTL = 5;
 
 // tabledap wants whole seconds - '2026-09-03T00:00:00Z', not the milliseconds
 // toISOString() adds.
@@ -197,7 +201,7 @@ class SourceErddapBuoys extends SourceBuoys {
       + `?time,${columns.map(c => c.column).join(',')}`
       + `&time>=${stamp(startDate)}&time<=${stamp(endDate)}`;
 
-    const text = await this.fetchManager.fetch(SourceErddap.proxied(url), undefined, DATA_TIMEOUT)
+    const text = await this.fetchManager.fetch(SourceErddap.proxied(url), DATA_TTL, DATA_TIMEOUT)
       .then(res => res.text())
       .catch(error => {
         if (error.name === 'HTTPError' && error.status === 404) return undefined; // no rows in range

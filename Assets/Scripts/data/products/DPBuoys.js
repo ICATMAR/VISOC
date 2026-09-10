@@ -1,6 +1,14 @@
 import DP from './DataProduct.js';
 import SourceBuoys from '../sources/SourceBuoys.js';
+import BlockCache from './BlockCache.js';
 import buoys from '../../../../Data/buoys/buoys.js'
+
+// How far back a buoy's record can still change. Only has to cover the tip
+// that is still filling: a measurement, once recorded, is what it is, so
+// anything older is answered from memory without a request (see BlockCache).
+// HF radar totals will want a much wider window - a late station's radials can
+// arrive hours after the fact and cause the totals to be regenerated.
+const REREQUEST_HOUR_WINDOW_FROM_NOW = 1;
 
 // Fields that are merged one for one across sources - everything else on a
 // buoy (its id, its sensors, its dates) is merged by rules of its own below.
@@ -59,6 +67,15 @@ function coversRange(entry, startDate, endDate) {
 
 
 class DPBuoys extends DP {
+
+  constructor(catalogueDP, fetchManager) {
+    super(catalogueDP, fetchManager);
+
+    // Observations already fetched, by block (see BlockCache). A measurement
+    // doesn't change once it has been recorded, so anything outside the
+    // re-request window is answered from here and never asked for twice.
+    this.cache = new BlockCache({ rerequestHourWindowFromNow: REREQUEST_HOUR_WINDOW_FROM_NOW });
+  }
 
   // Get buoys
   getBuoys() {
@@ -322,18 +339,83 @@ class DPBuoys extends DP {
     return { codes: [...codes], startDate, endDate, warnings, promises };
   }
 
-  // One buoy's values, working down each code's ranked candidates until one
-  // actually delivers. Rounds rather than one pass: the best candidate per code
-  // is grouped by source so each source is asked once (its own getBuoyData
-  // splits that into per-dataset/per-table requests as needed), and whatever a
-  // round fails to produce - the request threw, or came back with nothing for
-  // that code - falls through to the next candidate on the next round. That is
-  // what makes a server going down mid-session a non-event, and what stops a
-  // source that has silently fallen behind from shadowing one that hasn't.
+  // One buoy's values for [startDate, endDate], served from the block cache and
+  // requesting only what it doesn't already hold.
+  //
+  // Requests are snapped to block boundaries rather than to the window asked
+  // for: a period already held is never re-requested, a gap at each end of a
+  // cached middle costs one request each rather than one big one over the top,
+  // and because the boundaries are stable the request URLs repeat, so
+  // FetchManager collapses them too. Blocks inside the re-request window (see
+  // REREQUEST_HOUR_WINDOW_FROM_NOW) are always re-asked; older ones are frozen
+  // and answered from memory.
   async fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate) {
-    const pending = new Map(Object.entries(candidatesByCode).map(([code, candidates]) => [code, [...candidates]]));
+    const now = Date.now();
+    const codes = Object.keys(candidatesByCode);
+    const errors = [];
+
+    // What each code still needs, and the fewest spans that cover all of it.
+    const missingByCode = {};
+    const allMissing = new Set();
+    codes.forEach(code => {
+      const missing = this.cache.missingBlocks(`${buoyId}|${code}`, startDate, endDate, now);
+      if (missing.length === 0) return;
+      missingByCode[code] = missing;
+      missing.forEach(key => allMissing.add(key));
+    });
+
+    const spans = this.cache.coalesceBlocks([...allMissing]);
+    await Promise.all(spans.map(async span => {
+      // Only the codes that are actually short of this span - a code already
+      // held here shouldn't be dragged into the request.
+      const wanted = Object.entries(missingByCode)
+        .filter(([, missing]) => missing.some(key => span.keys.includes(key)))
+        .map(([code]) => code);
+      if (wanted.length === 0) return;
+
+      const result = await this.fetchSpan(buoyId, candidatesByCode, wanted, span);
+      errors.push(...result.errors);
+
+      // Only a definitive answer is cached. A source that responded, even with
+      // nothing, settles the question; every candidate throwing does not - that
+      // is an outage, and caching "no data" for it would outlive the outage.
+      wanted.forEach(code => {
+        if (!result.answered.has(code)) return;
+        this.cache.write(`${buoyId}|${code}`, span.keys, result.points[code]);
+      });
+    }));
+
     const data = {};
     const used = {};
+    codes.forEach(code => {
+      Object.entries(this.cache.read(`${buoyId}|${code}`, startDate, endDate)).forEach(([timestamp, point]) => {
+        if (data[timestamp] == undefined) data[timestamp] = {};
+        data[timestamp][code] = point;
+        if (used[code] == undefined) used[code] = { source: point.source, sensor: point.sensor };
+      });
+    });
+
+    const missing = codes.filter(code => used[code] == undefined);
+    return { buoyId, data, used, missing, errors };
+  }
+
+  // One span's worth of values, working down each code's ranked candidates
+  // until one actually delivers. Rounds rather than one pass: the best
+  // candidate per code is grouped by source so each source is asked once (its
+  // own getBuoyData splits that into per-dataset/per-table requests as needed),
+  // and whatever a round fails to produce - the request threw, or came back
+  // with nothing for that code - falls through to the next candidate on the
+  // next round. That is what makes a server going down mid-session a
+  // non-event, and what stops a source that has silently fallen behind from
+  // shadowing one that hasn't.
+  //
+  // `answered` is which codes got a definitive reply (rows, or an honest empty
+  // response) as opposed to nothing but errors - only those are safe to cache.
+  async fetchSpan(buoyId, candidatesByCode, codes, span) {
+    const { from: startDate, to: endDate } = span;
+    const pending = new Map(codes.map(code => [code, [...candidatesByCode[code]]]));
+    const points = {};
+    const answered = new Set();
     const errors = [];
 
     while (pending.size > 0) {
@@ -363,6 +445,11 @@ class DPBuoys extends DP {
       const delivered = new Set();
       results.forEach(({ source, group, rows }) => {
         if (rows == undefined) return; // request failed - nothing delivered
+        // The source answered, even if this span holds nothing for some of the
+        // codes it was asked for: that settles them, and settles them as
+        // cacheable, which an error never does.
+        group.codes.forEach(({ code }) => answered.add(code));
+
         Object.entries(rows).forEach(([timestamp, bySensor]) => {
           Object.entries(bySensor).forEach(([sensorId, values]) => {
             const standardized = this.standardize(source, values, sensorId);
@@ -370,17 +457,17 @@ class DPBuoys extends DP {
               if (sensorId !== wantedSensor) return;
               const value = standardized[code];
               if (value == undefined) return;
-              if (data[timestamp] == undefined) data[timestamp] = {};
-              data[timestamp][code] = { value, sensor: sensorId, source: source.src };
+              if (points[code] == undefined) points[code] = {};
+              points[code][timestamp] = { value, sensor: sensorId, source: source.src };
               delivered.add(code);
-              used[code] = { source: source.src, sensor: sensorId };
             });
           });
         });
       });
 
       // Anything this round didn't deliver drops its leading candidate and
-      // tries the next one; a code with none left is simply missing.
+      // tries the next one; a code with none left has been asked of everything
+      // that could have answered.
       pending.forEach((candidates, code) => {
         if (delivered.has(code)) { pending.delete(code); return; }
         candidates.shift();
@@ -388,8 +475,7 @@ class DPBuoys extends DP {
       });
     }
 
-    const missing = Object.keys(candidatesByCode).filter(code => used[code] == undefined);
-    return { buoyId, data, used, missing, errors };
+    return { points, answered, errors };
   }
 }
 
