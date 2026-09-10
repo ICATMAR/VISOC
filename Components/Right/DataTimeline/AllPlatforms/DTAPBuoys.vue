@@ -39,12 +39,27 @@
 <script>
 import DTLayout from '../Shared/DTLayout.vue';
 import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
+// pollMixin is a bare global (see main.js) - a .vue file's <script> block
+// isn't a real ES module under vue3-sfc-loader, so importing a plain .js file
+// directly here doesn't resolve, the same reason ol.Map works everywhere with
+// no import.
 
 const WAVE_MAX_M   = 2.5;
 const WIND_MAX_KMH = 30 * 1.852; // 30 knots → km/h
 
+// How often refreshVariableData() re-asks DPBuoys for fresh values. Plain
+// literal for now rather than something read off DPBuoys itself - revisit
+// once getVariablesData() exists and it's clear whether the cadence should
+// live on the data product instead.
+const REFRESH_MINUTES = 5;
+
 export default {
   name: "DTAPBuoys",
+  // refreshVariableData polls the real per-cell values on REFRESH_MINUTES
+  // (see pollMixin.js); buoys and its own loading below is the ROW list
+  // (which buoys exist at all) - kept separate, no reason the two need the
+  // same trigger.
+  mixins: [pollMixin('refreshVariableData', REFRESH_MINUTES)],
   // Row list comes from the real buoy catalogue now, not the 5-buoy mock -
   // static first (synchronous, so there's something to show immediately),
   // refined once the live sources (ERDDAP/MSM/SOMO) resolve and can add
@@ -65,6 +80,23 @@ export default {
     }
   },
   methods: {
+    // STUB: DPBuoys.getVariablesData() doesn't exist yet - this is only the
+    // polling wiring (see pollMixin.js), called immediately and then every
+    // REFRESH_MINUTES. The wrapping try/catch is here only because the
+    // method is missing (a plain call throws synchronously, before there's
+    // even a promise to .catch()) - drop it once getVariablesData() is
+    // implemented, a normal .catch() below is enough from then on. Not
+    // touching this.buoys yet either - what the returned object looks like
+    // and how it merges into the rows is next.
+    refreshVariableData() {
+      try {
+        this.$dataService.buoys.getVariablesData(['VHM0', 'VMDR', 'WSPD', 'WDIR'], this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+          .then(data => console.log('DTAPBuoys: getVariablesData resolved (not wired into the rows yet):', data))
+          .catch(error => console.error('Error loading buoy variable data:', error));
+      } catch (error) {
+        console.error('DPBuoys.getVariablesData is not implemented yet:', error);
+      }
+    },
     buildRows(buoys) {
       const totalHours = Math.round(
         (this.$gui.timelineEndDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600)
