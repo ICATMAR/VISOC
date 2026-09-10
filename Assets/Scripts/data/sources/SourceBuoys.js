@@ -29,6 +29,14 @@ class SourceBuoys extends Source {
     // buoys exist and how fresh they are. Set to true by the ones that do, so
     // DPBuoys can tell them apart without calling and catching.
     this.servesData = false;
+
+    // How long a coverage check (see getEndDate) is trusted before the server
+    // is asked again. Subclasses override where their own check is cheaper or
+    // dearer than this.
+    this.coverageTTLMinutes = 5;
+    // When the coverage dates last came from the server. Each subclass' load()
+    // sets it, since loading is itself a coverage check.
+    this.coverageCheckedAt = undefined;
   }
 
   // Earliest start and latest end among a list of entries (buoys or sensors -
@@ -52,6 +60,32 @@ class SourceBuoys extends Source {
   getBuoy(id) {
     return this.buoys.find(buoy => buoy.id === id);
   }
+
+  // The latest timestamp this source can currently serve, re-asking the server
+  // when the last answer has gone stale (coverageTTLMinutes). Asked BEFORE the
+  // data itself: which source is worth requesting a given period from is a
+  // question about how far each one actually reaches right now, not an
+  // assumption about which one is "the historical one" or "the live one" -
+  // those roles change, and a source that has fallen behind should lose on the
+  // measurement rather than on a hardcoded rule.
+  //
+  // Refreshing also updates the per-buoy and per-sensor dates, which is what
+  // DPBuoys' planning actually reads.
+  async getEndDate() {
+    await this.loadingPromise?.catch(() => {}); // the initial load is itself a coverage check
+    const fresh = this.coverageCheckedAt != undefined
+      && Date.now() - this.coverageCheckedAt < this.coverageTTLMinutes * 60000;
+    if (!fresh) {
+      await this.refreshCoverage();
+      this.coverageCheckedAt = Date.now();
+    }
+    return this.endDate;
+  }
+
+  // Re-reads how far this source reaches, as cheaply as it can (one request
+  // that covers every buoy, where the server allows it). Subclasses that can
+  // do this implement it; the default leaves whatever load() found in place.
+  async refreshCoverage() {}
 
   // Subclasses that can serve measurements implement this: the rows for one
   // buoy within [startDate, endDate], keyed by timestamp and then by sensor -

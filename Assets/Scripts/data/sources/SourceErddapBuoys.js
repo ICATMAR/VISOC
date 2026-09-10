@@ -19,6 +19,12 @@ const SENSOR_IDS = {
   YOUN: 'RM_YOUNG', // the MSM API spells the same anemometer out in full
 };
 
+const DATA_TIMEOUT = 60; // seconds for one tabledap query
+
+// tabledap wants whole seconds - '2026-09-03T00:00:00Z', not the milliseconds
+// toISOString() adds.
+const stamp = date => date.toISOString().substring(0, 19) + 'Z';
+
 class SourceErddapBuoys extends SourceBuoys {
 
   constructor({ fetchManager, src, datasetCommonKey }) {
@@ -26,6 +32,7 @@ class SourceErddapBuoys extends SourceBuoys {
     this.src = src;
     this.baseUrl = src.replace(/\/index\.html$/, '');
     this.datasetCommonKey = datasetCommonKey;
+    this.servesData = true;
 
     // this.buoys (see SourceBuoys) is filled in by load(): id, array of sensors
     // (metadata, variables...), lat-long, institution, acknowledgement
@@ -58,7 +65,12 @@ class SourceErddapBuoys extends SourceBuoys {
 
       const sensor = {
         id: sensorId,
-        variables: SourceErddapBuoys.stripSensorSuffix(variables, datasetSensor),
+        // Which dataset(s) this sensor's data actually lives in - needed to
+        // build a tabledap query, and not derivable from the sensor id once
+        // SENSOR_IDS has renamed it (WAVE -> WAVES) or two datasets have been
+        // folded into one sensor.
+        datasets: [dataset],
+        variables: SourceErddapBuoys.stripSensorSuffix(variables, datasetSensor, dataset),
         metadata,
         startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
         endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
@@ -99,17 +111,147 @@ class SourceErddapBuoys extends SourceBuoys {
     const { startDate, endDate } = this.dateRange();
     this.startDate = startDate;
     this.endDate = endDate;
+    this.coverageCheckedAt = Date.now(); // loading is itself a coverage check
+  }
+
+  // Re-reads every dataset's minTime/maxTime and pushes them back onto the
+  // sensors. One request for the whole server (allDatasets), which is why the
+  // coverage check is cheap enough to do before every data request that has
+  // gone stale - see SourceBuoys.getEndDate().
+  async refreshCoverage() {
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const byDataset = new Map(allDatasets.map(d => [d['datasetID'], d]));
+
+    this.buoys.forEach(buoy => {
+      buoy.sensors.forEach(sensor => {
+        (sensor.datasets ?? []).forEach(dataset => {
+          const row = byDataset.get(dataset);
+          if (!row) return;
+          if (row['minTime']) sensor.startDate = new Date(row['minTime']);
+          if (row['maxTime']) sensor.endDate = new Date(row['maxTime']);
+        });
+      });
+      Object.assign(buoy, SourceBuoys.dateRangeOf(buoy.sensors));
+    });
+
+    const { startDate, endDate } = this.dateRange();
+    this.startDate = startDate;
+    this.endDate = endDate;
+  }
+
+  // Measurements for one buoy within [startDate, endDate]:
+  // { '<ISO timestamp>': { '<SENSOR>': { <variable>: value } } }, keyed by the
+  // variable names this source publishes (suffix already stripped, see
+  // stripSensorSuffix) rather than by standard code - mapping those is
+  // DataProduct's job.
+  //
+  // `sensors` narrows what is asked for: { '<SENSOR>': ['WSPD', 'WDIR'] },
+  // omitted meaning every sensor and every column. Worth passing - tabledap is
+  // queried per dataset, and four columns of one sensor is a far smaller
+  // response than every column of every sensor the buoy has.
+  async getBuoyData(buoyId, startDate, endDate, { sensors } = {}) {
+    const buoy = this.getBuoy(buoyId);
+    if (!buoy) throw new Error(`Unknown buoy '${buoyId}' in ${this.src}`);
+
+    const wantedSensors = sensors ? buoy.sensors.filter(s => sensors[s.id]) : buoy.sensors;
+
+    // One query per dataset, not per sensor: a sensor's columns can come from
+    // more than one dataset (see mergeSensor), and each tabledap request can
+    // only name one.
+    const queries = [];
+    wantedSensors.forEach(sensor => {
+      const wanted = sensors?.[sensor.id] ?? Object.keys(sensor.variables ?? {});
+      const byDataset = new Map();
+      wanted.forEach(name => {
+        const attributes = sensor.variables?.[name];
+        if (!attributes) return; // this sensor doesn't publish it
+        const dataset = attributes.dataset ?? sensor.datasets?.[0];
+        if (!dataset) return;
+        if (!byDataset.has(dataset)) byDataset.set(dataset, []);
+        // rawName is the column as ERDDAP spells it, suffix and all
+        byDataset.get(dataset).push({ name, column: attributes.rawName ?? name });
+      });
+      byDataset.forEach((columns, dataset) => queries.push({ sensor, dataset, columns }));
+    });
+
+    const results = await Promise.all(queries.map(query => this.fetchQuery(query, startDate, endDate)));
+
+    const rows = {};
+    results.forEach(result => {
+      Object.entries(result).forEach(([timestamp, values]) => {
+        if (rows[timestamp] == undefined) rows[timestamp] = {};
+        rows[timestamp][values.sensorId] = { ...rows[timestamp][values.sensorId], ...values.values };
+      });
+    });
+
+    return rows;
+  }
+
+  // One tabledap CSV request:
+  //   <base>/tabledap/<dataset>.csv?time,WSPD,WDIR&time>=...&time<=...
+  // Answers { '<ISO>': { sensorId, values: { name: value } } }. ERDDAP replies
+  // 404 when a query matches no rows at all (not 200 with an empty body), which
+  // means "nothing in that window", not a failure.
+  async fetchQuery({ sensor, dataset, columns }, startDate, endDate) {
+    const url = `${this.baseUrl}/tabledap/${dataset}.csv`
+      + `?time,${columns.map(c => c.column).join(',')}`
+      + `&time>=${stamp(startDate)}&time<=${stamp(endDate)}`;
+
+    const text = await this.fetchManager.fetch(SourceErddap.proxied(url), undefined, DATA_TIMEOUT)
+      .then(res => res.text())
+      .catch(error => {
+        if (error.name === 'HTTPError' && error.status === 404) return undefined; // no rows in range
+        throw error;
+      });
+    if (text == undefined) return {};
+
+    return SourceErddapBuoys.parseCSV(text, sensor.id, columns);
+  }
+
+  // ERDDAP CSV: line 1 the column names, line 2 their units, then one row per
+  // timestamp. Missing values arrive as NaN or as an empty cell and are
+  // dropped, so a gap stays a gap instead of being read as a real 0.
+  static parseCSV(text, sensorId, columns) {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 3) return {}; // header and units only - no rows
+
+    const header = lines[0].split(',');
+    const timeIndex = header.indexOf('time');
+    if (timeIndex < 0) throw new Error(`Unexpected ERDDAP CSV: no time column in ${header.join(',')}`);
+
+    const rows = {};
+    lines.slice(2).forEach(line => {
+      const cells = line.split(',');
+      const date = new Date(cells[timeIndex]);
+      if (isNaN(date)) return;
+
+      const values = {};
+      columns.forEach(({ name, column }) => {
+        const cell = cells[header.indexOf(column)];
+        if (cell == undefined) return;
+        const value = Number(cell.trim());
+        if (cell.trim() === '' || !isFinite(value)) return;
+        values[name] = value;
+      });
+      if (Object.keys(values).length === 0) return;
+
+      rows[date.toISOString()] = { sensorId, values };
+    });
+
+    return rows;
   }
 
   // Folds a second dataset's view of a sensor into the first: its variables
-  // are added (the first dataset's win on a name they share), and the coverage
-  // grows to whichever of the two starts earliest and ends latest. The first
-  // one's metadata is kept as-is - it is one instrument, described twice.
+  // are added (the first dataset's win on a name they share), the datasets it
+  // covers are recorded alongside, and the coverage grows to whichever of the
+  // two starts earliest and ends latest. The first one's metadata is kept
+  // as-is - it is one instrument, described twice.
   static mergeSensor(sensor, other) {
     console.warn(`SourceErddapBuoys: merging sensor ${sensor.id} with another dataset's view of it ${other.id}`);
     Object.entries(other.variables).forEach(([name, attributes]) => {
       if (sensor.variables[name] == undefined) sensor.variables[name] = attributes;
     });
+    sensor.datasets = [...new Set([...(sensor.datasets ?? []), ...(other.datasets ?? [])])];
     if (other.startDate && (!sensor.startDate || other.startDate < sensor.startDate)) sensor.startDate = other.startDate;
     if (other.endDate && (!sensor.endDate || other.endDate > sensor.endDate)) sensor.endDate = other.endDate;
   }
@@ -120,13 +262,18 @@ class SourceErddapBuoys extends SourceBuoys {
   // across sensors and sources. Dropped here, so the catalogue's mapping only
   // ever has to know SWHT. A variable that already exists unsuffixed keeps its
   // own entry rather than being overwritten by the suffixed one.
-  static stripSensorSuffix(variables, sensor) {
+  //
+  // `rawName` and `dataset` are recorded alongside because a tabledap query has
+  // to name the column exactly as ERDDAP spells it, in the dataset that holds
+  // it - neither of which survives the renaming (see fetchQuery).
+  static stripSensorSuffix(variables, sensor, dataset) {
     const suffix = `_${sensor}`.toUpperCase();
 
     const renamed = {};
     Object.entries(variables).forEach(([name, attributes]) => {
       const bare = name.toUpperCase().endsWith(suffix) ? name.slice(0, -suffix.length) : name;
-      renamed[bare && renamed[bare] == undefined ? bare : name] = attributes;
+      const key = bare && renamed[bare] == undefined ? bare : name;
+      renamed[key] = { ...attributes, rawName: name, dataset };
     });
 
     return renamed;

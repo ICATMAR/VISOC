@@ -59,6 +59,13 @@ const SENSOR_IDS = {
   'HMP155-2': 'HMP2',
 };
 
+// How far back the API keeps records. It publishes no coverage start of its
+// own (only latestTimestamp per buoy), so this is configuration rather than
+// something discovered - a buoy's startDate is derived from it. Raise it if the
+// database is known to hold more; a value that's too small only means DPBuoys
+// won't consider this source for older windows it could in fact have served.
+const HISTORY_DAYS = 7;
+
 // Keys of a record that are not sensors
 const NOT_A_SENSOR = ['parsedJson'];
 
@@ -110,6 +117,40 @@ class SourceMSMAPI extends SourceBuoys {
     return SENSOR_IDS[normalized] ?? normalized;
   }
 
+  // What a buoy's `latestTimestamp` says about its coverage: the end is
+  // measured, the start is inferred from HISTORY_DAYS (the API doesn't publish
+  // one). Both are needed for DPBuoys to weigh this source against the others
+  // for a given window rather than assume a role for it.
+  static coverageOf(latestTimestamp) {
+    if (!latestTimestamp) return { startDate: undefined, endDate: undefined };
+    const endDate = new Date(latestTimestamp);
+    if (isNaN(endDate)) return { startDate: undefined, endDate: undefined };
+    return { startDate: new Date(endDate.getTime() - HISTORY_DAYS * 86400000), endDate };
+  }
+
+  // Re-reads every buoy's latest timestamp - one request for the whole list,
+  // which is what makes the coverage check before a data request affordable
+  // (see SourceBuoys.getEndDate).
+  async refreshCoverage() {
+    const url = `${this.baseUrl}/buoys`;
+    const json = await this.fetchManager.fetch(url, LIST_TTL).then(res => res.json());
+    if (!Array.isArray(json?.buoys)) throw new Error(`No buoys in the response of ${url}`);
+
+    json.buoys.forEach(published => {
+      const buoy = this.getBuoy(SourceMSMAPI.idFromName(published.name));
+      if (!buoy) return; // a buoy that appeared since load() - picked up on the next one
+      const coverage = SourceMSMAPI.coverageOf(published.latestTimestamp);
+      Object.assign(buoy, coverage);
+      // Sensor-level dates follow the buoy's: the list is per buoy, and this
+      // API gives no way to ask when one sensor last reported.
+      buoy.sensors.forEach(sensor => { if (coverage.endDate) sensor.endDate = coverage.endDate; });
+    });
+
+    const { startDate, endDate } = this.dateRange();
+    this.startDate = startDate;
+    this.endDate = endDate;
+  }
+
   async load() {
     const url = `${this.baseUrl}/buoys`;
     const json = await this.fetchManager.fetch(url, LIST_TTL).then(res => res.json());
@@ -122,9 +163,7 @@ class SourceMSMAPI extends SourceBuoys {
       latitude: buoy.lat != undefined ? Number(buoy.lat) : undefined,
       longitude: buoy.lon != undefined ? Number(buoy.lon) : undefined,
       sensors: [],
-      // Only the latest timestamp is published - the API has no coverage
-      // endpoint, so how far back a buoy goes stays unknown (startDate).
-      endDate: buoy.latestTimestamp ? new Date(buoy.latestTimestamp) : undefined,
+      ...SourceMSMAPI.coverageOf(buoy.latestTimestamp),
     }));
 
     if (this.discoverSensors) {
@@ -138,6 +177,7 @@ class SourceMSMAPI extends SourceBuoys {
     const { startDate, endDate } = this.dateRange();
     this.startDate = startDate;
     this.endDate = endDate;
+    this.coverageCheckedAt = Date.now(); // loading is itself a coverage check
   }
 
   // Which sensors a buoy carries, and which parameters each of them reports -
@@ -177,12 +217,20 @@ class SourceMSMAPI extends SourceBuoys {
 
   // Rows for one buoy within [startDate, endDate]:
   // { '<ISO timestamp>': { '<SENSOR>': { <parameter>: value } } }, values raw
-  // (see the note at the top). `parameters` narrows the request to a list of
-  // parameter names, the way the HFRadar viewer does; omitted, the API returns
-  // everything it holds for those records.
-  async getBuoyData(buoyId, startDate, endDate, { parameters, limit = DEFAULT_LIMIT, timeout = DATA_TIMEOUT } = {}) {
+  // (see the note at the top).
+  //
+  // `sensors` ({ '<SENSOR>': ['WSPD', 'WDIR'] }) narrows the request: this API
+  // has no per-sensor endpoint, so every sensor still comes back and the
+  // caller filters, but the parameter names are unioned into the request's
+  // `parameters` filter the way the HFRadar viewer does, which does make the
+  // response smaller. `parameters` can also be passed directly instead.
+  async getBuoyData(buoyId, startDate, endDate, { sensors, parameters, limit = DEFAULT_LIMIT, timeout = DATA_TIMEOUT } = {}) {
     const buoy = this.getBuoy(buoyId);
     if (!buoy) throw new Error(`Unknown buoy '${buoyId}' in ${this.src}`);
+
+    if (!parameters && sensors) {
+      parameters = [...new Set(Object.values(sensors).flat())];
+    }
 
     const query = [`limit=${limit}`];
     if (startDate) query.push(`start_date=${stamp(startDate)}`);

@@ -38,6 +38,25 @@ function widenDates(target, source) {
   if (source.endDate && (!target.endDate || source.endDate > target.endDate)) target.endDate = source.endDate;
 }
 
+// Whether an entry (a sensor) could hold anything inside [startDate, endDate].
+// Deliberately permissive: a bound the source doesn't publish counts as "might
+// reach", not "doesn't" - the MSM API never publishes a startDate at all (see
+// SourceMSMAPI), so requiring proof of coverage would rule it out of every
+// query.
+function overlapsRange(entry, startDate, endDate) {
+  if (entry.endDate && entry.endDate < startDate) return false;
+  if (entry.startDate && entry.startDate > endDate) return false;
+  return true;
+}
+
+// Whether an entry provably spans the whole of [startDate, endDate] - both its
+// own bounds have to be known, so a source that doesn't publish coverage can
+// overlap but never "cover".
+function coversRange(entry, startDate, endDate) {
+  return Boolean(entry.startDate && entry.endDate
+    && entry.startDate <= startDate && entry.endDate >= endDate);
+}
+
 
 class DPBuoys extends DP {
 
@@ -186,6 +205,191 @@ class DPBuoys extends DP {
     });
 
     return data;
+  }
+
+  // Which standard codes a source's sensor publishes, and under which of its
+  // OWN variable names - the inverse of standardizeVariables(), needed because
+  // a request has to name the source's columns ('Corr_WindS'), not the code
+  // they map to (WSPD). First name wins on a collision, same as there.
+  publishedNamesByCode(source, sensor) {
+    const names = {};
+    Object.keys(sensor.variables ?? {}).forEach(name => {
+      const code = this.standardCode(source, name, sensor.id);
+      if (names[code] == undefined) names[code] = name;
+    });
+    return names;
+  }
+
+  // Every source/sensor that could answer for each requested code, ranked -
+  // { [buoyId]: { [code]: [{ source, sensorId, name, covers }, ...] } }.
+  //
+  // Pure: it reads the coverage and variable lists the sources already hold
+  // (refreshed by getEndDate() before this runs), so choosing where to ask
+  // costs no requests of its own. Ranked by whether a candidate provably spans
+  // the whole window first, then by the order the catalogue lists the sources -
+  // but only as a STARTING order: a candidate that then fails, or turns out to
+  // hold nothing for the window, is dropped in favour of the next one (see
+  // fetchBuoyVariables), so a source that has fallen behind loses on what it
+  // actually returns rather than on an assumption about its role.
+  planVariablesData(codes, startDate, endDate) {
+    const wanted = new Set(codes);
+    const byBuoy = {};
+    const warnings = [];
+
+    this.providers.forEach((sources, buoyId) => {
+      const candidatesByCode = {};
+
+      sources.forEach((source, sourceIndex) => {
+        if (!source.servesData) return; // metadata only - nothing to request
+        const buoy = source.getBuoy(buoyId);
+        if (!buoy) return;
+
+        buoy.sensors.forEach(sensor => {
+          // A source that dates the buoy but not its sensors (the MSM API)
+          // still has usable coverage - fall back to the buoy's own.
+          const coverage = {
+            startDate: sensor.startDate ?? buoy.startDate,
+            endDate: sensor.endDate ?? buoy.endDate,
+          };
+          if (!overlapsRange(coverage, startDate, endDate)) return;
+
+          const names = this.publishedNamesByCode(source, sensor);
+          Object.entries(names).forEach(([code, name]) => {
+            if (!wanted.has(code)) return;
+            if (candidatesByCode[code] == undefined) candidatesByCode[code] = [];
+            candidatesByCode[code].push({
+              source, sourceIndex, sensorId: sensor.id, name,
+              covers: coversRange(coverage, startDate, endDate),
+            });
+          });
+        });
+      });
+
+      Object.entries(candidatesByCode).forEach(([code, candidates]) => {
+        candidates.sort((a, b) => (b.covers - a.covers) || (a.sourceIndex - b.sourceIndex));
+
+        // Two DIFFERENT instruments on one buoy reporting the same code is
+        // ambiguous and worth saying out loud - the wind on SOMO's METEO table
+        // and on its RM_YOUNG sensor are not the same measurement. The same
+        // sensor id from several sources is not: that is one instrument two
+        // servers both carry, which is the whole point of merging them.
+        const sensorIds = [...new Set(candidates.map(c => c.sensorId))];
+        if (sensorIds.length > 1) {
+          warnings.push(`Buoy '${buoyId}': ${code} is published by more than one sensor (${sensorIds.join(', ')}) - using ${candidates[0].sensorId}`);
+        }
+      });
+
+      if (Object.keys(candidatesByCode).length) byBuoy[buoyId] = candidatesByCode;
+    });
+
+    return { byBuoy, warnings };
+  }
+
+  // Measurements for every buoy, for a set of standard codes, within a window.
+  //
+  // Returns as soon as the plan is made, handing back ONE PROMISE PER BUOY so
+  // the caller can render each row as its data lands instead of waiting for
+  // the slowest server:
+  //
+  //   { codes, startDate, endDate, warnings, promises: [Promise, ...] }
+  //
+  // and each of those promises resolves to
+  //
+  //   { buoyId, data: { '<ISO>': { <code>: { value, sensor, source } } },
+  //     used: { <code>: { source, sensor } }, missing: [<code>], errors: [...] }
+  //
+  // Every value carries the sensor and source it came from, so a point on a
+  // chart can always be traced back to the instrument and server that served
+  // it.
+  async getVariablesData(codes, startDate, endDate) {
+    await this.loadBuoys(); // fills this.providers and the per-source sensor metadata
+
+    // Ask every source how far it currently reaches BEFORE deciding who to
+    // request from - re-asking the server only where its last answer has gone
+    // stale (see SourceBuoys.getEndDate). A source that can't answer keeps
+    // whatever coverage it had; it just competes with stale numbers.
+    const sources = [...new Set([...this.providers.values()].flat())].filter(source => source.servesData);
+    await Promise.all(sources.map(source => source.getEndDate().catch(error => {
+      console.error(`Could not check how fresh ${source.src} is:`, error);
+    })));
+
+    const { byBuoy, warnings } = this.planVariablesData(codes, startDate, endDate);
+    warnings.forEach(warning => console.warn(warning));
+
+    const promises = Object.entries(byBuoy).map(([buoyId, candidatesByCode]) =>
+      this.fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate));
+
+    return { codes: [...codes], startDate, endDate, warnings, promises };
+  }
+
+  // One buoy's values, working down each code's ranked candidates until one
+  // actually delivers. Rounds rather than one pass: the best candidate per code
+  // is grouped by source so each source is asked once (its own getBuoyData
+  // splits that into per-dataset/per-table requests as needed), and whatever a
+  // round fails to produce - the request threw, or came back with nothing for
+  // that code - falls through to the next candidate on the next round. That is
+  // what makes a server going down mid-session a non-event, and what stops a
+  // source that has silently fallen behind from shadowing one that hasn't.
+  async fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate) {
+    const pending = new Map(Object.entries(candidatesByCode).map(([code, candidates]) => [code, [...candidates]]));
+    const data = {};
+    const used = {};
+    const errors = [];
+
+    while (pending.size > 0) {
+      // Group this round's leading candidates by source: one request each.
+      const groups = new Map();
+      pending.forEach((candidates, code) => {
+        const candidate = candidates[0];
+        if (candidate == undefined) return;
+        if (!groups.has(candidate.source)) groups.set(candidate.source, { sensors: {}, codes: [] });
+        const group = groups.get(candidate.source);
+        if (group.sensors[candidate.sensorId] == undefined) group.sensors[candidate.sensorId] = [];
+        if (!group.sensors[candidate.sensorId].includes(candidate.name)) group.sensors[candidate.sensorId].push(candidate.name);
+        group.codes.push({ code, sensorId: candidate.sensorId });
+      });
+      if (groups.size === 0) break;
+
+      const results = await Promise.all([...groups].map(async ([source, group]) => {
+        const rows = await source.getBuoyData(buoyId, startDate, endDate, { sensors: group.sensors })
+          .catch(error => {
+            errors.push(`Buoy '${buoyId}' from ${source.src}: ${error.message ?? error}`);
+            console.error(`Error loading ${group.codes.map(c => c.code).join(', ')} of buoy '${buoyId}' from ${source.src}:`, error);
+            return undefined; // fall through to the next candidate below
+          });
+        return { source, group, rows };
+      }));
+
+      const delivered = new Set();
+      results.forEach(({ source, group, rows }) => {
+        if (rows == undefined) return; // request failed - nothing delivered
+        Object.entries(rows).forEach(([timestamp, bySensor]) => {
+          Object.entries(bySensor).forEach(([sensorId, values]) => {
+            const standardized = this.standardize(source, values, sensorId);
+            group.codes.forEach(({ code, sensorId: wantedSensor }) => {
+              if (sensorId !== wantedSensor) return;
+              const value = standardized[code];
+              if (value == undefined) return;
+              if (data[timestamp] == undefined) data[timestamp] = {};
+              data[timestamp][code] = { value, sensor: sensorId, source: source.src };
+              delivered.add(code);
+              used[code] = { source: source.src, sensor: sensorId };
+            });
+          });
+        });
+      });
+
+      // Anything this round didn't deliver drops its leading candidate and
+      // tries the next one; a code with none left is simply missing.
+      pending.forEach((candidates, code) => {
+        if (delivered.has(code)) { pending.delete(code); return; }
+        candidates.shift();
+        if (candidates.length === 0) pending.delete(code);
+      });
+    }
+
+    const missing = Object.keys(candidatesByCode).filter(code => used[code] == undefined);
+    return { buoyId, data, used, missing, errors };
   }
 }
 

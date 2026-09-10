@@ -174,6 +174,25 @@ class SourceGithubSOMO extends SourceBuoys {
     }));
 
     this.updateDates();
+    this.coverageCheckedAt = Date.now(); // loading is itself a coverage check
+  }
+
+  // Re-HEADs each table, which is the cheapest thing this source has that says
+  // how fresh it is (see SourceBuoys.getEndDate). Only moves endDate forward
+  // for a table that hasn't been parsed yet - once loadTable() has run, the
+  // last row's own timestamp is a better answer than Last-Modified.
+  async refreshCoverage() {
+    await Promise.all(this.buoy().sensors.map(async sensor => {
+      const lastModified = await this.fetchLastModified(sensor.url).catch(error => {
+        console.error(`Could not reach ${sensor.url}:`, error);
+        return undefined;
+      });
+      if (!lastModified) return;
+      sensor.lastModified = lastModified;
+      if (!this.tables.has(sensor.id)) sensor.endDate = lastModified;
+    }));
+
+    this.updateDates();
   }
 
   // Deliberately NOT through the FetchManager: it caches by URL alone, so a
@@ -241,10 +260,17 @@ class SourceGithubSOMO extends SourceBuoys {
   // { '<ISO timestamp>': { '<SENSOR>': { <column>: value } } }. Values are the
   // logger's own columns and units - mapping 'Corr_WindS' onto WSPD and the
   // rest is DataProduct's job, not this one's.
-  async getBuoyData(buoyId = BUOY_ID, startDate, endDate) {
+  //
+  // `sensors` ({ '<SENSOR>': ['Corr_WindS', ...] }) limits which tables get
+  // downloaded at all - worth passing, since these are whole multi-MB files
+  // and a wind-only request has no reason to pull the CTD's 1.2 MB down too.
+  // The column lists themselves are not applied here (a parsed row is a whole
+  // row); the caller keeps what it asked for.
+  async getBuoyData(buoyId = BUOY_ID, startDate, endDate, { sensors } = {}) {
     if (buoyId !== BUOY_ID) throw new Error(`Unknown buoy '${buoyId}' in ${this.src} - it only publishes ${BUOY_ID}`);
 
-    const tables = await Promise.all(this.buoy().sensors.map(async sensor => [sensor.id, await this.loadTable(sensor.id)]));
+    const wanted = sensors ? this.buoy().sensors.filter(s => sensors[s.id]) : this.buoy().sensors;
+    const tables = await Promise.all(wanted.map(async sensor => [sensor.id, await this.loadTable(sensor.id)]));
 
     const rows = {};
     tables.forEach(([sensorId, table]) => {
