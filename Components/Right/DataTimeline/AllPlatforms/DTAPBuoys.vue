@@ -80,22 +80,23 @@ export default {
     }
   },
   methods: {
-    // STUB: DPBuoys.getVariablesData() doesn't exist yet - this is only the
-    // polling wiring (see pollMixin.js), called immediately and then every
-    // REFRESH_MINUTES. The wrapping try/catch is here only because the
-    // method is missing (a plain call throws synchronously, before there's
-    // even a promise to .catch()) - drop it once getVariablesData() is
-    // implemented, a normal .catch() below is enough from then on. Not
-    // touching this.buoys yet either - what the returned object looks like
-    // and how it merges into the rows is next.
+    // Logs what comes back and nothing else - the rows still draw the mock
+    // (see buildRows), wiring this into them is the next step. Called
+    // immediately and then every REFRESH_MINUTES by pollMixin.
+    //
+    // getVariablesData resolves as soon as it has PLANNED the work, handing
+    // back one promise per buoy, so each is logged as it lands rather than
+    // waiting for the slowest server.
     refreshVariableData() {
-      try {
-        this.$dataService.buoys.getVariablesData(['VHM0', 'VMDR', 'WSPD', 'WDIR'], this.$gui.timelineStartDate, this.$gui.timelineEndDate)
-          .then(data => console.log('DTAPBuoys: getVariablesData resolved (not wired into the rows yet):', data))
-          .catch(error => console.error('Error loading buoy variable data:', error));
-      } catch (error) {
-        console.error('DPBuoys.getVariablesData is not implemented yet:', error);
-      }
+      this.$dataService.buoys.getVariablesData(['VHM0', 'VMDR', 'WSPD', 'WDIR'], this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+        .then(({ codes, startDate, endDate, warnings, promises }) => {
+          console.log(`DTAPBuoys: ${codes.join(', ')} from ${startDate.toISOString()} to ${endDate.toISOString()} - ${promises.length} buoys`,
+            warnings.length ? { warnings } : '');
+          promises.forEach(promise => promise
+            .then(result => console.log(`DTAPBuoys: ${result.buoyId}`, result))
+            .catch(error => console.error('DTAPBuoys: a buoy failed outright:', error)));
+        })
+        .catch(error => console.error('DTAPBuoys: could not plan the variable request:', error));
     },
     buildRows(buoys) {
       const totalHours = Math.round(
