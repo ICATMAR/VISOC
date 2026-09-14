@@ -28,6 +28,19 @@ const SENSOR_FIELDS = ['metadata', 'url'];
 // source keeps its own name on its own buoy objects regardless.
 const STATIC_FIELDS = ['name'];
 
+// Tiebreak between two DIFFERENT sensors on the same buoy that publish the
+// same code and are otherwise ranked equally (same source, same coverage) -
+// e.g. a buoy with two wind sensors, RM_YOUNG and GILL. Without this the
+// winner would depend on whatever order the source happened to list its
+// sensors in. Lower index wins; a sensor not listed here sorts after every
+// one that is (see sensorPriority below).
+const SENSOR_PRIORITY = ['RM_YOUNG', 'GILL'];
+
+function sensorPriority(sensorId) {
+  const index = SENSOR_PRIORITY.indexOf(sensorId);
+  return index === -1 ? SENSOR_PRIORITY.length : index;
+}
+
 // Copies over only what the target doesn't already know. First source to say
 // something wins, so the order the catalogue lists them in is the order of
 // preference - and a source that only knows part of a buoy (the MSM API has no
@@ -283,7 +296,8 @@ class DPBuoys extends DP {
       });
 
       Object.entries(candidatesByCode).forEach(([code, candidates]) => {
-        candidates.sort((a, b) => (b.covers - a.covers) || (a.sourceIndex - b.sourceIndex));
+        candidates.sort((a, b) => (b.covers - a.covers) || (a.sourceIndex - b.sourceIndex)
+          || (sensorPriority(a.sensorId) - sensorPriority(b.sensorId)));
 
         // Two DIFFERENT instruments on one buoy reporting the same code is
         // ambiguous and worth saying out loud - the wind on SOMO's METEO table
