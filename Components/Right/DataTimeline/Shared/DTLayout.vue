@@ -68,6 +68,18 @@ export default {
     variables: Array, // [{ name, unit }]
     activeVar: String,   // name of the variable to highlight in bold (hover)
     selectedVar: String, // name of the selected station — kept bold while selected
+    // Time steps the zoom buttons step through, coarse → fine. A view whose
+    // cells mean something different can pass its own: the buoys timeline
+    // averages into its cells, so it offers 12h/3h/1h rather than a daily
+    // step that would flatten a whole day into one number.
+    intervalOptions: {
+      type: Array,
+      default: () => ([
+        { label: 'Daily',   minutes: 1440 },
+        { label: '3 hours', minutes: 180  },
+        { label: 'Hourly',  minutes: 60   },
+      ]),
+    },
   },
   mounted() {
     this.resetScroll();
@@ -82,12 +94,6 @@ export default {
       isDragging: false,
       startX: 0,
       scrollLeft: 0,
-      // Interval options ordered coarse → fine (zoom out → zoom in)
-      intervalOptions: [
-        { label: 'Daily',   minutes: 1440 },
-        { label: '3 hours', minutes: 180  },
-        { label: 'Hourly',  minutes: 60   },
-      ],
     }
   },
   methods: {
@@ -271,11 +277,16 @@ export default {
   color: black;
   text-shadow: none;
   height: 23px;
-  display: flex;
+  display: flow-root;
   align-items: flex-end;
-  justify-content: flex-end;
+  align-content: center;
   padding-left: 5px;
+  max-width: 110px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
+
 
 .active-var {
   font-weight: bold;

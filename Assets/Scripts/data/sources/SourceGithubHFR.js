@@ -13,7 +13,7 @@ const PATH = 'observational/hf_radar/currents/L2';
 //   validPoints = (fileBytes - headerBytes) / bytesPerPoint
 //
 // Calibrated against the EU HFR Node ERDDAP's RDVA counts (the same number
-// SourceErddapEUHFRStations.getNumberOfValidPointsPerStations() returns) over
+// SourceErddapEUHFR.getNumberOfValidPointsPerStation() returns) over
 // 2026-07-30..2026-08-06 - ~1150 file/timestamp pairs, robust linear fit per
 // station. R2 >= 0.9995 everywhere; residuals are within a few points, and the
 // row count in the file matches ERDDAP's count exactly when both refer to the
@@ -146,7 +146,7 @@ class SourceGithubHFR extends Source {
 
     if (this.stations['SCAL']) Object.assign(this.stations['SCAL'], SCAL_METADATA);
 
-    // Earliest/latest across every station - same as SourceErddapEUHFRStations's
+    // Earliest/latest across every station - same as SourceErddapEUHFR's
     // own startDate/endDate, read by DataProducts.vue for this source's status dot.
     const coverages = Object.values(this.stations);
     this.startDate = coverages.length ? new Date(Math.min(...coverages.map(c => c.startDate))) : undefined;
@@ -267,9 +267,10 @@ class SourceGithubHFR extends Source {
   }
 
   // Per-hour count of valid radial vectors for each given station within
-  // [startDate, endDate] (endDate defaults to now), in the same shape
-  // SourceErddapEUHFRStations.getNumberOfValidPointsPerStations() returns:
-  // { '<station>': { '<ISO timestamp>': count } }.
+  // [startDate, endDate] (endDate defaults to now): { '<station>': { '<ISO
+  // timestamp>': count } }. Note this is a plain object, unlike
+  // SourceErddapEUHFR.getNumberOfValidPointsPerStations(), which returns an
+  // array of per-station promises instead.
   //
   // These are ESTIMATES derived from file size (see CALIBRATION above), not
   // counted points - accurate to within a few points for the calibrated

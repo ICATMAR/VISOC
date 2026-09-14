@@ -99,7 +99,7 @@ export default {
 
 .variableValue {
   position: absolute;
-  font-size: x0.7rem;
+  font-size: 0.7rem;
   transform: translateX(calc(-50% + 49px));
   background: var(--blue);
   padding-right: 2px;

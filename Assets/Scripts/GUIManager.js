@@ -1,3 +1,5 @@
+import COLOR_LEGENDS from '../../styles/colorLegends.js';
+
 class GUIManager {
 
   isMenuOpen = false;
@@ -85,6 +87,33 @@ class GUIManager {
     return date.toLocaleString(locale, options);
   }
 
+  // BUOY TIMELINE VARIABLES
+  // What the buoy timeline can draw, one at a time (see DTAPBuoysVariableBar
+  // for the picker and DTAPBuoys for the cells). `code` is the magnitude shown
+  // as a number and coloured by the legend; `directionCode`, where there is
+  // one, is drawn as an arrow instead of a second number. `range` is what the
+  // colour legend is normalized over - it has to match the units the values
+  // arrive in (see the catalogue's mapping), not the units of some other
+  // convention: WSPD is m/s here, so 0-20 rather than 0-40 kn.
+  // `fromDirection` marks the ones reported as where the wind/swell comes FROM,
+  // which is the opposite of where the arrow should point.
+  buoyVariables = [
+    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, unit: 'm/s', decimals: 1, range: [0, 20] },
+    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, unit: 'm',   decimals: 1, range: [0, 4]  },
+    { label: 'Water temp.', code: 'TEMP', unit: 'ºC', decimals: 1, range: [10, 28] },
+    { label: 'Air temp.',   code: 'DRYT', unit: 'ºC', decimals: 1, range: [0, 35]  },
+  ];
+  selectedBuoyVariableCode = 'WSPD';
+  get selectedBuoyVariable() {
+    return this.buoyVariables.find(v => v.code === this.selectedBuoyVariableCode) ?? this.buoyVariables[0];
+  }
+  // Every code the buoy timeline needs, magnitudes and directions together.
+  // Requested in one go so switching variable is instant - the block cache
+  // already holds the others (see DPBuoys.getVariablesData).
+  get buoyVariableCodes() {
+    return [...new Set(this.buoyVariables.flatMap(v => [v.code, v.directionCode].filter(Boolean)))];
+  }
+
   // TIMELINE INTERVAL
   timelineIntervalMinutes = null; // null = auto (derived from latestDaysRange)
   get timelineEffectiveIntervalMinutes() {
@@ -129,6 +158,15 @@ class GUIManager {
     if (this.isMenuOpen) {
       this.isDataTimelineOpen = false;
     }
+  }
+
+  // Timeline cell colour scale for a standard variable code (see
+  // styles/colorLegends.js) - an array of [t, [r,g,b]] stops, t normalized
+  // 0..1 over the variable's own range. Falls back to BLANK (a no-op white
+  // scale) for a code with no dedicated palette, so a caller never has to
+  // check for undefined first.
+  colorLegend(code) {
+    return COLOR_LEGENDS[code] ?? COLOR_LEGENDS.BLANK;
   }
 }
 

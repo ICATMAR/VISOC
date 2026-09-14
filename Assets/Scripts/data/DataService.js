@@ -17,8 +17,11 @@ class DataService {
     const hfrstations = Catalogue.find(p => p.name === 'High-frequency radar stations');
     this.hfrstations = new hfrstations.Class(hfrstations, FetchManager);
 
+    const hfrtotals = Catalogue.find(p => p.name === 'High-frequency radar totals');
+    this.hfrtotals = new hfrtotals.Class(hfrtotals, FetchManager);
+
     // this.hfrstations.getICATMARHFRStations().then(stations => console.log(stations));
-    // this.hfrstations.getAllStations().then(stations => console.log(stations));
+    // this.hfrnetwork.getAllNetworks(this.hfrstations).then(networks => console.log(networks));
     // this.hfrstations.getNumberOfValidPointsPerStations(undefined, new Date(2026, 7, 1)).then(console.log);
 
     const buoys = Catalogue.find(p => p.name === 'Buoys');
@@ -33,6 +36,7 @@ class DataService {
       { name: drifters.name, product: this.drifters },
       { name: hfrnetwork.name, product: this.hfrnetwork },
       { name: hfrstations.name, product: this.hfrstations },
+      { name: hfrtotals.name, product: this.hfrtotals },
       { name: buoys.name, product: this.buoys },
       { name: ssforecast.name, product: this.ssforecast },
     ];

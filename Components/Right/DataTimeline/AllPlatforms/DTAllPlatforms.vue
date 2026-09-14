@@ -8,6 +8,11 @@
       :class="{ 'selectedOption': selectedView === view }"
       @click="selectView(view)"><span>{{ $t(view.label) }}</span></button>
   </div>
+
+  <!-- Buoys-only: which variable the rows' colours read as, and the legend
+       for it. Below the tab bar above, not part of it - it doesn't apply to
+       HFR currents/Drifters. -->
+  <DTAPBuoysVariableBar v-if="selectedView.dashboardId === 'buoys'" />
 </template>
 
 
@@ -16,6 +21,7 @@ import DTAPHFR from './DTAPHFR.vue';
 import DTAPBuoys from './DTAPBuoys.vue';
 import DTAPDrifters from './DTAPDrifters.vue';
 import DTAPArgos from './DTAPArgos.vue';
+import DTAPBuoysVariableBar from './DTAPBuoysVariableBar.vue';
 
 export default {
   name: "DTAllPlatforms",
@@ -71,7 +77,8 @@ export default {
     DTAPHFR,
     DTAPBuoys,
     DTAPDrifters,
-    DTAPArgos
+    DTAPArgos,
+    DTAPBuoysVariableBar,
   }
 }
 

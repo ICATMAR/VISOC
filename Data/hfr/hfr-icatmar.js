@@ -1,5 +1,5 @@
 const hfricatmar = {
-  network: {
+  total: {
     "site_code": "HFR-ICATMAR",
     "title": "ICATMAR HF Radar Network",
     "acknowledgement": "ICATMAR HF Radar Network has been established with the support of the European Maritime and Fisheries Fund, the European Maritime, Fisheries and Aquaculture Fund and the fund provided by the Government of Catalonia. The network has been designed, implemented and managed through the efforts of the Direcció General de Política Marítima i Pesca Sostenible (Government of Catalonia) and the Insitut de CiÃ¨ncies del Mar (CSIC), Barcelona.",

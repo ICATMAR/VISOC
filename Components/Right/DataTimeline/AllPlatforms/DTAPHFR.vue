@@ -3,9 +3,13 @@
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
         <!-- TOTALS row at top, separated from station rows by border -->
-        <!-- No live source for totals yet - show a placeholder message instead of bars -->
-        <tr v-if="totals.unavailable">
-          <td :colspan="cells.length" class="message-cell totals-bar-cell">{{ $t('API feature missing for totals (combination of stations)') }}</td>
+        <!-- Still waiting on the network Total's own promise to resolve -->
+        <tr v-if="totals.loading">
+          <td :colspan="cells.length" class="message-cell totals-bar-cell"><span class="spinner-border"></span></td>
+        </tr>
+        <!-- No data at all for the network Total - show a placeholder message instead of bars -->
+        <tr v-else-if="totals.noData">
+          <td :colspan="cells.length" class="message-cell totals-bar-cell">{{ $t('No data for TOTALS') }}</td>
         </tr>
         <tr v-else :class="{ 'row-selected': isRowSelected('TOTALS') }"
           @mouseenter="hoveredStation = 'TOTALS'" @mouseleave="hoveredStation = null">
@@ -24,8 +28,12 @@
         </tr>
         <!-- Individual station availability bars -->
         <template v-for="station in stations" :key="station.name">
+          <!-- Still waiting on this station's own promise to resolve -->
+          <tr v-if="station.loading">
+            <td :colspan="cells.length" class="message-cell"><span class="spinner-border"></span></td>
+          </tr>
           <!-- No EU HFR Node dataset for this station (e.g. SCAL) - show a placeholder message instead of bars -->
-          <tr v-if="station.noData">
+          <tr v-else-if="station.noData">
             <td :colspan="cells.length" class="message-cell">{{ $t('No data for ') + station.name }}</td>
           </tr>
           <tr v-else
@@ -65,8 +73,7 @@ export default {
     return {
       hoveredStation: null,
       selectedBar: null,
-      // No live source for network-wide totals yet - shown as unavailable, see template.
-      totals: { name: 'TOTALS', hourlyData: [], activeStations: [], maxValue: 0, unavailable: true },
+      totals: { name: 'TOTALS', hourlyData: [], maxValue: 0 },
       stations: [
         { name: 'CNET', hourlyData: [], maxValue: 0 },
         { name: 'CREU', hourlyData: [], maxValue: 0 },
@@ -80,43 +87,47 @@ export default {
     }
   },
   methods: {
+    // getNumberOfValidPointsPerNetwork() resolves to an array of per-entity
+    // promises (one per station, plus one for TOTALS), not a single
+    // Promise<object> - each row's bars are filled in as soon as ITS own
+    // promise resolves, instead of everything waiting on the slowest one.
     async loadStations() {
-      const stationIds = this.stations.map(s => s.name);
-      const result = await this.$dataService.hfrstations.getNumberOfValidPointsPerStations(
-        stationIds, this.$gui.timelineStartDate, this.$gui.timelineEndDate
+      this.stations.forEach(s => { s.loading = true; });
+      this.totals.loading = true;
+
+      const promises = await this.$dataService.hfrnetwork.getNumberOfValidPointsPerNetwork(
+        this.$dataService.hfrstations, this.$dataService.hfrtotals,
+        this.$gui.timelineStartDate, this.$gui.timelineEndDate
       );
 
       const startMs = this.$gui.timelineStartDate.getTime();
-      for (const station of this.stations) {
-        const validPoints = result?.[station.name];
-        if (!validPoints) { station.noData = true; continue; } // e.g. SCAL - no EU HFR Node dataset
+      promises.forEach(promise => promise.then(({ id, points }) => {
+        const entry = id === 'TOTALS' ? this.totals : this.stations.find(s => s.name === id);
+        if (!entry) return;
+        entry.loading = false;
+        if (points == null) { entry.noData = true; return; } // e.g. SCAL - no EU HFR Node dataset
 
-        Object.entries(validPoints).forEach(([timeStr, count]) => {
+        Object.entries(points).forEach(([timeStr, count]) => {
           const hourIndex = Math.round((new Date(timeStr).getTime() - startMs) / (1000 * 3600));
           if (hourIndex < 0) return;
-          station.hourlyData[hourIndex] = count;
-          if (count > station.maxValue) station.maxValue = count;
+          entry.hourlyData[hourIndex] = count;
+          if (count > entry.maxValue) entry.maxValue = count;
         });
-      }
+      }));
     },
     totalsValue(cellIndex, subIndex) {
       return this.totals.hourlyData[cellIndex * this.barsPerCell + subIndex] || 0;
     },
-    totalsActiveStations(cellIndex, subIndex) {
-      return this.totals.activeStations[cellIndex * this.barsPerCell + subIndex] ?? 0;
-    },
     totalsTitle(cellIndex, subIndex) {
       const pts = this.totalsValue(cellIndex, subIndex);
-      const active = this.totalsActiveStations(cellIndex, subIndex);
       if (!pts) return this.$t('No data available');
-      return `${pts} valid points · ${active} active stations`;
+      return `${pts} valid points`;
     },
     totalsClicked(cellIndex, subIndex, cellDate) {
       const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
       this.$gui.selectedPlatform = {
         stationId: 'TOTALS',
         value: this.totalsValue(cellIndex, subIndex),
-        activeStations: this.totalsActiveStations(cellIndex, subIndex),
         date,
       };
       this.selectedBar = { stationName: 'TOTALS', cellIndex, subIndex };
@@ -169,27 +180,25 @@ export default {
       if (newP?.date) return;
       const newId = newP?.stationId;
       const oldId = oldP?.stationId;
-      // Never cross-sync when TOTALS is involved
-      if (newId === 'TOTALS' || oldId === 'TOTALS') return;
-      // Double-click fix: same station, map click cleared the date → restore from selectedBar
+      // Double-click fix: same entity, map click cleared the date → restore from selectedBar
       if (newId && newId === oldId && !newP.date && oldP?.date) {
-        const s = this.stations.find(st => st.name === newId);
-        if (s) {
-          const value = this.getHourlyValue(s, this.selectedBar.cellIndex, this.selectedBar.subIndex);
+        const entry = newId === 'TOTALS' ? this.totals : this.stations.find(st => st.name === newId);
+        if (entry) {
+          const value = this.getHourlyValue(entry, this.selectedBar.cellIndex, this.selectedBar.subIndex);
           this.$gui.selectedPlatform = { stationId: newId, value, date: oldP.date };
         }
         return;
       }
       if (!newId || !oldId || newId === oldId) return;
-      const newStation = this.stations.find(s => s.name === newId);
-      if (!newStation) return;
+      const newEntry = newId === 'TOTALS' ? this.totals : this.stations.find(s => s.name === newId);
+      if (!newEntry) return;
       const oldDate = oldP?.date;
       if (!oldDate) return;
       const elapsedHours = (oldDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600);
       const absHour = Math.floor(elapsedHours);
       const subIndex = absHour % this.barsPerCell;
       const cellIndex = Math.floor(absHour / this.barsPerCell);
-      const value = this.getHourlyValue(newStation, cellIndex, subIndex);
+      const value = this.getHourlyValue(newEntry, cellIndex, subIndex);
       this.$gui.selectedPlatform = { stationId: newId, value, date: oldDate };
       this.selectedBar = { stationName: newId, cellIndex, subIndex };
     },
@@ -234,6 +243,7 @@ export default {
   margin-left: 5%;
   background: var(--blue);
   border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease-out;
 }
 
 /* Style A (TOTALS): faint background reveals the empty space → progress-bar feel */

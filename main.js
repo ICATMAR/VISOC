@@ -22,6 +22,9 @@ import RequestsManager from './Assets/Scripts/RequestsManager.js';
 import FetchManager from './Assets/Scripts/data/FetchManager.js';
 import ServiceStatus from './Assets/Scripts/data/ServiceStatus.js';
 import DataService from './Assets/Scripts/data/DataService.js';
+// Vue mixin to poll for data and update the GUI, common for several .vue components
+import pollMixin from './Assets/Scripts/pollMixin.js';
+window.pollMixin = pollMixin;
 
 // Globals
 window.MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}

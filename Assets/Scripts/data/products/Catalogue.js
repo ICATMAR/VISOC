@@ -2,13 +2,16 @@ import SourceErddap from '../sources/SourceErddap.js';
 import SourceFileDrifters from '../sources/SourceFileDrifters.js';
 import SourceFileHFRTotals from '../sources/SourceFileHFRTotals.js';
 import SourceFileHFRRadials from '../sources/SourceFileHFRRadials.js';
-import SourceErddapEUHFRStations from '../sources/SourceErddapEUHFRStations.js';
+import SourceErddapEUHFR from '../sources/SourceErddapEUHFR.js';
 import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 import SourceErddapBuoys from '../sources/SourceErddapBuoys.js';
+import SourceMSMAPI from '../sources/SourceMSMAPI.js';
+import SourceGithubSOMO from '../sources/SourceGithubSOMO.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
 import DPHFRStations from './DPHFRStations.js';
+import DPHFRTotals from './DPHFRTotals.js';
 import DPBuoys from './DPBuoys.js';
 import DPSSForecast from './DPSSForecast.js';
 
@@ -21,6 +24,14 @@ const WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
 const KelvinToCelsius = (value) => {
   if (value === undefined || value === null) return value;
   return value - 273.15;
+}
+
+// Several buoy parameters travel as scaled integers (the loggers transmit them
+// that way to keep the messages short), so they need a factor to become the
+// unit their standard code is defined in.
+const scaledBy = (factor) => (value) => {
+  if (value === undefined || value === null) return value;
+  return value * factor;
 }
 
 
@@ -89,6 +100,19 @@ const dataProducts = [
     description: "Surface currents from the ICATMAR's high-frequency radar network",
     type: 'near-real-time',
     sources: [
+      // Its sources are DPHFRTotals and DPHFRStations! TODO
+    ]
+  },
+
+  // High-frequency radar totals (the network's combined product, as opposed
+  // to its individual stations) - own product so DPHFRNetwork can compose it
+  // with DPHFRStations without either owning the other's sources.
+  {
+    name: 'High-frequency radar totals',
+    Class: DPHFRTotals,
+    description: "Surface currents from the ICATMAR's high-frequency radar network (combined stations)",
+    type: 'near-real-time',
+    sources: [
       // Recent
       {
         Class: SourceErddap,
@@ -113,10 +137,18 @@ const dataProducts = [
       },
       // EU HFR Node
       {
-        Class: SourceErddap,
+        Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
-        dataset: 'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3',
         institution: 'EU HFR Node',
+        datasets: [
+          'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
+        ],
+      },
+      // Github
+      {
+        Class: SourceGithubHFR,
+        institution: 'ICATMAR',
+        src: 'https://github.com/ICATMAR/data/'
       },
       // Static file
       {
@@ -137,7 +169,7 @@ const dataProducts = [
           HEAD: {code: 'HCDT'}
         }
       }
-    ]
+    ],
   },
 
 
@@ -155,7 +187,7 @@ const dataProducts = [
         institution: 'ICATMAR',
       },
       {
-        Class: SourceErddapEUHFRStations,
+        Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         institution: 'EU HFR Node',
         datasets: [
@@ -222,6 +254,93 @@ const dataProducts = [
         src: 'https://hebe.icm.csic.es/erddap/index.html',
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
+      },
+      {
+        Class: SourceMSMAPI,
+        src: 'https://api.icatmar.cat/MSM_fast_api/',
+        institution: 'ICATMAR',
+        // The API already names most parameters by their standard code, so
+        // what this mapping is really for is the scaling: they arrive as
+        // integers (37.9871 psu as 379871), with the factors below the ones
+        // the HFRadar viewer reads them by.
+        // Waves (VGHS, VMDR, VTPK, VPED, ...) come through untouched - they
+        // are already standard codes in their own units.
+        // The buoys carry two wind sensors and they do NOT agree on units:
+        // the Gill anemometer reports cm/s (150-550 for an ordinary breeze,
+        // and the HFRadar viewer skips it for that reason) while the other
+        // reports m/s, which is why the wind lives in sensorMapping below
+        // rather than here.
+        mapping: {
+          TEMP: {unitTransform: scaledBy(0.0001)},
+          PSAL: {unitTransform: scaledBy(0.0001)},
+          DRYT: {unitTransform: scaledBy(0.1)},
+          DEWT: {unitTransform: scaledBy(0.1)}, // same magnitude as DRYT, same sensor
+          ATMS: {unitTransform: scaledBy(0.1)},
+          RELH: {unitTransform: scaledBy(0.1)},
+          // The highest/lowest of the interval, in the same scale as the
+          // parameter they belong to. No standard code of their own, so they
+          // keep their names and only get the factor.
+          DRYTM: {unitTransform: scaledBy(0.1)},
+          DRYTL: {unitTransform: scaledBy(0.1)},
+          RELHM: {unitTransform: scaledBy(0.1)},
+          RELHL: {unitTransform: scaledBy(0.1)},
+        },
+        // Sensors that disagree with the mapping above, or with each other:
+        // both the CTD and the ADCP report a 'temperature', the CTD's scaled
+        // and the ADCP's already in °C.
+        sensorMapping: {
+          // cm/s -> m/s. Directions are degrees on both sensors, so only the
+          // speeds need a factor.
+          GILL: {
+            WSPD: {unitTransform: scaledBy(0.01)},
+            GSPD: {unitTransform: scaledBy(0.01)},
+          },
+          CTD: {
+            temperature: {code: 'TEMP', unitTransform: scaledBy(0.0001)},
+            pressure: {code: 'PRES'}, // dbar
+          },
+          ADCP: {
+            temperature: {code: 'TEMP'},
+          },
+          GPS: {
+            LAT: {code: 'latitude'},
+            LON: {code: 'longitude'},
+          },
+        },
+      },
+      {
+        Class: SourceGithubSOMO,
+        src: 'https://github.com/ICATMAR/data/',
+        institution: 'ICATMAR',
+        // Raw CR1000X logger columns. No unit transforms: the logger writes
+        // physical units already (°C, hPa, m/s, S/m, dbar, PSU).
+        // Left alone, and so kept under their own names: the relative wind
+        // (Rel_WindDir/Rel_WS - uncorrected for the buoy's heading, unlike the
+        // Corr_ pair), WindDir_True, air density (AD), wet bulb temperature
+        // (WBT), height above sea level (HASL), the logger's RECORD counter
+        // and the CTD's own serial/date/time strings.
+        mapping: {
+          // Meteo
+          Latitude: {code: 'latitude'},
+          Longitude: {code: 'longitude'},
+          WindDir_True: {code: 'WDIR'},
+          Corr_WindS: {code: 'WSPD'},
+          BP: {code: 'ATMS'},    // hPa = mbar, ATMS' own unit
+          RH: {code: 'RELH'},
+          AirTemp: {code: 'DRYT'},
+          DP: {code: 'DEWT'},
+          Rel_WindDir: {code: 'WRDR'},
+          Corr_WindDir: {code: 'WCDR'},
+          Rel_WS: {code: 'WRSP'},
+          HASL: {code: 'HEIGHT'},
+
+          // SBE37 CTD
+          SBE37Temp: {code: 'TEMP'},
+          SBE37Cond: {code: 'CNDC'},
+          SBE37Pres: {code: 'PRES'},
+          SBE37Sal: {code: 'PSAL'},
+          SBE37OXY: {code: 'DOX1'}, // ml/L, which is DOX1's unit (DOX2 is µmol/kg)
+        },
       }
     ]
   },

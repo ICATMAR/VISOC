@@ -71,13 +71,14 @@ export default {
       this.isLoading = false;
     },
 
-    // SourceErddapEUHFRStations/SourceErddapBuoys (multiple datasets, one per
+    // SourceErddapEUHFR/SourceErddapBuoys (multiple datasets, one per
     // station/sensor) aren't broken down per-dataset in the UI yet, just
     // shown as one ERDDAP entry - revisit once we build out that view.
     sourceTitle(source) {
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
       if (source.datasetCommonKey) return `ERDDAP - ${this.erddapServerLabel(source.baseUrl)}`;
       if (source.datasets) return `ERDDAP - ${source.institution}`;
+      if (source.api) return `API - ${source.api}`;
       if (source.repo) return `Github - ${source.repo}`;
       if (source.path || source.paths) return 'Static files';
       return source.constructor.name;
@@ -97,7 +98,7 @@ export default {
     sourceUrl(source) {
       if (source.dataset) return `${source.baseUrl}/info/${source.dataset}/index.html`;
       if (source.datasetCommonKey || source.datasets) return source.src;
-      if (source.repo) return source.src;
+      if (source.api || source.repo) return source.src;
       return undefined;
     },
 

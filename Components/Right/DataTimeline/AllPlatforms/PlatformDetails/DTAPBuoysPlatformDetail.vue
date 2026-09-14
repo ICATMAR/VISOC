@@ -13,9 +13,16 @@
 
       <!-- Line 1: type · depth · lat/lon [copy] -->
       <div class="pd-header">
-        <span>{{ $t('Buoy') }} · {{ station.depth }} {{ $t('m depth') }}</span>
+        <span>{{ $t('Buoy') }}</span>
+        <!-- depth is a static-catalogue field, so a buoy a live source
+             reports that isn't in Data/buoys/buoys.js (not yet aliased -
+             see BUOY_IDS in SourceMSMAPI.js) won't have one -->
+        <template v-if="station.depth != null">
+          <span>·</span>
+          <span>{{ station.depth }} {{ $t('m depth') }}</span>
+        </template>
         <span>·</span>
-        <span class="pd-coords">{{ station.lat.toFixed(2) }}° N, {{ station.lon.toFixed(2) }}° E</span>
+        <span class="pd-coords">{{ station.latitude.toFixed(2) }}° N, {{ station.longitude.toFixed(2) }}° E</span>
         <button class="pd-copy-btn clickable" @click="copyCoords" :title="$t('Copy coordinates')">
           <i class="fa fa-copy"></i>
         </button>
@@ -102,9 +109,20 @@ import MapCircleArrows from '../../MapCircleArrows.vue';
 
 export default {
   name: "DTAPBuoysPlatformDetail",
+  // The buoy catalogue this panel reads position/status from - static first
+  // (synchronous, so whatever's already selected resolves immediately),
+  // refined once the live sources (ERDDAP/MSM/SOMO) resolve and can supply a
+  // real endDate for the status dot. Same two-step pattern as
+  // MapOverlayBuoys.vue and DTAPBuoys.vue. This component mounts once per
+  // visit to the Buoys All-Platforms view (see DTPlatformDetail.vue's
+  // isBuoysView), not once per buoy click, so this only runs once.
   created() {
     this.map = undefined;
     this.markerOverlay = undefined;
+    this.buoys = this.$dataService.buoys.getBuoys();
+    this.$dataService.buoys.loadBuoys()
+      .then(buoys => { this.buoys = buoys; })
+      .catch(error => console.error('Error loading buoys for the platform detail panel:', error));
   },
   mounted() {
     if (!this.station) return;
@@ -129,6 +147,7 @@ export default {
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
+      buoys: [],
     }
   },
   methods: {
@@ -148,7 +167,7 @@ export default {
           }),
         ],
         view: new ol.View({
-          center: ol.proj.fromLonLat([this.station.lon, this.station.lat]),
+          center: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
           zoom: 9
         })
       });
@@ -157,7 +176,7 @@ export default {
       const mainMap = this.$gui.olMap;
       if (!mainMap || !this.station) return;
       const view = mainMap.getView();
-      const coords = ol.proj.fromLonLat([this.station.lon, this.station.lat]);
+      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
       const targetZoom = view.getZoom() < 7 ? 10 : view.getZoom();
       const mapSize = mainMap.getSize();
       const bottomCovered = 380;
@@ -168,7 +187,7 @@ export default {
       view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
     },
     copyCoords() {
-      const text = `${this.station.lat.toFixed(2)}, ${this.station.lon.toFixed(2)}`;
+      const text = `${this.station.latitude.toFixed(2)}, ${this.station.longitude.toFixed(2)}`;
       navigator.clipboard?.writeText(text);
     },
     // fa-location-arrow points NE (45° CW from N) by default.
@@ -197,7 +216,7 @@ export default {
   computed: {
     station() {
       if (!this.$gui.selectedPlatform?.stationId) return null;
-      return this.$requests.getBuoyStation(this.$gui.selectedPlatform.stationId);
+      return this.buoys.find(b => b.id === this.$gui.selectedPlatform.stationId) ?? null;
     },
     sp() { return this.$gui.selectedPlatform; },
     formattedDate() {
@@ -214,15 +233,26 @@ export default {
       const m = Math.abs(offsetMins) % 60;
       return m ? `UTC${sign}${h}:${String(m).padStart(2, '0')}` : `UTC${sign}${h}`;
     },
+    // Same thresholds as MapOverlayBuoys.vue's buoyStatus() - active <3h,
+    // delayed up to 24h, otherwise inactive. That map also has an 'offline'
+    // bucket beyond 30 days; this panel's CSS draws it identically to
+    // 'inactive' (see platformDetails.css), so there's nothing gained by
+    // telling them apart here.
+    ageHours() {
+      if (!this.station?.endDate) return null;
+      return (Date.now() - new Date(this.station.endDate).getTime()) / 3600000;
+    },
     status() {
-      return this.station ? this.$requests.getStationStatus(this.station.id, 'buoy') : 'inactive';
+      if (this.ageHours == null) return 'inactive';
+      if (this.ageHours < 3) return 'active';
+      if (this.ageHours <= 24) return 'delayed';
+      return 'inactive';
     },
     statusLabel() {
       return { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[this.status] ?? 'Inactive';
     },
     lastUpdateText() {
-      if (!this.station) return '';
-      return this.formatTimeAgo(this.$requests.getLastUpdateHoursAgo(this.station.id, 'buoy'));
+      return this.ageHours == null ? '' : this.formatTimeAgo(this.ageHours);
     },
     buoysDashboard() {
       return this.$gui.dashboards.find(d => d.id === 'buoys') ?? { icon: '', name: 'Buoys' };
@@ -238,7 +268,7 @@ export default {
   watch: {
     '$gui.selectedPlatform'() {
       if (!this.map || !this.station) return;
-      const coords = ol.proj.fromLonLat([this.station.lon, this.station.lat]);
+      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
       this.markerOverlay?.setPosition(coords);
       this.map.getView().animate({ center: coords, duration: 300 });
     }
