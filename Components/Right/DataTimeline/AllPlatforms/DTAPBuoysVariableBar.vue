@@ -1,51 +1,58 @@
 <template>
-  <!-- Which variable the buoy rows' colours read as, and what those colours
-       mean. Sits below DTAllPlatforms' HFR currents/Buoys/Drifters tabs -
-       only relevant to the Buoys view, so it isn't part of that shared bar.
-       UI only for now: picking an item doesn't yet change what the timeline
-       draws (see DTAPBuoys.vue). -->
+  <!-- Which variable the buoy rows draw, and what its colours mean. Sits below
+       DTAllPlatforms' HFR currents/Buoys/Drifters tabs - only relevant to the
+       Buoys view, so it isn't part of that shared bar. The selection lives on
+       $gui because DTAPBuoys needs it too (see buoyVariables there). -->
   <div class="vertical variable-bar">
     <div class="horizontal wrap button-group variable-menu">
-      <button v-for="item in items" :key="item.code" class="clickable"
-        :class="{ 'selectedOption': selected === item }"
-        @click="selected = item"><span>{{ $t(item.label) }}</span></button>
+      <button v-for="item in $gui.buoyVariables" :key="item.code" class="clickable"
+        :class="{ 'selectedOption': $gui.selectedBuoyVariableCode === item.code }"
+        @click="$gui.selectedBuoyVariableCode = item.code"><span>{{ $t(item.label) }}</span></button>
     </div>
-    <div class="horizontal legend-row">
-      <div class="legend-gradient" :style="{ background: legendGradient }"></div>
+
+    <!-- The scale the cells are coloured by: unit first, then the gradient
+         with its own stops labelled where they actually fall. -->
+    <div class="horizontal legend">
+      <span class="legend-unit">{{ selected.unit }}</span>
+      <div class="legend-scale" :style="{ background: legendGradient }">
+        <span v-for="tick in ticks" :key="tick.percent" class="legend-tick"
+          :style="{ left: tick.percent + '%' }">{{ tick.label }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 
 <script>
-// Standard code each button reads its colour scale under (see
-// styles/colorLegends.js and GUIManager.colorLegend). Water temp. and Air
-// temp. share one palette there (TEMPERATURE) but are kept as separate
-// buttons - they're different sensors/codes (TEMP vs DRYT), the shared look
-// is incidental.
-const ITEMS = [
-  { label: 'Wind', code: 'WSPD' },
-  { label: 'Waves', code: 'VHM0' },
-  { label: 'Water temp.', code: 'TEMP' },
-  { label: 'Air temp.', code: 'DRYT' },
-];
 
 export default {
   name: "DTAPBuoysVariableBar",
-  data() {
-    return {
-      items: ITEMS,
-      selected: ITEMS[0],
-    }
-  },
   computed: {
+    selected() {
+      return this.$gui.selectedBuoyVariable;
+    },
     // A CSS gradient built straight from the legend's own [t, [r,g,b]] stops
     // (t already normalized 0..1), so this always matches colorLegends.js
-    // without a second copy of the stops to keep in sync.
+    // without a second copy of the stops to keep in sync. The same scale the
+    // cells are coloured by (see DTAPBuoys.cellColor).
     legendGradient() {
-      const stops = this.$gui.colorLegend(this.selected.code);
-      const colors = stops.map(([t, [r, g, b]]) => `rgb(${r}, ${g}, ${b}) ${t * 100}%`);
+      const colors = this.stops.map(([t, [r, g, b]]) => `rgb(${r}, ${g}, ${b}) ${t * 100}%`);
       return `linear-gradient(to right, ${colors.join(', ')})`;
+    },
+    stops() {
+      return this.$gui.colorLegend(this.selected.code);
+    },
+    // Labelled at the legend's OWN stops rather than at even intervals - the
+    // stops are where the colour actually changes, so that is where a number
+    // is worth reading off. Their positions are the same 0..1 the gradient
+    // uses, mapped onto the variable's range.
+    ticks() {
+      const [min, max] = this.selected.range;
+      const decimals = max - min > 10 ? 0 : this.selected.decimals;
+      return this.stops.map(([t]) => ({
+        percent: t * 100,
+        label: (min + t * (max - min)).toFixed(decimals),
+      }));
     },
   },
 }
@@ -69,14 +76,50 @@ export default {
   font-size: small;
 }
 
-.legend-row {
-  padding: 0 4px;
+.legend {
+  max-width: 320px;
+  width: 100%;
+  height: 22px;
+  border-radius: 11px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
 }
 
-.legend-gradient {
-  height: 10px;
-  width: 100%;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+.legend-unit {
+  flex: 0 0 auto;
+  padding: 0 8px;
+  font-size: 0.7rem;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.legend-scale {
+  position: relative;
+  flex: 1;
+  height: 100%;
+}
+
+/* Centred on the value it marks, so a label sits over its own colour. The
+   first and last would half-overflow the bar, so they are nudged inside by
+   the same trick the ends of a slider use. */
+.legend-tick {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.65rem;
+  color: rgba(0, 0, 0, 0.8);
+  text-shadow: none;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.legend-tick:first-child {
+  transform: translate(0, -50%);
+  padding-left: 2px;
+}
+
+.legend-tick:last-child {
+  transform: translate(-100%, -50%);
+  padding-right: 2px;
 }
 </style>

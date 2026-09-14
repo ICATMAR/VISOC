@@ -73,9 +73,10 @@ export default {
 }
 
 .dt-table td {
-  width: 30px;
+  width: 38px;
   height: 22px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .dt-table td > * {
