@@ -14,13 +14,6 @@
       <!-- Line 1: type · depth · lat/lon [copy] -->
       <div class="pd-header">
         <span>{{ $t('Buoy') }}</span>
-        <!-- depth is a static-catalogue field, so a buoy a live source
-             reports that isn't in Data/buoys/buoys.js (not yet aliased -
-             see BUOY_IDS in SourceMSMAPI.js) won't have one -->
-        <template v-if="station.depth != null">
-          <span>·</span>
-          <span>{{ station.depth }} {{ $t('m depth') }}</span>
-        </template>
         <span>·</span>
         <span class="pd-coords">{{ station.latitude.toFixed(2) }}° N, {{ station.longitude.toFixed(2) }}° E</span>
         <button class="pd-copy-btn clickable" @click="copyCoords" :title="$t('Copy coordinates')">
@@ -40,7 +33,7 @@
       <div class="pd-date-row" v-if="sp?.date">
         <span class="pd-date">{{ formattedDate }}</span>
         <span class="pd-time-toggle" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">
-          {{ $gui.timelineUseLocalTime ? `Local time (${utcOffsetLabel})` : 'UTC' }}
+          {{ $gui.timelineUseLocalTime ? `(${utcOffsetLabel})` : '(UTC)' }}
         </span>
       </div>
 
@@ -222,7 +215,7 @@ export default {
     formattedDate() {
       const date = this.sp?.date;
       if (!date) return '';
-      const opts = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
+      const opts = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', hour12: true};
       if (!this.$gui.timelineUseLocalTime) opts.timeZone = 'UTC';
       return date.toLocaleString(this.$i18n.locale, opts);
     },
