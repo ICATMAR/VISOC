@@ -76,6 +76,10 @@ class SourceErddapBuoys extends SourceBuoys {
         datasets: [dataset],
         variables: SourceErddapBuoys.stripSensorSuffix(variables, datasetSensor, dataset),
         metadata,
+        // What the measurement was actually taken with, as the dataset itself
+        // declares it - shown alongside the sensor id wherever a value is
+        // traced back to where it came from (see DPBuoys).
+        instrument: metadata['instrument'],
         startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
         endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
       };
@@ -256,6 +260,7 @@ class SourceErddapBuoys extends SourceBuoys {
       if (sensor.variables[name] == undefined) sensor.variables[name] = attributes;
     });
     sensor.datasets = [...new Set([...(sensor.datasets ?? []), ...(other.datasets ?? [])])];
+    if (sensor.instrument == undefined) sensor.instrument = other.instrument;
     if (other.startDate && (!sensor.startDate || other.startDate < sensor.startDate)) sensor.startDate = other.startDate;
     if (other.endDate && (!sensor.endDate || other.endDate > sensor.endDate)) sensor.endDate = other.endDate;
   }

@@ -127,15 +127,17 @@ export default {
         // would spin for ever without this.
         .finally(() => { this.loading = {}; });
     },
-    // { '<ISO>': { code: { value, sensor, source } } } -> { code: { '<ISO>': value } },
-    // which is the shape the binning below walks. Reassigned rather than
+    // { '<ISO>': { code: point } } -> { code: { '<ISO>': point } }, which is the
+    // shape the binning below walks. The WHOLE point is kept, not just its
+    // value: each one carries the sensor, instrument and server it came from,
+    // and a cell lists whatever contributed to it. Reassigned rather than
     // mutated so the computed rebuilds.
     applyResult(result) {
       const byCode = {};
       Object.entries(result.data).forEach(([timestamp, codes]) => {
         Object.entries(codes).forEach(([code, point]) => {
           if (byCode[code] == undefined) byCode[code] = {};
-          byCode[code][timestamp] = point.value;
+          byCode[code][timestamp] = point;
         });
       });
       this.values = { ...this.values, [result.buoyId]: byCode };
@@ -148,10 +150,20 @@ export default {
     // the wrong way. Weighted by the magnitude measured at the same moment,
     // so a heading recorded in a flat calm doesn't drag the arrow around.
     binVariable(byCode, variable, cells, startTime, stepMs) {
-      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0 }));
+      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0, from: new Map() }));
       const binOf = timestamp => {
         const index = Math.floor((new Date(timestamp).getTime() - startTime) / stepMs);
         return index >= 0 && index < bins.length ? bins[index] : undefined;
+      };
+      // Who contributed to a cell. A cell is an average over hours, so it can
+      // mix sensors and servers - keyed by both so the same instrument served
+      // by two servers is listed once per server, which is the distinction
+      // that matters when a number looks wrong.
+      const credit = (bin, point) => {
+        if (point?.sensor == undefined && point?.source == undefined) return;
+        bin.from.set(`${point.source}|${point.sensor}`, {
+          sensor: point.sensor, source: point.source, instrument: point.instrument,
+        });
       };
 
       // A reading far past the top of the legend's range is an instrument
@@ -162,21 +174,23 @@ export default {
       const ceiling = variable.range[1] * OUT_OF_RANGE_FACTOR;
       const magnitudes = {};
       const rejected = new Set();
-      Object.entries(byCode?.[variable.code] ?? {}).forEach(([timestamp, value]) => {
-        if (!isFinite(value) || value > ceiling) { rejected.add(timestamp); return; }
-        magnitudes[timestamp] = value;
+      Object.entries(byCode?.[variable.code] ?? {}).forEach(([timestamp, point]) => {
+        if (!isFinite(point?.value) || point.value > ceiling) { rejected.add(timestamp); return; }
+        magnitudes[timestamp] = point;
       });
 
-      Object.entries(magnitudes).forEach(([timestamp, value]) => {
+      Object.entries(magnitudes).forEach(([timestamp, point]) => {
         const bin = binOf(timestamp);
         if (!bin) return;
         bin.count++;
-        bin.total += value;
+        bin.total += point.value;
+        credit(bin, point);
       });
 
       if (variable.directionCode) {
-        Object.entries(byCode?.[variable.directionCode] ?? {}).forEach(([timestamp, degrees]) => {
+        Object.entries(byCode?.[variable.directionCode] ?? {}).forEach(([timestamp, point]) => {
           const bin = binOf(timestamp);
+          const degrees = point?.value;
           if (!bin || !isFinite(degrees)) return;
           // A heading recorded alongside a rejected magnitude goes with it:
           // the logger writes a perfectly plausible direction next to its
@@ -185,11 +199,12 @@ export default {
           if (rejected.has(timestamp)) return;
           // Unweighted only where there is no magnitude to weight BY - not
           // where there was one and it was thrown away.
-          const weight = isFinite(magnitudes[timestamp]) ? magnitudes[timestamp] : 1;
+          const weight = isFinite(magnitudes[timestamp]?.value) ? magnitudes[timestamp].value : 1;
           const radians = degrees * Math.PI / 180;
           bin.x += Math.cos(radians) * weight;
           bin.y += Math.sin(radians) * weight;
           bin.directions++;
+          credit(bin, point);
         });
       }
 
@@ -198,6 +213,7 @@ export default {
         direction: bin.directions && (bin.x || bin.y)
           ? ((Math.atan2(bin.y, bin.x) * 180 / Math.PI) + 360) % 360
           : undefined,
+        from: [...bin.from.values()],
       }));
     },
 
@@ -251,8 +267,19 @@ export default {
       // there to read the data off, so it has to say what the source recorded;
       // the +180 belongs to the drawing, not to the number.
       const heading = bin.direction == undefined ? '' : ` · ${bin.direction.toFixed(0)}º`;
-      return `${cell.toISOString()}\n${this.$t(variable.label)}: `
-        + `${bin.value.toFixed(variable.decimals)} ${variable.unit}${heading}`;
+      // Where the cell's average actually came from - one line per contributor,
+      // since a cell spans hours and can mix sensors and servers. The
+      // instrument is only named where the source says what it is (ERDDAP
+      // publishes one, the MSM API names its sensors after them; see
+      // SourceGithubSOMO's INSTRUMENTS for the rest).
+      const from = (bin.from ?? []).map(({ sensor, instrument, source }) =>
+        `Sensor: ${sensor}${instrument ? ` (${instrument})` : ''} \nSource: ${source}`);
+
+      return [
+        cell.toISOString(),
+        `${this.$t(variable.label)}: ${bin.value.toFixed(variable.decimals)} ${variable.unit}${heading}`,
+        ...from,
+      ].join('\n');
     },
 
     isRowSelected(buoyId) {

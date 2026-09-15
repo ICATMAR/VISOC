@@ -85,6 +85,11 @@ class SourceMSMAPI extends SourceBuoys {
     this.api = 'MSM';                       // read by DataProducts.vue to label this source
     this.servesData = true;
 
+    // Sensor id -> the instrument name the API published it under (see
+    // parseRecords). Filled in as records are parsed, since there is no
+    // metadata endpoint to ask.
+    this.instruments = {};
+
     // Whether load() also asks each buoy for a recent record to find out which
     // sensors it carries. Off means one single request (the buoy list), but
     // then the buoys come back with no sensors at all.
@@ -199,7 +204,7 @@ class SourceMSMAPI extends SourceBuoys {
           // No units or long names anywhere in the response, so `variables`
           // only records which parameters exist - same shape as the ERDDAP
           // sources' variables, with the attributes simply unknown.
-          sensors.set(id, { id, variables: {}, metadata: {} });
+          sensors.set(id, { id, variables: {}, metadata: {}, instrument: this.instruments[id] });
         }
         const sensor = sensors.get(id);
         Object.keys(values).forEach(name => {
@@ -264,7 +269,16 @@ class SourceMSMAPI extends SourceBuoys {
           const parsedValue = SourceMSMAPI.parseValue(value);
           if (parsedValue !== undefined) parsed[parameter] = parsedValue;
         });
-        if (Object.keys(parsed).length) values[SourceMSMAPI.sensorId(name)] = parsed;
+        if (Object.keys(parsed).length === 0) return;
+
+        const id = SourceMSMAPI.sensorId(name);
+        values[id] = parsed;
+        // The API has no instrument field of its own, but it doesn't need one:
+        // the keys it groups readings under ARE instrument models - 'Gill',
+        // 'RM Young', 'HMP155-2'. So the name as published, before SENSOR_IDS
+        // normalizes it into an id, is the instrument. Recorded here because
+        // this is the only place the raw spelling is still in hand.
+        this.instruments[id] = name;
       });
       if (Object.keys(values).length === 0) return;
 

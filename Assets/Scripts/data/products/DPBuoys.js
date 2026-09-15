@@ -34,7 +34,7 @@ const STATIC_FIELDS = ['name'];
 // winner would depend on whatever order the source happened to list its
 // sensors in. Lower index wins; a sensor not listed here sorts after every
 // one that is (see sensorPriority below).
-const SENSOR_PRIORITY = ['RM_YOUNG', 'GILL'];
+const SENSOR_PRIORITY = ['GILL', 'RM_YOUNG'];
 
 function sensorPriority(sensorId) {
   const index = SENSOR_PRIORITY.indexOf(sensorId);
@@ -235,6 +235,15 @@ class DPBuoys extends DP {
     });
 
     return data;
+  }
+
+  // What a source says a buoy's sensor actually measures with - ERDDAP's
+  // `instrument` dataset attribute, the MSM API's own sensor naming, or the
+  // SOMO repository's declared table (see each source). Undefined where the
+  // source doesn't say, which is a fine answer: the sensor id still
+  // identifies it, the instrument only names it more precisely.
+  sensorInstrument(source, buoyId, sensorId) {
+    return source.getBuoy?.(buoyId)?.sensors?.find(sensor => sensor.id === sensorId)?.instrument;
   }
 
   // Which standard codes a source's sensor publishes, and under which of its
@@ -467,12 +476,13 @@ class DPBuoys extends DP {
         Object.entries(rows).forEach(([timestamp, bySensor]) => {
           Object.entries(bySensor).forEach(([sensorId, values]) => {
             const standardized = this.standardize(source, values, sensorId);
+            const instrument = this.sensorInstrument(source, buoyId, sensorId);
             group.codes.forEach(({ code, sensorId: wantedSensor }) => {
               if (sensorId !== wantedSensor) return;
               const value = standardized[code];
               if (value == undefined) return;
               if (points[code] == undefined) points[code] = {};
-              points[code][timestamp] = { value, sensor: sensorId, source: source.src };
+              points[code][timestamp] = { value, sensor: sensorId, source: source.src, instrument };
               delivered.add(code);
             });
           });
