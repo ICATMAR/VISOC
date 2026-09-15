@@ -26,7 +26,7 @@ export const buoyThings = [
     properties: { owner: 'ICATMAR', manufacturer: 'MSM', depth: 86, distanceCoast: 2.74, installed: '2025-12-01' },
   },
   {
-    id: 'ODAS', kind: ThingKind.BUOY, name: 'Somorrostro',
+    id: 'SOMO', kind: ThingKind.BUOY, name: 'Somorrostro',
     locations: [{ lon: 2.2162, lat: 41.3757 }],
     sensors: [{ id: 'ctd', name: 'CTD' }, { id: 'meteo', name: 'Meteo station' }, { id: 'adcp', name: 'ADCP' }],
     defaultDatastreams: { TEMP: 'TEMP', PSAL: 'PSAL', WSPD: 'WSPD', VHM0: 'VHM0', HCSP: 'HCSP' },

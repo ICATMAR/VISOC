@@ -53,7 +53,7 @@ export const buoyDataSources = {
   },
 
   // Somorrostro: one ERDDAP source, several per-sensor datasets (routed by variable).
-  // ODAS: {
+  // SOMO: {
   //   sources: [
   //     { type: 'erddap', baseUrls: ['https://erddap.icatmar.cat/erddap'], proxy: 'https://api.icatmar.cat/proxy/',
   //       datasets: [
