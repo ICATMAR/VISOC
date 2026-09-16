@@ -114,7 +114,8 @@ const buoys = [
 
   // Puertos del Estado
   {
-    "id": "2798",
+    "id": "BEGU",
+    "puertosId": "2798",
     "name": "Mar Begur",
     "latitude": 41.90,
     "longitude": 3.65,
@@ -134,7 +135,8 @@ const buoys = [
       'AirPressure']
   },
   {
-    "id": "1731",
+    "id": "PBCN",
+    "puertosId": "1731",
     "name": "Port Barcelona",
     "latitude": 41.323,
     "longitude": 2.2072,
@@ -149,7 +151,8 @@ const buoys = [
       'WaterTemp']
   },
   {
-    "id": "1712",
+    "id": "PTARR",
+    "puertosId": "1712",
     "name": "Port Tarragona",
     "latitude": 41.07,
     "longitude": 1.19,
@@ -164,7 +167,8 @@ const buoys = [
                   'WaterTemp'],
   },
   {
-    "id": "2720",
+    "id": "MTARR",
+    "puertosId": "2720",
     "name": "Mar de Tarragona",
     "latitude": 40.69,
     "longitude": 1.46,
