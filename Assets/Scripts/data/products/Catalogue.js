@@ -7,6 +7,7 @@ import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 import SourceErddapBuoys from '../sources/SourceErddapBuoys.js';
 import SourceMSMAPI from '../sources/SourceMSMAPI.js';
 import SourceGithubSOMO from '../sources/SourceGithubSOMO.js';
+import SourcePuertosBuoys from '../sources/SourcePuertosBuoys.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
@@ -340,10 +341,32 @@ const dataProducts = [
           SBE37Pres: {code: 'PRES'},
           SBE37Sal: {code: 'PSAL'},
           SBE37OXY: {code: 'DOX1'}, // ml/L, which is DOX1's unit (DOX2 is µmol/kg)
-        },
+        }
+      },
+      {
+        Class: SourcePuertosBuoys,
+        src: 'https://portus.puertos.es/',
+        institution: 'Puertos del Estado',
+        mapping: {
+          Hm0: {code: 'VHM0'},
+          Hmax: {code: 'VZMX'},
+          Tm02: {code: 'VTM02'},
+          Tp: {code: 'VTPK'},
+          MeanDir: {code: 'VMDR'},
+          MeanDirPeak: {code: 'VPED'},
+          WindSpeed: {code: 'WSPD'},
+          WindDir: {code: 'WDIR'},
+          CurrentSpeed: {code: 'HCSP'},
+          CurrentDir: {code: 'HCDT'},
+          WaterTemp: {code: 'TEMP'},
+          AirTemp: {code: 'DRYT'},
+          Salinity: {code: 'PSAL'},
+          AirPressure: {code: 'ATMS'},
+        }
       }
     ]
   },
+
 
 
   // Sea surface forecast
