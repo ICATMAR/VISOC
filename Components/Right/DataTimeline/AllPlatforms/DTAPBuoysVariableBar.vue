@@ -13,7 +13,13 @@
     <!-- The scale the cells are coloured by: unit first, then the gradient
          with its own stops labelled where they actually fall. -->
     <div class="horizontal legend">
-      <span class="legend-unit">{{ selected.unit }}</span>
+      <!-- The unit doubles as its own picker, the way boiasomorrostro's
+           DTLayout does it. Switching is by quantity, not by variable, so
+           picking knots here puts every wind reading in the app into knots -
+           and nothing is refetched, since only the drawing changes. -->
+      <span class="legend-unit" :class="{ clickable: switchable }"
+        :title="switchable ? $t('Change units') : ''"
+        @click="switchable && $gui.cycleUnit(selected.code)">{{ unit.unit }}</span>
       <div class="legend-scale" :style="{ background: legendGradient }">
         <span v-for="tick in ticks" :key="tick.percent" class="legend-tick"
           :style="{ left: tick.percent + '%' }">{{ tick.label }}</span>
@@ -31,6 +37,13 @@ export default {
     selected() {
       return this.$gui.selectedBuoyVariable;
     },
+    // { unit, decimals, toDisplay } for whatever the user has picked
+    unit() {
+      return this.$gui.unitFor(this.selected.code);
+    },
+    switchable() {
+      return this.$gui.isUnitSwitchable(this.selected.code);
+    },
     // A CSS gradient built straight from the legend's own [t, [r,g,b]] stops
     // (t already normalized 0..1), so this always matches colorLegends.js
     // without a second copy of the stops to keep in sync. The same scale the
@@ -46,12 +59,17 @@ export default {
     // stops are where the colour actually changes, so that is where a number
     // is worth reading off. Their positions are the same 0..1 the gradient
     // uses, mapped onto the variable's range.
+    //
+    // The range is standard, so the LABELS convert while the gradient behind
+    // them doesn't move - the colours mean the same thing in any unit, only
+    // the numbers written on them change.
     ticks() {
       const [min, max] = this.selected.range;
-      const decimals = max - min > 10 ? 0 : this.selected.decimals;
+      const { toDisplay, decimals } = this.unit;
+      const span = toDisplay(max) - toDisplay(min);
       return this.stops.map(([t]) => ({
         percent: t * 100,
-        label: (min + t * (max - min)).toFixed(decimals),
+        label: toDisplay(min + t * (max - min)).toFixed(span > 10 ? 0 : decimals),
       }));
     },
   },
@@ -91,6 +109,10 @@ export default {
   font-size: 0.7rem;
   line-height: 22px;
   white-space: nowrap;
+}
+
+.legend-unit.clickable {
+  text-decoration: underline;
 }
 
 .legend-scale {

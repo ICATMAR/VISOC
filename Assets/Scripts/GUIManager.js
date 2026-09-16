@@ -1,4 +1,5 @@
 import COLOR_LEGENDS from '../../styles/colorLegends.js';
+import { VARIABLES, UNIT_GROUPS } from './data/variables.js';
 
 class GUIManager {
 
@@ -87,21 +88,70 @@ class GUIManager {
     return date.toLocaleString(locale, options);
   }
 
+  // UNITS
+  // Everything outside the view layer is in standard units (see
+  // data/variables.js); this is the only place another unit exists, and it
+  // only affects what is DRAWN. Nothing refetches when it changes - the block
+  // cache holds standard values, so a unit switch is a re-render.
+  //
+  // Keyed by unit group, holding the chosen unit. A group with no entry uses
+  // its first option, which is always the standard one.
+  selectedUnits = {};
+
+  // The unit a value should be shown in, and how to get there: { unit,
+  // decimals, toDisplay }. Always answers, so no caller has to check - a code
+  // whose quantity isn't switchable (a direction, a salinity) comes back with
+  // its own standard unit and an identity conversion.
+  unitFor(code) {
+    const variable = VARIABLES[code];
+    const options = UNIT_GROUPS[variable?.unitGroup];
+    if (!options) return { unit: variable?.unit, decimals: 1, toDisplay: value => value };
+    return options.find(option => option.unit === this.selectedUnits[variable.unitGroup]) ?? options[0];
+  }
+
+  // Whether a code's quantity has more than one unit to offer - what a picker
+  // should check before making itself clickable.
+  isUnitSwitchable(code) {
+    return (UNIT_GROUPS[VARIABLES[code]?.unitGroup]?.length ?? 0) > 1;
+  }
+
+  // Steps a code's quantity to its next unit. By group, not by code, so
+  // switching the wind on one row switches every wind reading in the app.
+  cycleUnit(code) {
+    const group = VARIABLES[code]?.unitGroup;
+    const options = UNIT_GROUPS[group];
+    if (!options || options.length < 2) return;
+    const next = options[(options.indexOf(this.unitFor(code)) + 1) % options.length];
+    this.selectedUnits = { ...this.selectedUnits, [group]: next.unit };
+  }
+
+  // What a code means - long name, CF standard name, standard unit
+  variable(code) {
+    return VARIABLES[code];
+  }
+
   // BUOY TIMELINE VARIABLES
   // What the buoy timeline can draw, one at a time (see DTAPBuoysVariableBar
   // for the picker and DTAPBuoys for the cells). `code` is the magnitude shown
   // as a number and coloured by the legend; `directionCode`, where there is
-  // one, is drawn as an arrow instead of a second number. `range` is what the
-  // colour legend is normalized over - it has to match the units the values
-  // arrive in (see the catalogue's mapping), not the units of some other
-  // convention: WSPD is m/s here, so 0-20 rather than 0-40 kn.
+  // one, is drawn as an arrow instead of a second number.
+  //
+  // `range` is what the colour legend is normalized over, in STANDARD units
+  // (see data/variables.js) - deliberately not per display unit. TEMP and DRYT
+  // share a unit group but not a range, so a range can't belong to the unit;
+  // and since the values being coloured are standard too, a cell keeps exactly
+  // its colour when the unit changes. Only the legend's end labels convert.
+  //
+  // The unit and its decimals are no longer here: they follow the code's
+  // quantity and whatever the user has picked for it (see unitFor).
+  //
   // `fromDirection` marks the ones reported as where the wind/swell comes FROM,
   // which is the opposite of where the arrow should point.
   buoyVariables = [
-    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, unit: 'm/s', decimals: 1, range: [0, 20] },
-    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, unit: 'm',   decimals: 1, range: [0, 4]  },
-    { label: 'Water temp.', code: 'TEMP', unit: 'ºC', decimals: 1, range: [10, 28] },
-    { label: 'Air temp.',   code: 'DRYT', unit: 'ºC', decimals: 1, range: [0, 35]  },
+    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, range: [0, 20] },
+    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, range: [0, 4]  },
+    { label: 'Water temp.', code: 'TEMP', range: [10, 28] },
+    { label: 'Air temp.',   code: 'DRYT', range: [0, 35]  },
   ];
   selectedBuoyVariableCode = 'WSPD';
   get selectedBuoyVariable() {

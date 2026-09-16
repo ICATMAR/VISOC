@@ -222,7 +222,10 @@ export default {
     },
     cellText(buoy, index) {
       const bin = this.binFor(buoy, index);
-      return bin?.value == undefined ? '' : bin.value.toFixed(this.$gui.selectedBuoyVariable.decimals);
+      if (bin?.value == undefined) return '';
+      // Standard on the way in, the user's unit only here at the last moment
+      const unit = this.$gui.unitFor(this.$gui.selectedBuoyVariable.code);
+      return unit.toDisplay(bin.value).toFixed(unit.decimals);
     },
     // The compass bearing the arrow shows: where the wind/swell is GOING.
     // WDIR and VMDR are reported as where it comes FROM (fromDirection), so
@@ -240,6 +243,10 @@ export default {
     },
     // The legend's own stops (see styles/colorLegends.js), interpolated over
     // the variable's range - the same scale the bar above the timeline draws.
+    //
+    // Both the value and the range are standard, so this needs no unit
+    // conversion at all: a cell keeps its exact colour when the unit changes,
+    // and nothing drifts on the rounding of a converted range.
     cellColor(buoy, index) {
       const bin = this.binFor(buoy, index);
       if (bin?.value == undefined) return 'transparent';
@@ -275,9 +282,10 @@ export default {
       const from = (bin.from ?? []).map(({ sensor, instrument, source }) =>
         `Sensor: ${sensor}${instrument ? ` (${instrument})` : ''} \nSource: ${source}`);
 
+      const unit = this.$gui.unitFor(variable.code);
       return [
         cell.toISOString(),
-        `${this.$t(variable.label)}: ${bin.value.toFixed(variable.decimals)} ${variable.unit}${heading}`,
+        `${this.$t(variable.label)}: ${unit.toDisplay(bin.value).toFixed(unit.decimals)} ${unit.unit}${heading}`,
         ...from,
       ].join('\n');
     },
