@@ -5,7 +5,7 @@
         <!-- TOTALS row at top, separated from station rows by border -->
         <!-- Still waiting on the network Total's own promise to resolve -->
         <tr v-if="totals.loading">
-          <td :colspan="cells.length" class="message-cell totals-bar-cell"><span class="spinner-border"></span></td>
+          <!-- <td :colspan="cells.length" class="message-cell totals-bar-cell"><span class="spinner-border"></span></td> -->
         </tr>
         <!-- No data at all for the network Total - show a placeholder message instead of bars -->
         <tr v-else-if="totals.noData">
@@ -30,7 +30,7 @@
         <template v-for="station in stations" :key="station.name">
           <!-- Still waiting on this station's own promise to resolve -->
           <tr v-if="station.loading">
-            <td :colspan="cells.length" class="message-cell"><span class="spinner-border"></span></td>
+            <!-- <td :colspan="cells.length" class="message-cell"><span class="spinner-border"></span></td> -->
           </tr>
           <!-- No EU HFR Node dataset for this station (e.g. SCAL) - show a placeholder message instead of bars -->
           <tr v-else-if="station.noData">

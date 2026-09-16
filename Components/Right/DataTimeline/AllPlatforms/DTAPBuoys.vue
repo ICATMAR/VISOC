@@ -13,25 +13,28 @@
           :class="{ 'row-selected': isRowSelected(buoy.id) }"
           @mouseenter="hoveredBuoy = buoy.id"
           @mouseleave="hoveredBuoy = null">
-          <!-- Each buoy's fetch resolves on its own, so a row spins until its
-               own data lands rather than the whole table waiting for the
-               slowest server (same as DTAPHFR's per-station rows). -->
-          <td v-if="isLoading(buoy.id)" :colspan="cells.length" class="message-cell">
-            <span class="spinner-border"></span>
-          </td>
-          <template v-else>
-            <td v-for="(cell, index) in cells" :key="index"
-              class="value-cell clickable"
-              :class="{ 'cell-selected': isCellSelected(buoy.id, index) }"
-              :style="{ background: cellColor(buoy, index) }"
-              :title="cellTitle(buoy, cell, index)"
-              @click="buoyClicked(buoy, index, cell)">
+          <!-- The cells stay put while a row loads - DTLayout draws the
+               spinner over the row instead, where it can be seen whatever the
+               timeline is scrolled to. A buoy that doesn't measure this
+               variable at all gets a flat grey row rather than a row of blanks
+               that reads as "broken". -->
+          <td v-for="(cell, index) in cells" :key="index"
+            class="value-cell"
+            :class="{
+              'cell-selected': isCellSelected(buoy.id, index),
+              'cell-unmeasured': !measures(buoy),
+              'clickable': measures(buoy),
+            }"
+            :style="{ background: cellColor(buoy, index) }"
+            :title="cellTitle(buoy, cell, index)"
+            @click="measures(buoy) && buoyClicked(buoy, index, cell)">
+            <template v-if="measures(buoy)">
               <i v-if="arrowAngle(buoy, index) != undefined"
                 class="fa-solid fa-location-arrow cell-arrow"
                 :style="{ transform: `rotate(${arrowAngle(buoy, index) - 45}deg)` }"></i>
               <span class="cell-value">{{ cellText(buoy, index) }}</span>
-            </td>
-          </template>
+            </template>
+          </td>
         </tr>
       </DTTimelineGrid>
     </template>
@@ -95,8 +98,27 @@ export default {
       // above them. A buoy with no position sinks to the bottom rather than
       // jumping to the top, which is where NaN comparisons would put it.
       this.buoys = buoys
-        .map(buoy => ({ id: buoy.id, name: buoy.id, latitude: buoy.latitude }))
+        .map(buoy => ({
+          id: buoy.id,
+          name: buoy.id,
+          latitude: buoy.latitude,
+          // Every standard code this buoy's sensors publish, across all of
+          // them - what tells an empty cell apart from one this platform was
+          // never going to fill (see measures).
+          codes: new Set(buoy.sensors?.flatMap(sensor => Object.keys(sensor.variables ?? {})) ?? []),
+          // Whether anything is KNOWN about its sensors. A buoy no source
+          // covered has an empty list, which says nothing about what it
+          // measures - quite different from a list that simply doesn't
+          // include this variable.
+          knowsSensors: (buoy.sensors?.length ?? 0) > 0,
+        }))
         .sort((a, b) => (b.latitude ?? -Infinity) - (a.latitude ?? -Infinity));
+    },
+    // Whether this buoy reports the variable on screen at all. Unknown counts
+    // as "might" - only a buoy whose sensors we actually know, and which
+    // doesn't list this code among them, is greyed out as not measuring it.
+    measures(buoy) {
+      return !buoy.knowsSensors || buoy.codes.has(this.$gui.selectedBuoyVariable.code);
     },
     // A row is waiting if a request is out and nothing has arrived for it yet.
     // Deliberately derived rather than a per-row flag set when the request
@@ -250,6 +272,10 @@ export default {
     // conversion at all: a cell keeps its exact colour when the unit changes,
     // and nothing drifts on the rounding of a converted range.
     cellColor(buoy, index) {
+      // Left to the stylesheet (.cell-unmeasured) so the grey stays in one
+      // place rather than being written here as well
+      if (!this.measures(buoy)) return undefined;
+
       const bin = this.binFor(buoy, index);
       if (bin?.value == undefined) return 'transparent';
 
@@ -268,9 +294,15 @@ export default {
       return `rgb(${last[0]}, ${last[1]}, ${last[2]})`;
     },
     cellTitle(buoy, cell, index) {
+      const variable = this.$gui.selectedBuoyVariable;
+      // Worth saying apart from "no data": one is a gap in a record this buoy
+      // keeps, the other is a reading it was never going to take.
+      if (!this.measures(buoy)) {
+        return `${this.$t(variable.label)}: ${this.$t('Not measured by this platform')}`;
+      }
+
       const bin = this.binFor(buoy, index);
       if (bin?.value == undefined) return this.$t('No data available');
-      const variable = this.$gui.selectedBuoyVariable;
       // The direction as MEASURED - where the wind/swell comes FROM for WDIR
       // and VMDR - not the bearing the arrow is turned to. The tooltip is
       // there to read the data off, so it has to say what the source recorded;
@@ -420,6 +452,18 @@ tr.row-selected .value-cell {
 
 .value-cell:hover {
   filter: brightness(0.85);
+}
+
+/* This platform doesn't take this reading at all - flat grey, so it reads as
+   "nothing to show here" rather than as a gap in data it does record. Not
+   hoverable or clickable either: there is nothing to select. */
+.cell-unmeasured {
+  background: rgba(0, 0, 0, 0.12);
+  cursor: default;
+}
+
+.cell-unmeasured:hover {
+  filter: none;
 }
 
 /* Same as DTAPHFR's, so a row waiting on its data looks the same everywhere */
