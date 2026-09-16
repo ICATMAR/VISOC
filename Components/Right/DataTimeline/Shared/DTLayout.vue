@@ -41,8 +41,14 @@
 
       <!-- Timeline container -->
       <div class="horizontal table-container" ref="tableContainer">
-        <div class="vertical" style="align-self: flex-start">
+        <div class="vertical timeline-inner">
           <slot name="grid"></slot>
+          <!-- Where "now" falls on the timeline. Lives here rather than in
+               each view so every timeline gets it from one place, and sits
+               inside the scrolling container so it travels with the columns
+               it marks. Non-interactive, and hidden when now is outside the
+               range the timeline is showing. -->
+          <div v-if="isNowInRange" class="now-line" :style="{ left: nowLineLeft + 'px' }"></div>
         </div>
       </div>
 
@@ -60,6 +66,18 @@
 
 <script>
 import DTInfoSection from './DTInfoSection.vue';
+
+// Fallback width of one timeline column, in px - the real one is measured off
+// a rendered cell (see measureCell), this only covers the moment before the
+// grid exists. Keep it in step with .dt-table td in DTTimelineGrid.vue.
+const CELL_WIDTH_PX = 38;
+
+// How often the now-line is moved. Deliberately not requestAnimationFrame:
+// at the finest zoom a column is an hour wide, so the line travels about
+// 0.6 px per MINUTE - repainting 60 times a second would burn battery to
+// animate something that cannot be seen to move. Half a minute is already
+// sub-pixel.
+const NOW_TICK_MS = 30000;
 
 export default {
   name: "DTLayout",
@@ -83,10 +101,13 @@ export default {
   },
   mounted() {
     this.resetScroll();
+    this.measureCell();
+    this.nowTimer = setInterval(() => { this.now = Date.now(); }, NOW_TICK_MS);
   },
   // Clean up global listeners if component is destroyed
   beforeUnmount() {
     this.stopDragging();
+    clearInterval(this.nowTimer);
   },
   data() {
     return {
@@ -94,9 +115,27 @@ export default {
       isDragging: false,
       startX: 0,
       scrollLeft: 0,
+      // Now-line
+      now: Date.now(),
+      cellWidth: CELL_WIDTH_PX,
     }
   },
   methods: {
+    // Takes the column width from a cell the grid actually rendered, rather
+    // than trusting a constant here to stay in step with a stylesheet in
+    // another file.
+    //
+    // Specifically an .hourCell: that row has exactly one cell per column,
+    // whereas the day row above it spans a whole day per cell (colspan) and
+    // the data rows below can span the lot (a loading or no-data message).
+    // Measuring any of those would scale the line by however many columns
+    // that cell happened to cover.
+    measureCell() {
+      this.$nextTick(() => {
+        const cell = this.$refs.tableContainer?.querySelector('.dt-table td.hourCell');
+        if (cell?.offsetWidth) this.cellWidth = cell.offsetWidth;
+      });
+    },
     currentIntervalIdx() {
       const idx = this.intervalOptions.findIndex(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
       return idx >= 0 ? idx : 0;
@@ -164,6 +203,20 @@ export default {
     },
   },
   computed: {
+    isNowInRange() {
+      return this.now >= this.$gui.timelineStartDate.getTime()
+        && this.now <= this.$gui.timelineEndDate.getTime();
+    },
+    // How far along the grid "now" falls, in px. Counted in COLUMNS rather
+    // than as a fraction of the range: the grid lays out one column per step
+    // from the start, so its last column can run past the end date when the
+    // range isn't a whole number of steps - a percentage of the total width
+    // would then sit up to a column off.
+    nowLineLeft() {
+      const elapsedMs = this.now - this.$gui.timelineStartDate.getTime();
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+      return (elapsedMs / stepMs) * this.cellWidth;
+    },
     hasUnits() {
       return this.variables.some(v => v.unit != undefined);
     },
@@ -183,9 +236,15 @@ export default {
   },
   watch: {
     isComponentVisible(isVisible) {
-      if (isVisible)
+      if (isVisible) {
         this.resetScroll();
-    }
+        this.measureCell(); // nothing has a width while the pane is hidden
+      }
+    },
+    // The grid relays out on a zoom, so the column width is worth taking again
+    '$gui.timelineEffectiveIntervalMinutes'() {
+      this.measureCell();
+    },
   },
   components: {
     DTInfoSection
@@ -213,6 +272,25 @@ export default {
 }
 .table-and-info-container:active {
   cursor: grabbing;
+}
+
+.timeline-inner {
+  align-self: flex-start;
+  position: relative; /* what the now-line is positioned against */
+}
+
+/* Above the ordinary cells, below the drifters' sticky row labels (which go
+   up to 6) - the line should pass behind a label that is pinned to the left
+   edge rather than cut across it. */
+.now-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--red);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.6;
 }
 
 .table-container {
