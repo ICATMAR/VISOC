@@ -19,9 +19,15 @@
       <!-- Variable names and units -->
       <div class="horizontal variable-names-row">
         <div class="vertical variable-names-subcontainer">
+          <!-- A row still waiting on its data spins here rather than in the
+               grid: this column never scrolls, while a spinner in the cells
+               sits wherever the timeline happens to be scrolled to - which
+               after resetScroll() is far off to the left, out of sight. Read
+               off the variable itself (v.loading), so any view whose rows
+               already carry that flag gets it without passing anything. -->
           <span v-for="v in variables" :key="v.name"
             :class="{ 'active-var': v.name === activeVar || v.name === selectedVar, 'var-name-clickable': true }"
-            @click="$emit('varClick', v)">{{ $t(v.name) }}</span>
+            @click="$emit('varClick', v)"><span v-if="v.loading" class="spinner-border name-spinner"></span>{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
           <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
@@ -272,6 +278,16 @@ export default {
 }
 .table-and-info-container:active {
   cursor: grabbing;
+}
+
+/* Sized to sit inside a 23px name row without pushing it taller */
+.name-spinner {
+  width: 9px;
+  height: 9px;
+  border-width: 2px;
+  margin-right: 4px;
+  color: black;
+  vertical-align: middle;
 }
 
 .timeline-inner {

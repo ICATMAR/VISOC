@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="buoys" :interval-options="intervalOptions"
+  <DTLayout :variables="rowVariables" :interval-options="intervalOptions"
     :active-var="hoveredBuoy || (selectedCell && selectedCell.buoyId)"
     :selected-var="$gui.isPlatformDetailOpen ? $gui.selectedPlatform?.stationId : null"
     @var-click="buoyNameClicked">
@@ -81,7 +81,7 @@ export default {
       selectedCell: null, // { buoyId, index }
       buoys: [],          // [{ id, name, latitude }] - one row each, north to south
       values: {},         // { buoyId: { code: { '<ISO>': value } } }, as measured
-      loading: {},        // { buoyId: true } until that buoy's own fetch lands
+      isFetching: false,  // a request is out; see isLoading for what that means per row
       intervalOptions: INTERVAL_OPTIONS,
     }
   },
@@ -98,8 +98,13 @@ export default {
         .map(buoy => ({ id: buoy.id, name: buoy.id, latitude: buoy.latitude }))
         .sort((a, b) => (b.latitude ?? -Infinity) - (a.latitude ?? -Infinity));
     },
+    // A row is waiting if a request is out and nothing has arrived for it yet.
+    // Deliberately derived rather than a per-row flag set when the request
+    // starts: pollMixin's created() runs BEFORE this component's own (Vue
+    // merges mixin hooks first), so on the very first load - the one time the
+    // spinner really matters - there are no rows yet to mark.
     isLoading(buoyId) {
-      return this.loading[buoyId] === true;
+      return this.isFetching && this.values[buoyId] == undefined;
     },
 
     // Asks for every variable the picker offers, not just the selected one:
@@ -107,12 +112,9 @@ export default {
     // afterwards costs nothing. Each buoy's promise is applied as it lands, so
     // rows fill in progressively rather than all at the end.
     refreshVariableData() {
-      // Only rows with nothing to show yet spin - a refresh of a row that
-      // already has data shouldn't blank it out and flash a spinner every
-      // five minutes.
-      const loading = { ...this.loading };
-      this.buoys.forEach(buoy => { if (this.values[buoy.id] == undefined) loading[buoy.id] = true; });
-      this.loading = loading;
+      // Only rows with nothing to show yet end up spinning (see isLoading), so
+      // the five-minute refresh never blanks out a row that already has data.
+      this.isFetching = true;
 
       this.$dataService.buoys.getVariablesData(this.$gui.buoyVariableCodes, this.$gui.timelineStartDate, this.$gui.timelineEndDate)
         // Promise.all, not forEach: each row still stops spinning the moment
@@ -125,7 +127,7 @@ export default {
         .catch(error => console.error('DTAPBuoys: could not plan the variable request:', error))
         // A buoy no source could serve never gets a promise of its own, so it
         // would spin for ever without this.
-        .finally(() => { this.loading = {}; });
+        .finally(() => { this.isFetching = false; });
     },
     // { '<ISO>': { code: point } } -> { code: { '<ISO>': point } }, which is the
     // shape the binning below walks. The WHOLE point is kept, not just its
@@ -140,8 +142,8 @@ export default {
           byCode[code][timestamp] = point;
         });
       });
+      // Recording the values is what stops this row spinning - see isLoading
       this.values = { ...this.values, [result.buoyId]: byCode };
-      this.loading = { ...this.loading, [result.buoyId]: false };
     },
 
     // One variable's cells for one buoy: the mean of the magnitudes that fell
@@ -316,6 +318,13 @@ export default {
     },
   },
   computed: {
+    // The rows as DTLayout wants them: the buoy, plus whether it is still
+    // waiting on its data - which is what puts a spinner next to its name in
+    // the names column (see DTLayout), where it stays visible however the
+    // timeline is scrolled.
+    rowVariables() {
+      return this.buoys.map(buoy => ({ ...buoy, loading: this.isLoading(buoy.id) }));
+    },
     // Same steps DTTimelineGrid lays the columns out on - both read the same
     // $gui values, so they can't drift apart.
     cells() {
