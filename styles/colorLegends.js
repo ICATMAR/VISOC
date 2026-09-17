@@ -55,7 +55,7 @@ const COLOR_LEGENDS = {
   // Wind speed, gusts, relative wind, and current speed all read as a "how
   // strong" scale
   WSPD: LEGENDS.WIND,
-  GUST: LEGENDS.WIND,
+  GSPD: LEGENDS.WIND, // gust: CF spells it GSPD, not GUST
   WRSP: LEGENDS.WIND,
   HCSP: LEGENDS.WIND,
 
@@ -79,6 +79,8 @@ const COLOR_LEGENDS = {
   ADNS: LEGENDS.BLANK, // air density: no dedicated palette
 
   VHM0: LEGENDS.WAVES,
+  VZMX: LEGENDS.WAVES, // maximum wave height, same scale as the significant one
+  VTPK: LEGENDS.HUMIDITY, // peak period, as VTM02 above
 
   // Fallback for any code above without an entry (see GUIManager.colorLegend)
   BLANK: LEGENDS.BLANK,
@@ -98,13 +100,16 @@ const COLOR_LEGENDS = {
 const VARIABLE_RANGES = {
   // Wind and currents
   WSPD: [0, 20],    // m/s
-  GUST: [0, 25],    // m/s
+  GSPD: [0, 25],    // m/s - gusts run above the mean, so a wider top
   WRSP: [0, 20],    // m/s
   HCSP: [0, 1],     // m/s
 
-  // Waves
+  // Waves. The maximum wave in a record runs well above the significant
+  // height, so it gets a range of its own rather than sharing VHM0's.
   VHM0: [0, 4],     // m
+  VZMX: [0, 7],     // m
   VTM02: [0, 12],   // s
+  VTPK: [0, 16],    // s
 
   // Temperatures - sea and air are spread differently, which is exactly why
   // a range can't belong to the unit group they share

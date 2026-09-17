@@ -85,6 +85,7 @@ export default {
       buoys: [],          // [{ id, name, latitude }] - one row each, north to south
       values: {},         // { buoyId: { code: { '<ISO>': value } } }, as measured
       isFetching: false,  // a request is out; see isLoading for what that means per row
+      detailToken: 0,     // guards against a slow detail request landing after a newer click
       intervalOptions: INTERVAL_OPTIONS,
     }
   },
@@ -229,7 +230,11 @@ export default {
       // anemometer (see SourceGithubSOMO), and one of those in a cell would
       // drag its average somewhere meaningless. Generous rather than tight:
       // three times the range still lets a genuinely extreme storm through.
-      const ceiling = variable.range[1] * OUT_OF_RANGE_FACTOR;
+      // The detail variables (see GUIManager.buoyDetailVariables) carry no
+      // range of their own, so fall back to the code's colour range and, for a
+      // code that has neither, filter nothing rather than throw.
+      const range = variable.range ?? this.$gui.rangeFor(variable.code);
+      const ceiling = range ? range[1] * OUT_OF_RANGE_FACTOR : Infinity;
       const magnitudes = {};
       const rejected = new Set();
       Object.entries(byCode?.[variable.code] ?? {}).forEach(([timestamp, point]) => {
@@ -356,6 +361,11 @@ export default {
     },
     // Hands the detail panel every variable's average for that cell, not just
     // the one on screen - the panel shows them all.
+    //
+    // Two steps, and the split is the point: everything the timeline already
+    // holds goes on the object NOW, synchronously, so the panel opens filled
+    // in; the variables the timeline never fetches (salinity, gusts, maximum
+    // waves, currents) are requested afterwards and merged in when they land.
     buoyClicked(buoy, index, cell) {
       const platform = { stationId: buoy.id, date: cell };
       this.$gui.buoyVariables.forEach(variable => {
@@ -367,6 +377,46 @@ export default {
       this.$gui.selectedPlatform = platform;
       this.selectedCell = { buoyId: buoy.id, index };
       this.$gui.isPlatformDetailOpen = true;
+      this.fetchDetailVariables(buoy, cell);
+    },
+
+    // The variables only the detail panel shows, fetched for ONE buoy over the
+    // ONE cell that was clicked - never as part of the timeline's own request,
+    // which runs for every buoy over the whole window every five minutes and
+    // would carry a lot of columns nobody is looking at (see
+    // GUIManager.buoyDetailVariables and DPBuoys.getBuoyDetailData). Repeat
+    // clicks around the same day cost nothing: the block cache keeps them.
+    async fetchDetailVariables(buoy, cell) {
+      const token = ++this.detailToken;
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+      const end = new Date(cell.getTime() + stepMs);
+
+      const result = await this.$dataService.buoys
+        .getBuoyDetailData(buoy.id, this.$gui.buoyDetailCodes, cell, end)
+        .catch(error => {
+          console.error(`DTAPBuoys: could not load the detail variables of '${buoy.id}':`, error);
+          return undefined;
+        });
+      // A newer click has been made while this was in flight - its own request
+      // owns the panel now, and merging this one would write the wrong buoy's
+      // salinity under the right buoy's name.
+      if (!result || token !== this.detailToken) return;
+
+      const platform = this.$gui.selectedPlatform;
+      if (platform?.stationId !== buoy.id || platform?.date?.getTime() !== cell.getTime()) return;
+
+      // Averaged over the clicked cell exactly as the grid averages its own
+      // variables - one cell, same binning, so a gust reads as the gust of the
+      // same interval the wind beside it was measured over.
+      const byCode = this.byCode(result.data);
+      const extras = {};
+      this.$gui.buoyDetailVariables.forEach(variable => {
+        const [bin] = this.binVariable(byCode, variable, [cell], cell.getTime(), stepMs);
+        if (bin?.value != undefined) extras[variable.code] = bin.value;
+        if (variable.directionCode && bin?.direction != undefined) extras[variable.directionCode] = bin.direction;
+      });
+
+      this.$gui.selectedPlatform = { ...platform, ...extras };
     },
   },
   computed: {

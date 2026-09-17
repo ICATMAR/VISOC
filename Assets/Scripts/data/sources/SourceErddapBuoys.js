@@ -19,6 +19,13 @@ const SENSOR_IDS = {
   YOUN: 'RM_YOUNG', // the MSM API spells the same anemometer out in full
 };
 
+// Currents are wanted at the surface, not down the whole water column. An
+// ADCP dataset carries one row per (time, depth) bin, so without this a query
+// drags back every bin - and worse, parseCSV keys rows by TIME, so the bins of
+// one timestamp would overwrite each other and whichever came last would win.
+// Depth is negative downward here, so "shallower than 6 m" is depth > -6.
+const MIN_CURRENT_DEPTH = -6;
+
 const DATA_TIMEOUT = 60; // seconds for one tabledap query
 // Minutes a tabledap response is reused for. Has to be a real number rather
 // than left open: DPBuoys re-asks for the block that is still filling on every
@@ -179,7 +186,10 @@ class SourceErddapBuoys extends SourceBuoys {
         // rawName is the column as ERDDAP spells it, suffix and all
         byDataset.get(dataset).push({ name, column: attributes.rawName ?? name });
       });
-      byDataset.forEach((columns, dataset) => queries.push({ sensor, dataset, columns }));
+      byDataset.forEach((columns, dataset) => queries.push({
+        sensor, dataset, columns,
+        depth: SourceErddapBuoys.depthColumnOf(sensor, dataset),
+      }));
     });
 
     const results = await Promise.all(queries.map(query => this.fetchQuery(query, startDate, endDate)));
@@ -200,10 +210,15 @@ class SourceErddapBuoys extends SourceBuoys {
   // Answers { '<ISO>': { sensorId, values: { name: value } } }. ERDDAP replies
   // 404 when a query matches no rows at all (not 200 with an empty body), which
   // means "nothing in that window", not a failure.
-  async fetchQuery({ sensor, dataset, columns }, startDate, endDate) {
+  async fetchQuery({ sensor, dataset, columns, depth }, startDate, endDate) {
+    // A depth-resolved dataset is constrained to the near-surface bins and
+    // asked for its depth column, so parseCSV can tell the remaining bins
+    // apart. Requested once even if it is also one of the wanted columns.
+    const wanted = columns.map(c => c.column).filter(column => column !== depth);
     const url = `${this.baseUrl}/tabledap/${dataset}.csv`
-      + `?time,${columns.map(c => c.column).join(',')}`
-      + `&time>=${stamp(startDate)}&time<=${stamp(endDate)}`;
+      + `?time,${depth ? depth + ',' : ''}${wanted.join(',')}`
+      + `&time>=${stamp(startDate)}&time<=${stamp(endDate)}`
+      + (depth ? `&${depth}>${MIN_CURRENT_DEPTH}` : '');
 
     const text = await this.fetchManager.fetch(SourceErddap.proxied(url), DATA_TTL, DATA_TIMEOUT)
       .then(res => res.text())
@@ -213,21 +228,33 @@ class SourceErddapBuoys extends SourceBuoys {
       });
     if (text == undefined) return {};
 
-    return SourceErddapBuoys.parseCSV(text, sensor.id, columns);
+    return SourceErddapBuoys.parseCSV(text, sensor.id, columns, depth);
+  }
+
+  // The column a dataset records its measurement depth in, spelled as ERDDAP
+  // spells it - stripSensorSuffix renames what the rest of the app sees, but a
+  // tabledap constraint has to name the real column. Undefined for the
+  // datasets that have no depth dimension at all, which is most of them.
+  static depthColumnOf(sensor, dataset) {
+    const entry = Object.entries(sensor.variables ?? {}).find(([name, attributes]) =>
+      name.toUpperCase() === 'DEPTH' && (attributes.dataset ?? dataset) === dataset);
+    return entry ? (entry[1].rawName ?? entry[0]) : undefined;
   }
 
   // ERDDAP CSV: line 1 the column names, line 2 their units, then one row per
   // timestamp. Missing values arrive as NaN or as an empty cell and are
   // dropped, so a gap stays a gap instead of being read as a real 0.
-  static parseCSV(text, sensorId, columns) {
+  static parseCSV(text, sensorId, columns, depthColumn) {
     const lines = text.trim().split(/\r?\n/);
     if (lines.length < 3) return {}; // header and units only - no rows
 
     const header = lines[0].split(',');
     const timeIndex = header.indexOf('time');
     if (timeIndex < 0) throw new Error(`Unexpected ERDDAP CSV: no time column in ${header.join(',')}`);
+    const depthIndex = depthColumn ? header.indexOf(depthColumn) : -1;
 
     const rows = {};
+    const depths = {}; // the depth each kept row came from, for the check below
     lines.slice(2).forEach(line => {
       const cells = line.split(',');
       const date = new Date(cells[timeIndex]);
@@ -243,7 +270,21 @@ class SourceErddapBuoys extends SourceBuoys {
       });
       if (Object.keys(values).length === 0) return;
 
-      rows[date.toISOString()] = { sensorId, values };
+      const timestamp = date.toISOString();
+      // A depth-resolved dataset can still return several bins per timestamp
+      // even after the query's depth constraint. Rows are keyed by time alone,
+      // so one bin has to win - take the SHALLOWEST, which is the surface
+      // current the panel is asking about. Depth is negative downward here, so
+      // the shallowest is the greatest value.
+      if (depthIndex >= 0) {
+        const depth = Number(cells[depthIndex]);
+        if (isFinite(depth)) {
+          if (depths[timestamp] != undefined && depths[timestamp] >= depth) return;
+          depths[timestamp] = depth;
+        }
+      }
+
+      rows[timestamp] = { sensorId, values };
     });
 
     return rows;

@@ -367,6 +367,42 @@ class DPBuoys extends DP {
     return { codes: [...codes], startDate, endDate, warnings, promises };
   }
 
+  // ONE buoy, ONE set of codes, on demand - what a cell click uses to pull in
+  // the variables the timeline never fetches (see GUIManager.buoyDetailCodes).
+  //
+  // Same machinery as getVariablesData, narrowed to a single buoy: the point
+  // is that these columns stay out of the five-minutely request for every buoy
+  // over the whole window. Asking for salinity, gusts, maximum waves and
+  // currents there would multiply what each ERDDAP query transfers, for values
+  // that are only ever read when someone opens the detail panel.
+  //
+  // Goes through the same block cache, so a second click anywhere in the same
+  // day costs no request at all.
+  async getBuoyDetailData(buoyId, codes, startDate, endDate) {
+    await this.loadBuoys();
+
+    const sources = (this.providers.get(buoyId) ?? []).filter(source => source.servesData);
+    if (sources.length === 0) return { buoyId, data: {}, used: {}, missing: [...codes], errors: [] };
+
+    await Promise.all(sources.map(source => source.getEndDate().catch(error => {
+      console.error(`Could not check how fresh ${source.src} is:`, error);
+    })));
+
+    // planVariablesData plans every buoy it knows; only this one's plan is
+    // wanted. A code nothing publishes simply gets no candidates and comes
+    // back in `missing`, which is the honest answer - not an error.
+    const { byBuoy } = this.planVariablesData(codes, startDate, endDate);
+    const candidatesByCode = byBuoy[buoyId];
+    if (candidatesByCode == undefined) return { buoyId, data: {}, used: {}, missing: [...codes], errors: [] };
+
+    const result = await this.fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate);
+    // fetchBuoyVariables only ever sees the codes that HAVE candidates, so a
+    // code nothing on this buoy publishes would otherwise vanish from the
+    // answer entirely. It was asked about, so it is reported back as missing.
+    const unpublished = [...codes].filter(code => candidatesByCode[code] == undefined);
+    return { ...result, missing: [...result.missing, ...unpublished] };
+  }
+
   // One buoy's values for [startDate, endDate], served from the block cache and
   // requesting only what it doesn't already hold.
   //

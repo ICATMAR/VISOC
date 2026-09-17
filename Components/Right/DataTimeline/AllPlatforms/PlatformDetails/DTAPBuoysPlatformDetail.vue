@@ -47,13 +47,30 @@
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
           <template v-if="anyData">
-            <!-- Wave height + direction arrow (FROM direction: rotate dir+135) -->
-            <div class="pd-value-item" v-if="sp.VHM0 != null"
+            <!-- The sea state as one reading: average height, mean direction, average
+                 period. Split across three chips they read as unrelated numbers -
+                 together they are what tells a long swell from a short wind chop.
+                 Coloured by the height, and the arrow is a FROM direction -->
+            <div class="pd-value-item" v-if="hasAny(['VHM0', 'VMDR', 'VTM02'])"
               :style="{ background: $gui.colorFor('VHM0', sp.VHM0) }">
-              <span class="pd-value-label">{{ $t('Wave height') }}</span>
+              <span class="pd-value-label">{{ $t('Waves') }}</span>
               <span class="pd-value-number">
-                {{ format('VHM0', sp.VHM0) }}
+                <span v-if="sp.VHM0 != null">{{ format('VHM0', sp.VHM0) }}</span>
                 <i v-if="sp.VMDR != null" class="fa fa-location-arrow" :title="`${sp.VMDR.toFixed(0)}º`" :style="arrowStyle(sp.VMDR, true)"></i>
+                <span v-if="sp.VTM02 != null">{{ format('VTM02', sp.VTM02) }}</span>
+              </span>
+            </div>
+            <!-- The same three for the biggest wave of the interval, from the spectral
+                 peak. Fetched only when a cell is clicked (see
+                 DTAPBuoys.fetchDetailVariables), so this chip appears a moment
+                 after the panel opens, and only for buoys that publish it -->
+            <div class="pd-value-item" v-if="hasAny(['VZMX', 'VPED', 'VTPK'])"
+              :style="{ background: $gui.colorFor('VZMX', sp.VZMX) }">
+              <span class="pd-value-label">{{ $t('Max wave') }}</span>
+              <span class="pd-value-number">
+                <span v-if="sp.VZMX != null">{{ format('VZMX', sp.VZMX) }}</span>
+                <i v-if="sp.VPED != null" class="fa fa-location-arrow" :title="`${sp.VPED.toFixed(0)}º`" :style="arrowStyle(sp.VPED, true)"></i>
+                <span v-if="sp.VTPK != null">{{ format('VTPK', sp.VTPK) }}</span>
               </span>
             </div>
             <!-- Wind speed + direction arrow (FROM direction: rotate dir+135) -->
@@ -63,6 +80,14 @@
               <span class="pd-value-number">
                 {{ format('WSPD', sp.WSPD) }}
                 <i v-if="sp.WDIR != null" class="fa fa-location-arrow" :title="`${sp.WDIR.toFixed(0)}º`" :style="arrowStyle(sp.WDIR, true)"></i>
+              </span>
+            </div>
+            <div class="pd-value-item" v-if="sp.GSPD != null"
+              :style="{ background: $gui.colorFor('GSPD', sp.GSPD) }">
+              <span class="pd-value-label">{{ $t('Gust') }}</span>
+              <span class="pd-value-number">
+                {{ format('GSPD', sp.GSPD) }}
+                <i v-if="sp.GDIR != null" class="fa fa-location-arrow" :title="`${sp.GDIR.toFixed(0)}º`" :style="arrowStyle(sp.GDIR, true)"></i>
               </span>
             </div>
             <!-- Current speed + direction arrow (TO direction: rotate dir-45) -->
@@ -156,6 +181,13 @@ export default {
     // Written in whatever unit the user has picked for that quantity; the
     // values themselves are STANDARD (see data/variables.js). Hardcoding these
     // is what had the wind reading "km/h" over a value in m/s.
+    // Whether a group has anything worth showing. A group chip appears as soon
+    // as ONE of its three parts arrives, rather than waiting for all of them -
+    // the detail variables land after the timeline's own, and a buoy may
+    // publish a height but no period at all.
+    hasAny(codes) {
+      return codes.some(code => this.sp?.[code] != null);
+    },
     format(code, value) {
       const { unit, decimals, toDisplay } = this.$gui.unitFor(code);
       return `${toDisplay(value).toFixed(decimals)} ${unit}`;
@@ -271,7 +303,7 @@ export default {
       return p && (p.VHM0 != null || p.WSPD != null || p.HCSP != null || p.TEMP != null);
     },
     wind()    { const p = this.sp; return p?.WSPD != null ? { speed: p.WSPD, dir: p.WDIR ?? 0 } : null; },
-    waves()   { const p = this.sp; return p?.VHM0 != null ? { height: p.VHM0, dir: p.VMDR ?? 0 } : null; },
+    waves()   { const p = this.sp; return p?.VHM0 != null ? { height: p.VHM0, dir: p.VMDR ?? 0, period: p.VTM02 ?? 0 } : null; },
     current() { const p = this.sp; return p?.HCSP != null ? { speed: p.HCSP, dir: p.HCDT ?? 0 } : null; },
   },
   watch: {

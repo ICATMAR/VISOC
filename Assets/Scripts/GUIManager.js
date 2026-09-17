@@ -153,6 +153,34 @@ class GUIManager {
     { label: 'Water temperature', code: 'TEMP', range: VARIABLE_RANGES.TEMP },
     { label: 'Air temperature',   code: 'DRYT', range: VARIABLE_RANGES.DRYT },
   ];
+  // What a CELL CLICK goes and fetches, on top of the codes above. Everything
+  // the platform detail panel shows but the timeline never draws.
+  //
+  // Deliberately NOT part of buoyVariableCodes: those are requested for every
+  // buoy over the whole timeline window on a five-minute poll, and adding ten
+  // more columns to that would multiply what every ERDDAP query transfers for
+  // data almost nobody looks at. These are asked for one buoy, over one cell,
+  // only once someone actually opens the panel - and the block cache keeps the
+  // answer, so clicking around the same day is free after the first click.
+  //
+  // `directionCode` pairs a magnitude with its heading so the two are averaged
+  // together (a direction is vector-averaged weighted by its magnitude, which
+  // needs both); a code with no direction just stands alone.
+  buoyDetailVariables = [
+    { code: 'PSAL' },                        // salinity
+    // Two groups in the panel: the sea state (average height, mean direction,
+    // average period) and the biggest wave of the interval (maximum height,
+    // direction and period at the spectral peak).
+    { code: 'VTM02' },                       // average period, shown with VHM0
+    { code: 'VZMX', directionCode: 'VPED' }, // maximum height + peak direction
+    { code: 'VTPK' },                        // peak period, shown with VZMX
+    { code: 'GSPD', directionCode: 'GDIR' }, // wind gust
+    { code: 'HCSP', directionCode: 'HCDT' }, // current, shallowest bin only
+  ];
+  get buoyDetailCodes() {
+    return [...new Set(this.buoyDetailVariables.flatMap(v => [v.code, v.directionCode].filter(Boolean)))];
+  }
+
   selectedBuoyVariableCode = 'WSPD';
   get selectedBuoyVariable() {
     return this.buoyVariables.find(v => v.code === this.selectedBuoyVariableCode) ?? this.buoyVariables[0];
