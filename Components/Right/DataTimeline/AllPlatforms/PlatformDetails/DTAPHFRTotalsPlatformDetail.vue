@@ -28,7 +28,7 @@
       <div class="pd-date-row" v-if="sp?.date">
         <span class="pd-date">{{ formattedDate }}</span>
         <span class="pd-time-toggle" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">
-          {{ $gui.timelineUseLocalTime ? `Local time (${utcOffsetLabel})` : 'UTC' }}
+          {{ $gui.timelineUseLocalTime ? `(${utcOffsetLabel})` : '(UTC)' }}
         </span>
       </div>
 

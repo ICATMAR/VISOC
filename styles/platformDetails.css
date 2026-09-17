@@ -8,14 +8,14 @@
   /* .horizontal utility class provides display:flex; flex-direction:row */
   align-items: flex-start;
   gap: 15px;
-  height: 200px;
+  height: 180px;
   /* No overflow:hidden — MapCircleArrows labels must be able to overflow */
 }
 
 /* ---- Map column (left) ---- */
 .pd-map {
   width: 180px;
-  height: 200px;
+  height: 180px;
   flex-shrink: 0;
 }
 

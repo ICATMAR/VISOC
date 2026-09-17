@@ -71,9 +71,9 @@ class GUIManager {
       const absH = Math.floor(Math.abs(offsetMinutes) / 60);
       const absM = Math.abs(offsetMinutes) % 60;
       const str = absM > 0 ? `${absH}:${String(absM).padStart(2, '0')}` : `${absH}`;
-      return `Local time (UTC${sign}${str})`;
+      return `(UTC${sign}${str})`;
     }
-    return 'UTC';
+    return '(UTC)';
   }
   // Timezone-aware helpers used by all timeline grid components
   timelineHours(date) {
@@ -150,8 +150,8 @@ class GUIManager {
   buoyVariables = [
     { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, range: [0, 20] },
     { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, range: [0, 4]  },
-    { label: 'Water temp.', code: 'TEMP', range: [10, 28] },
-    { label: 'Air temp.',   code: 'DRYT', range: [0, 35]  },
+    { label: 'Water temperature', code: 'TEMP', range: [10, 28] },
+    { label: 'Air temperature',   code: 'DRYT', range: [0, 35]  },
   ];
   selectedBuoyVariableCode = 'WSPD';
   get selectedBuoyVariable() {
