@@ -44,9 +44,9 @@ const UNIT_GROUPS = {
   // Kept apart from windSpeed even though both are m/s: currents are read in
   // cm/s where wind never is, and nobody wants one picker driving both.
   waterSpeed: [
-    { unit: 'm/s',  decimals: 2, toDisplay: value => value },
     { unit: 'cm/s', decimals: 0, toDisplay: value => value * 100 },
-    { unit: 'kn',   decimals: 2, toDisplay: value => value * 1.94384 },
+    { unit: 'kn',   decimals: 1, toDisplay: value => value * 1.94384 },
+    { unit: 'm/s',  decimals: 1, toDisplay: value => value },
   ],
   temperature: [
     { unit: 'ºC', decimals: 1, toDisplay: value => value },
