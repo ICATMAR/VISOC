@@ -3,6 +3,9 @@
     <div class="map-arrows-center"></div>
 
     <template v-for="(item, index) in items" :key="index">
+      <!-- Spoke: a hairline from the centre out to the chip, turned to the
+           same bearing. -->
+      <div class="variableSpoke" :style="{ rotate: (item.angle - 90) + 'deg' }"></div>
       <!-- Variable name label -->
       <div class="variableName animatedLayer" :style="{
         rotate: (item.angle - 90) + 'deg',
@@ -139,8 +142,11 @@ export default {
 .map-arrows-circle {
   position: absolute;
   z-index: 1;
-  width: 100px;
-  height: 100px;
+  /* Named so the spoke can be a fraction of it instead of another magic
+     number to keep in step with the size below. */
+  --radius: 50px;
+  width: calc(var(--radius) * 2);
+  height: calc(var(--radius) * 2);
   border-radius: 50%;
   border: 1px solid #ffffff6b;
   /* Center the circle on the map center (where the marker dot sits) */
@@ -158,6 +164,29 @@ export default {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+}
+
+/* Laid out like everything else in here: the element sits at the circle's
+   centre, `rotate` turns it about that centre, and the translate then pushes
+   it outward along the turned axis - individual transform properties apply
+   before `transform`, which is what makes that order work. translateX(50%)
+   puts its inner end at the centre, so it reaches out by its own width. */
+.variableSpoke {
+  position: absolute;
+  width: calc(var(--radius) * 0.9);
+  height: 1px;
+  background: white;
+  opacity: 0.7;
+  transform: translateX(50%);
+  pointer-events: none;
+  /* Behind every chip, not just its own. DOM order alone wouldn't do it: the
+     spokes are interleaved with the chips, so the second item's spoke would
+     paint over the first item's chip whenever that chip's cycling z-index came
+     back round to 0. The circle sets z-index on itself, so it is a stacking
+     context and this stays inside it - and the circle's own background is
+     transparent, so there is nothing here for the line to disappear behind.
+     The border sits at the full radius, past this line's 0.9 reach. */
+  z-index: -1;
 }
 
 .variableName {
