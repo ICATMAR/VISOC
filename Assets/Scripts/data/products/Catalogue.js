@@ -249,12 +249,22 @@ const dataProducts = [
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
+        mapping: {
+          VMTA: {code: 'VTM02'}, // ERDDAP needs fix for VGTA --> should be avg. period instead of height 1/3rd
+          CSPD: {code: 'HCSP'},
+          CDIR: {code: 'HCDT'},
+        }
       },
       {
         Class: SourceErddapBuoys,
         src: 'https://hebe.icm.csic.es/erddap/index.html',
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
+        mapping: {
+          VMTA: {code: 'VTM02'}, // ERDDAP needs fix for VGTA --> should be avg. period instead of height 1/3rd
+          CSPD: {code: 'HCSP'},
+          CDIR: {code: 'HCDT'},
+        }
       },
       {
         Class: SourceMSMAPI,
