@@ -1,4 +1,4 @@
-import COLOR_LEGENDS from '../../styles/colorLegends.js';
+import COLOR_LEGENDS, { VARIABLE_RANGES } from '../../styles/colorLegends.js';
 import { VARIABLES, UNIT_GROUPS } from './data/variables.js';
 
 class GUIManager {
@@ -148,10 +148,10 @@ class GUIManager {
   // `fromDirection` marks the ones reported as where the wind/swell comes FROM,
   // which is the opposite of where the arrow should point.
   buoyVariables = [
-    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, range: [0, 20] },
-    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, range: [0, 4]  },
-    { label: 'Water temperature', code: 'TEMP', range: [10, 28] },
-    { label: 'Air temperature',   code: 'DRYT', range: [0, 35]  },
+    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, range: VARIABLE_RANGES.WSPD },
+    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, range: VARIABLE_RANGES.VHM0 },
+    { label: 'Water temperature', code: 'TEMP', range: VARIABLE_RANGES.TEMP },
+    { label: 'Air temperature',   code: 'DRYT', range: VARIABLE_RANGES.DRYT },
   ];
   selectedBuoyVariableCode = 'WSPD';
   get selectedBuoyVariable() {
@@ -217,6 +217,50 @@ class GUIManager {
   // check for undefined first.
   colorLegend(code) {
     return COLOR_LEGENDS[code] ?? COLOR_LEGENDS.BLANK;
+  }
+
+  // Whether a code has a colour scale of its own - a palette AND a range to
+  // spread it over (see styles/colorLegends.js). Not the same question as
+  // colorLegend(), which always answers.
+  hasColorLegend(code) {
+    return COLOR_LEGENDS[code] != undefined && VARIABLE_RANGES[code] != undefined;
+  }
+
+  // The [min, max] a code's colour scale spans, in STANDARD units.
+  rangeFor(code) {
+    return VARIABLE_RANGES[code];
+  }
+
+  // The colour a value should be painted, as a CSS rgb() string - the single
+  // place the timeline cells, the platform detail's value chips and the map's
+  // circle arrows all get their background from, so one reading is the same
+  // colour wherever it is drawn.
+  //
+  // `value` and `range` are both STANDARD (see data/variables.js), so this
+  // needs no unit conversion: a value keeps its exact colour when the user
+  // switches to knots, and nothing drifts on a converted range's rounding.
+  //
+  // Returns undefined - rather than a colour - when there is nothing to say:
+  // no value, no palette, or no range. The caller then leaves its own default
+  // background in place instead of painting over it with a guess.
+  colorFor(code, value, range = this.rangeFor(code)) {
+    if (value == undefined || range == undefined) return undefined;
+    const stops = COLOR_LEGENDS[code];
+    if (stops == undefined) return undefined;
+
+    // Clamped: the range is where the interesting values are, not a bound on
+    // what the variable can be, so anything beyond it takes the end colour.
+    const t = Math.min(Math.max((value - range[0]) / (range[1] - range[0]), 0), 1);
+    for (let i = 0; i < stops.length - 1; i++) {
+      const [t0, from] = stops[i];
+      const [t1, to] = stops[i + 1];
+      if (t > t1) continue;
+      const f = t1 === t0 ? 0 : (t - t0) / (t1 - t0);
+      const channel = j => Math.round(from[j] + (to[j] - from[j]) * f);
+      return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
+    }
+    const [, last] = stops[stops.length - 1];
+    return `rgb(${last[0]}, ${last[1]}, ${last[2]})`;
   }
 }
 

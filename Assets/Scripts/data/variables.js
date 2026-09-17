@@ -16,14 +16,30 @@
 // spellings in UNIT_GROUPS do. A variable with no `unitGroup` isn't
 // switchable and is shown in its standard unit as-is.
 
+// Beaufort is a SCALE, not a unit: a force number covers a band of speeds
+// rather than converting from one. These are the WMO band UPPER limits in m/s
+// (force 0 is below 0.5, force 12 is anything above the last one), so the
+// index of the first limit a speed doesn't exceed is its force.
+//
+// Being lossy is the point - a mariner reads "force 6", not "12.4 m/s" - but
+// it does mean this is the one display unit you cannot convert back from, so
+// nothing but rendering may ever use it.
+const BEAUFORT_LIMITS = [0.5, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];
+const toBeaufort = speed => {
+  const force = BEAUFORT_LIMITS.findIndex(limit => speed < limit);
+  return force === -1 ? 12 : force;
+};
+
 // Quantities the user can switch, and how to get from the standard unit to
 // each alternative. The FIRST option of every group is the standard one, so
 // its toDisplay is the identity - keep it that way when adding units.
 const UNIT_GROUPS = {
   windSpeed: [
     { unit: 'm/s',  decimals: 1, toDisplay: value => value },
-    { unit: 'kn',   decimals: 1, toDisplay: value => value * 1.94384 },
+    { unit: 'kn',   decimals: 0, toDisplay: value => value * 1.94384 },
     { unit: 'km/h', decimals: 0, toDisplay: value => value * 3.6 },
+    // Whole forces only - a fractional Beaufort would be a contradiction
+    { unit: 'Bft',  decimals: 0, toDisplay: toBeaufort },
   ],
   // Kept apart from windSpeed even though both are m/s: currents are read in
   // cm/s where wind never is, and nobody wants one picker driving both.
@@ -35,10 +51,12 @@ const UNIT_GROUPS = {
   temperature: [
     { unit: 'ºC', decimals: 1, toDisplay: value => value },
     { unit: 'ºF', decimals: 1, toDisplay: value => value * 9 / 5 + 32 },
+    // No degree sign: kelvin is written K, never ºK
+    { unit: 'K',  decimals: 1, toDisplay: value => value + 273.15 },
   ],
   waveHeight: [
     { unit: 'm',  decimals: 1, toDisplay: value => value },
-    { unit: 'ft', decimals: 1, toDisplay: value => value * 3.28084 },
+    { unit: 'ft', decimals: 0, toDisplay: value => value * 3.28084 },
   ],
   // Vertical measures - depth, height, sea level. Nautical miles would be
   // meaningless here; they belong to coastDistance below.
@@ -50,8 +68,8 @@ const UNIT_GROUPS = {
   // app shows - and the only quantity here whose standard unit isn't the SI
   // base one, because the catalogue already records it in km.
   coastDistance: [
-    { unit: 'km', decimals: 1, toDisplay: value => value },
-    { unit: 'NM', decimals: 1, toDisplay: value => value / 1.852 },
+    { unit: 'km', decimals: 0, toDisplay: value => value },
+    { unit: 'NM', decimals: 0, toDisplay: value => value / 1.852 },
   ],
 };
 

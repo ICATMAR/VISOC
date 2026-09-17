@@ -37,41 +37,50 @@
         </span>
       </div>
 
-      <!-- Line 4: values (drag to scroll; direction shown as rotated arrow) -->
+      <!-- Line 4: values (drag to scroll; direction shown as rotated arrow).
+           Each chip is painted with its variable's own colour legend, the same
+           scale the buoys timeline colours its cells with (GUIManager.colorFor).
+           A variable with no legend or no range gets undefined back and keeps
+           the stylesheet's green (.pd-value-item in platformDetails.css). -->
       <div class="pd-values-wrapper" v-if="sp?.date">
         <div class="pd-values-scroll" ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
           <template v-if="anyData">
             <!-- Wave height + direction arrow (FROM direction: rotate dir+135) -->
-            <div class="pd-value-item" v-if="sp.VHM0 != null">
+            <div class="pd-value-item" v-if="sp.VHM0 != null"
+              :style="{ background: $gui.colorFor('VHM0', sp.VHM0) }">
               <span class="pd-value-label">{{ $t('Wave height') }}</span>
               <span class="pd-value-number">
-                {{ sp.VHM0.toFixed(1) }} m
+                {{ format('VHM0', sp.VHM0) }}
                 <i v-if="sp.VMDR != null" class="fa fa-location-arrow" :title="`${sp.VMDR.toFixed(0)}º`" :style="arrowStyle(sp.VMDR, true)"></i>
               </span>
             </div>
             <!-- Wind speed + direction arrow (FROM direction: rotate dir+135) -->
-            <div class="pd-value-item" v-if="sp.WSPD != null">
+            <div class="pd-value-item" v-if="sp.WSPD != null"
+              :style="{ background: $gui.colorFor('WSPD', sp.WSPD) }">
               <span class="pd-value-label">{{ $t('Wind speed') }}</span>
               <span class="pd-value-number">
-                {{ sp.WSPD.toFixed(0) }} km/h
+                {{ format('WSPD', sp.WSPD) }}
                 <i v-if="sp.WDIR != null" class="fa fa-location-arrow" :title="`${sp.WDIR.toFixed(0)}º`" :style="arrowStyle(sp.WDIR, true)"></i>
               </span>
             </div>
             <!-- Current speed + direction arrow (TO direction: rotate dir-45) -->
-            <div class="pd-value-item" v-if="sp.HCSP != null">
+            <div class="pd-value-item" v-if="sp.HCSP != null"
+              :style="{ background: $gui.colorFor('HCSP', sp.HCSP) }">
               <span class="pd-value-label">{{ $t('Current') }}</span>
               <span class="pd-value-number">
-                {{ sp.HCSP.toFixed(2) }} m/s
+                {{ format('HCSP', sp.HCSP) }}
                 <i v-if="sp.HCDT != null" class="fa fa-location-arrow" :title="`${sp.HCDT.toFixed(0)}º`" :style="arrowStyle(sp.HCDT, false)"></i>
               </span>
             </div>
-            <div class="pd-value-item" v-if="sp.TEMP != null">
+            <div class="pd-value-item" v-if="sp.TEMP != null"
+              :style="{ background: $gui.colorFor('TEMP', sp.TEMP) }">
               <span class="pd-value-label">{{ $t('Temperature') }}</span>
-              <span class="pd-value-number">{{ sp.TEMP.toFixed(1) }} °C</span>
+              <span class="pd-value-number">{{ format('TEMP', sp.TEMP) }}</span>
             </div>
-            <div class="pd-value-item" v-if="sp.PSAL != null">
+            <div class="pd-value-item" v-if="sp.PSAL != null"
+              :style="{ background: $gui.colorFor('PSAL', sp.PSAL) }">
               <span class="pd-value-label">{{ $t('Salinity') }}</span>
               <span class="pd-value-number">{{ sp.PSAL.toFixed(1) }} PSU</span>
             </div>
@@ -144,6 +153,13 @@ export default {
     }
   },
   methods: {
+    // Written in whatever unit the user has picked for that quantity; the
+    // values themselves are STANDARD (see data/variables.js). Hardcoding these
+    // is what had the wind reading "km/h" over a value in m/s.
+    format(code, value) {
+      const { unit, decimals, toDisplay } = this.$gui.unitFor(code);
+      return `${toDisplay(value).toFixed(decimals)} ${unit}`;
+    },
     initMap() {
       this.map = new ol.Map({
         target: this.$refs.stationMap,

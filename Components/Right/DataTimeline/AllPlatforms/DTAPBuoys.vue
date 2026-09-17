@@ -265,12 +265,9 @@ export default {
       const variable = this.$gui.selectedBuoyVariable;
       return ((variable.fromDirection ? bin.direction + 180 : bin.direction) % 360 + 360) % 360;
     },
-    // The legend's own stops (see styles/colorLegends.js), interpolated over
-    // the variable's range - the same scale the bar above the timeline draws.
-    //
-    // Both the value and the range are standard, so this needs no unit
-    // conversion at all: a cell keeps its exact colour when the unit changes,
-    // and nothing drifts on the rounding of a converted range.
+    // The legend's own colour for this cell's average, from GUIManager.colorFor
+    // - shared with the platform detail panel and the map's circle arrows, so
+    // one reading is the same colour wherever it is drawn.
     cellColor(buoy, index) {
       // Left to the stylesheet (.cell-unmeasured) so the grey stays in one
       // place rather than being written here as well
@@ -280,18 +277,7 @@ export default {
       if (bin?.value == undefined) return 'transparent';
 
       const { range, code } = this.$gui.selectedBuoyVariable;
-      const t = Math.min(Math.max((bin.value - range[0]) / (range[1] - range[0]), 0), 1);
-      const stops = this.$gui.colorLegend(code);
-      for (let i = 0; i < stops.length - 1; i++) {
-        const [t0, from] = stops[i];
-        const [t1, to] = stops[i + 1];
-        if (t > t1) continue;
-        const f = t1 === t0 ? 0 : (t - t0) / (t1 - t0);
-        const channel = j => Math.round(from[j] + (to[j] - from[j]) * f);
-        return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
-      }
-      const [, last] = stops[stops.length - 1];
-      return `rgb(${last[0]}, ${last[1]}, ${last[2]})`;
+      return this.$gui.colorFor(code, bin.value, range);
     },
     cellTitle(buoy, cell, index) {
       const variable = this.$gui.selectedBuoyVariable;

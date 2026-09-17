@@ -43,16 +43,18 @@
           @mousedown="onScrollDragStart">
           <template v-if="anyData">
             <!-- Current speed + direction arrow (TO direction: rotate dir-45) -->
-            <div class="pd-value-item" v-if="sp.HCSP != null">
+            <div class="pd-value-item" v-if="sp.HCSP != null"
+              :style="{ background: $gui.colorFor('HCSP', sp.HCSP) }">
               <span class="pd-value-label">{{ $t('Current') }}</span>
               <span class="pd-value-number">
-                {{ sp.HCSP.toFixed(2) }} m/s
+                {{ format('HCSP', sp.HCSP) }}
                 <i v-if="sp.HCDT != null" class="fa fa-location-arrow" :title="`${sp.HCDT.toFixed(0)}º`" :style="arrowStyle(sp.HCDT)"></i>
               </span>
             </div>
-            <div class="pd-value-item" v-if="sp.TEMP != null">
+            <div class="pd-value-item" v-if="sp.TEMP != null"
+              :style="{ background: $gui.colorFor('TEMP', sp.TEMP) }">
               <span class="pd-value-label">{{ $t('Temperature') }}</span>
-              <span class="pd-value-number">{{ sp.TEMP.toFixed(1) }} °C</span>
+              <span class="pd-value-number">{{ format('TEMP', sp.TEMP) }}</span>
             </div>
           </template>
           <span class="pd-no-data" v-else>{{ $t('No data available') }}</span>
@@ -111,6 +113,14 @@ export default {
     }
   },
   methods: {
+    // Written in whatever unit the user has picked for that quantity; the
+    // values themselves are STANDARD (see data/variables.js). Same helper as
+    // the buoys panel and MapCircleArrows, so a current is written the same
+    // way wherever it appears.
+    format(code, value) {
+      const { unit, decimals, toDisplay } = this.$gui.unitFor(code);
+      return `${toDisplay(value).toFixed(decimals)} ${unit}`;
+    },
     initMap() {
       this.trajLayer = new ol.layer.Vector({
         source: new ol.source.Vector(),

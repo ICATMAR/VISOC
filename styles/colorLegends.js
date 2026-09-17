@@ -85,4 +85,42 @@ const COLOR_LEGENDS = {
 };
 
 
+// What each scale is normalized OVER, in STANDARD units (see
+// data/variables.js) - the [min, max] that maps onto a legend's 0..1 stops.
+//
+// Here rather than in variables.js because a range isn't a property of the
+// variable, it's a property of how we choose to colour it: it is picked to
+// spread the Catalan coast's usual values across the palette, not to bound
+// what the variable can be. Values outside it clamp to the end colours.
+//
+// A code with no entry has no colour: GUIManager.colorFor returns undefined
+// and the caller keeps whatever background it draws by default.
+const VARIABLE_RANGES = {
+  // Wind and currents
+  WSPD: [0, 20],    // m/s
+  GUST: [0, 25],    // m/s
+  WRSP: [0, 20],    // m/s
+  HCSP: [0, 1],     // m/s
+
+  // Waves
+  VHM0: [0, 4],     // m
+  VTM02: [0, 12],   // s
+
+  // Temperatures - sea and air are spread differently, which is exactly why
+  // a range can't belong to the unit group they share
+  TEMP: [10, 28],     // ºC
+  SAMITEMP: [10, 28], // ºC
+  DRYT: [0, 35],      // ºC
+  DEWT: [0, 35],      // ºC
+  WETT: [0, 35],      // ºC
+
+  // Other bounded variables
+  PSAL: [36, 38.5],   // practical salinity
+  RELH: [0, 100],     // %
+  ATMS: [980, 1030],  // hPa
+  PHPH: [7, 9],
+};
+
+
+export { VARIABLE_RANGES };
 export default COLOR_LEGENDS;
