@@ -134,6 +134,19 @@ export default {
     // afterwards costs nothing. Each buoy's promise is applied as it lands, so
     // rows fill in progressively rather than all at the end.
     refreshVariableData() {
+      // Paint whatever DPBuoys already holds FIRST, synchronously. This
+      // component is destroyed every time the All Platforms tabs change, but
+      // the measurements are not - they live in DPBuoys' block cache on the
+      // data service, which outlives every view. Without this the grid would
+      // spin its way through a full reload of data the app never lost.
+      //
+      // Here rather than in created() because pollMixin's created() runs
+      // BEFORE this component's own (Vue merges mixin hooks first), so a seed
+      // in created() would be racing the very poll it exists to pre-empt.
+      // Re-seeding on each poll is harmless: the cache is where applyResult's
+      // data came from in the first place.
+      this.seedFromCache();
+
       // Only rows with nothing to show yet end up spinning (see isLoading), so
       // the five-minute refresh never blanks out a row that already has data.
       this.isFetching = true;
@@ -151,21 +164,42 @@ export default {
         // would spin for ever without this.
         .finally(() => { this.isFetching = false; });
     },
+    // Fills every row the cache can already answer for, in one assignment, so
+    // a remount paints in the same tick it mounts. A buoy that was asked about
+    // and had nothing gets an empty entry rather than no entry - that is what
+    // stops it spinning for ever over data that does not exist (see
+    // DPBuoys.readVariablesData).
+    //
+    // Anything already on screen wins over the seed. The two are normally
+    // identical, since this is where applyResult's data came from; keeping the
+    // existing entry just guarantees this can never blank a row it was added
+    // to protect.
+    seedFromCache() {
+      const seeded = {};
+      this.$dataService.buoys
+        .readVariablesData(this.$gui.buoyVariableCodes, this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+        .forEach(result => { seeded[result.buoyId] = this.byCode(result.data); });
+      if (Object.keys(seeded).length === 0) return;
+      this.values = { ...seeded, ...this.values };
+    },
     // { '<ISO>': { code: point } } -> { code: { '<ISO>': point } }, which is the
     // shape the binning below walks. The WHOLE point is kept, not just its
     // value: each one carries the sensor, instrument and server it came from,
-    // and a cell lists whatever contributed to it. Reassigned rather than
-    // mutated so the computed rebuilds.
-    applyResult(result) {
+    // and a cell lists whatever contributed to it.
+    byCode(data) {
       const byCode = {};
-      Object.entries(result.data).forEach(([timestamp, codes]) => {
+      Object.entries(data).forEach(([timestamp, codes]) => {
         Object.entries(codes).forEach(([code, point]) => {
           if (byCode[code] == undefined) byCode[code] = {};
           byCode[code][timestamp] = point;
         });
       });
-      // Recording the values is what stops this row spinning - see isLoading
-      this.values = { ...this.values, [result.buoyId]: byCode };
+      return byCode;
+    },
+    // Reassigned rather than mutated so the computed rebuilds. Recording the
+    // values is what stops this row spinning - see isLoading.
+    applyResult(result) {
+      this.values = { ...this.values, [result.buoyId]: this.byCode(result.data) };
     },
 
     // One variable's cells for one buoy: the mean of the magnitudes that fell

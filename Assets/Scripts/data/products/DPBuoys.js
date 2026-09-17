@@ -88,6 +88,11 @@ class DPBuoys extends DP {
     // doesn't change once it has been recorded, so anything outside the
     // re-request window is answered from here and never asked for twice.
     this.cache = new BlockCache({ rerequestHourWindowFromNow: REREQUEST_HOUR_WINDOW_FROM_NOW });
+
+    // Which sources can serve a given buoy, filled by loadBuoys(). Empty
+    // rather than undefined from the start: readVariablesData() reads it
+    // without awaiting the load, and gets "no buoys yet" instead of throwing.
+    this.providers = new Map();
   }
 
   // Get buoys
@@ -408,6 +413,43 @@ class DPBuoys extends DP {
       });
     }));
 
+    // Read back from the cache rather than from what was just fetched: the
+    // window asked for usually spans blocks that were already held, and this
+    // is the one place that knows how to put both halves together.
+    return { ...this.collectFromCache(buoyId, codes, startDate, endDate), errors };
+  }
+
+  // Everything the block cache already holds for [startDate, endDate], with no
+  // awaits and no requests - the SAME shape getVariablesData's promises
+  // resolve to, so a caller can paint from this immediately and let the
+  // promises refine it in place.
+  //
+  // This is what lets a view be disposable. The measurements live in the cache
+  // on this singleton, not in a component's data(), so a timeline that is
+  // unmounted and remounted (switching All Platforms tabs) repaints instantly
+  // from here instead of spinning while it re-asks for data the app never
+  // lost. Deliberately synchronous: a single await and the caller is back to
+  // rendering an empty grid for a tick, which is the whole problem.
+  //
+  // Only buoys the cache has actually been asked about appear, and a buoy that
+  // was asked and had nothing comes back with an empty `data`. That is a
+  // different answer from not appearing at all - "nothing to show" versus
+  // "nobody has looked yet" - and it is the distinction a spinner turns on.
+  readVariablesData(codes, startDate, endDate) {
+    const wanted = [...codes];
+    // this.providers as it stands, NOT a fresh loadBuoys(): staying
+    // synchronous is the point. Before the first load it is empty, so a cold
+    // start seeds nothing and the rows spin exactly as they did before.
+    return [...this.providers.keys()]
+      .filter(buoyId => wanted.some(code => this.cache.covers(`${buoyId}|${code}`)))
+      .map(buoyId => this.collectFromCache(buoyId, wanted, startDate, endDate));
+  }
+
+  // The cache's answer for one buoy, assembled into the result shape above.
+  // Shared by readVariablesData and fetchBuoyVariables so the two can never
+  // disagree about what a result looks like: they feed the same table, and a
+  // shape that differed between them would make it flicker on every poll.
+  collectFromCache(buoyId, codes, startDate, endDate) {
     const data = {};
     const used = {};
     codes.forEach(code => {
@@ -417,9 +459,7 @@ class DPBuoys extends DP {
         if (used[code] == undefined) used[code] = { source: point.source, sensor: point.sensor };
       });
     });
-
-    const missing = codes.filter(code => used[code] == undefined);
-    return { buoyId, data, used, missing, errors };
+    return { buoyId, data, used, missing: codes.filter(code => used[code] == undefined) };
   }
 
   // One span's worth of values, working down each code's ranked candidates

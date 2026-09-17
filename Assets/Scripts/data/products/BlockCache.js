@@ -105,6 +105,14 @@ class BlockCache {
     });
   }
 
+  // Whether this series has ever been recorded at all - the difference between
+  // "asked, and there was nothing" and "nobody has looked yet". read() cannot
+  // tell them apart: both come back {}. A caller deciding whether to show a
+  // spinner needs to, so it is asked here rather than inferred from emptiness.
+  covers(series) {
+    return this.series.has(series);
+  }
+
   // Everything held for [startDate, endDate], across the blocks it spans.
   read(series, startDate, endDate) {
     const blocks = this.series.get(series);
