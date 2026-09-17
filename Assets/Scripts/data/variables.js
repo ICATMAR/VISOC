@@ -58,6 +58,9 @@ const UNIT_GROUPS = {
     { unit: 'm',  decimals: 1, toDisplay: value => value },
     { unit: 'ft', decimals: 0, toDisplay: value => value * 3.28084 },
   ],
+  wavePeriod: [
+    { unit: 's', decimals: 0, toDisplay: value => value },
+  ],
   // Vertical measures - depth, height, sea level. Nautical miles would be
   // meaningless here; they belong to coastDistance below.
   distance: [
@@ -101,21 +104,21 @@ const VARIABLES = {
   VCMX:  { longName: 'Maximum crest trough wave height (Hc,max)',  standardName: 'sea_surface_wave_maximum_height',        unit: 'm', unitGroup: 'waveHeight' },
   VMXL:  { longName: 'Height of the highest crest',                standardName: 'sea_surface_wave_maximum_crest_height',  unit: 'm', unitGroup: 'waveHeight' },
   // WAVES - period
-  VGTA:  { longName: 'Generic average wave period',                       standardName: 'sea_surface_wave_mean_period', unit: 's' },
-  VMTW:  { longName: 'Wave energy period',                                                                              unit: 's' },
-  VM01:  { longName: 'Spectral moments (0,1) wave period (Tm01)',         standardName: 'sea_surface_wave_mean_period_from_variance_spectral_density_first_frequency_moment',   unit: 's' },
-  VTM02: { longName: 'Spectral moments (0,2) wave period (Tm02)',         standardName: 'sea_surface_wave_mean_period_from_variance_spectral_density_second_frequency_moment',  unit: 's' },
-  VTM10: { longName: 'Spectral moments (-1,0) wave period (Tm-10)',       standardName: 'sea_surface_wave_mean_period_from_variance_spectral_density_inverse_frequency_moment', unit: 's' },
-  VTZA:  { longName: 'Average zero crossing wave period (Tz)',            standardName: 'sea_surface_wave_mean_period', unit: 's' },
-  VT3:   { longName: 'Wave mean period of the 1/3 highest waves',         standardName: 'sea_surface_wave_mean_period', unit: 's' },
-  VT10:  { longName: 'Wave mean period of the 1/10 highest waves',        standardName: 'sea_surface_wave_mean_period', unit: 's' },
+  VGTA:  { longName: 'Generic average wave period',                       standardName: 'sea_surface_wave_mean_period', unit: 's', unitGroup: 'wavePeriod' },
+  VMTW:  { longName: 'Wave energy period',                                                                              unit: 's' , unitGroup: 'wavePeriod'},
+  VM01:  { longName: 'Spectral moments (0,1) wave period (Tm01)',         standardName: 'sea_surface_wave_mean_period_from_variance_spectral_density_first_frequency_moment',   unit: 's' , unitGroup: 'wavePeriod'},
+  VTM02: { longName: 'Spectral moments (0,2) wave period (Tm02)',         standardName: 'sea_surface_wave_mean_period_from_variance_spectral_density_second_frequency_moment',  unit: 's' , unitGroup: 'wavePeriod'},
+  VTM10: { longName: 'Spectral moments (-1,0) wave period (Tm-10)',       standardName: 'sea_surface_wave_mean_period_from_variance_spectral_density_inverse_frequency_moment', unit: 's' , unitGroup: 'wavePeriod'},
+  VTZA:  { longName: 'Average zero crossing wave period (Tz)',            standardName: 'sea_surface_wave_mean_period', unit: 's' , unitGroup: 'wavePeriod'},
+  VT3:   { longName: 'Wave mean period of the 1/3 highest waves',         standardName: 'sea_surface_wave_mean_period', unit: 's' , unitGroup: 'wavePeriod'},
+  VT10:  { longName: 'Wave mean period of the 1/10 highest waves',        standardName: 'sea_surface_wave_mean_period', unit: 's' , unitGroup: 'wavePeriod'},
   // WAVES - peak period
-  VTPK:  { longName: 'Wave period at spectral peak / peak period (Tp)',   standardName: 'sea_surface_wave_period_at_variance_spectral_density_maximum', unit: 's' },
-  VAVT:  { longName: 'Average period highest 1/3 wave (T1/3)',            standardName: 'sea_surface_wave_significant_period',           unit: 's' },
-  VT110: { longName: 'Average period highest 1/10 wave (T1/10)',          standardName: 'sea_surface_wave_mean_period_of_highest_tenth', unit: 's' },
-  VPMX:  { longName: 'Period based on successive up/downcrossings (Pmax)', standardName: 'sea_surface_wave_maximum_period',              unit: 's' },
-  VTMX:  { longName: 'Maximum wave period (Tmax)',                        standardName: 'sea_surface_wave_maximum_period',               unit: 's' },
-  VTZM:  { longName: 'Period of the highest wave (Thmax)',                standardName: 'sea_surface_wave_period_of_highest_wave',       unit: 's' },
+  VTPK:  { longName: 'Wave period at spectral peak / peak period (Tp)',   standardName: 'sea_surface_wave_period_at_variance_spectral_density_maximum', unit: 's' , unitGroup: 'wavePeriod'},
+  VAVT:  { longName: 'Average period highest 1/3 wave (T1/3)',            standardName: 'sea_surface_wave_significant_period',           unit: 's' , unitGroup: 'wavePeriod'},
+  VT110: { longName: 'Average period highest 1/10 wave (T1/10)',          standardName: 'sea_surface_wave_mean_period_of_highest_tenth', unit: 's' , unitGroup: 'wavePeriod'},
+  VPMX:  { longName: 'Period based on successive up/downcrossings (Pmax)', standardName: 'sea_surface_wave_maximum_period',              unit: 's' , unitGroup: 'wavePeriod'},
+  VTMX:  { longName: 'Maximum wave period (Tmax)',                        standardName: 'sea_surface_wave_maximum_period',               unit: 's' , unitGroup: 'wavePeriod'},
+  VTZM:  { longName: 'Period of the highest wave (Thmax)',                standardName: 'sea_surface_wave_period_of_highest_wave',       unit: 's' , unitGroup: 'wavePeriod'},
   // WAVES - mean direction
   VMDR:   { longName: 'Mean wave direction from (Mdir)', standardName: 'sea_surface_wave_from_direction', unit: 'deg' },
   VDIR:   { longName: 'Wave direction rel. true north',  standardName: 'sea_surface_wave_from_direction', unit: 'deg' },
