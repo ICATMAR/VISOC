@@ -209,7 +209,10 @@ export default {
     // the wrong way. Weighted by the magnitude measured at the same moment,
     // so a heading recorded in a flat calm doesn't drag the arrow around.
     binVariable(byCode, variable, cells, startTime, stepMs) {
-      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0, from: new Map() }));
+      // `raw` is what each code was PUBLISHED as by whoever served it (see
+      // DPBuoys' rawName) - VHM0 arriving as Puertos' 'Hm0'. Kept per code, so
+      // a magnitude and its direction can name their own spellings.
+      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0, from: new Map(), raw: {} }));
       const binOf = timestamp => {
         const index = Math.floor((new Date(timestamp).getTime() - startTime) / stepMs);
         return index >= 0 && index < bins.length ? bins[index] : undefined;
@@ -247,6 +250,7 @@ export default {
         if (!bin) return;
         bin.count++;
         bin.total += point.value;
+        if (point.rawName) bin.raw[variable.code] = point.rawName;
         credit(bin, point);
       });
 
@@ -267,6 +271,7 @@ export default {
           bin.x += Math.cos(radians) * weight;
           bin.y += Math.sin(radians) * weight;
           bin.directions++;
+          if (point.rawName) bin.raw[variable.directionCode] = point.rawName;
           credit(bin, point);
         });
       }
@@ -367,11 +372,16 @@ export default {
     // in; the variables the timeline never fetches (salinity, gusts, maximum
     // waves, currents) are requested afterwards and merged in when they land.
     buoyClicked(buoy, index, cell) {
-      const platform = { stationId: buoy.id, date: cell };
+      // `from` is kept as a map beside the values rather than flattened in with
+      // them: a reading is a number, and which instrument took it is a
+      // different kind of fact about it. The panel's tooltips read it back.
+      const platform = { stationId: buoy.id, date: cell, from: {}, raw: {} };
       this.$gui.buoyVariables.forEach(variable => {
         const bin = this.binned[buoy.id]?.[variable.code]?.[index];
         if (bin?.value != undefined) platform[variable.code] = bin.value;
         if (variable.directionCode && bin?.direction != undefined) platform[variable.directionCode] = bin.direction;
+        if (bin?.from?.length) platform.from[variable.code] = bin.from;
+        Object.assign(platform.raw, bin?.raw);
       });
 
       this.$gui.selectedPlatform = platform;
@@ -410,13 +420,17 @@ export default {
       // same interval the wind beside it was measured over.
       const byCode = this.byCode(result.data);
       const extras = {};
+      const from = { ...(platform.from ?? {}) };
+      const raw = { ...(platform.raw ?? {}) };
       this.$gui.buoyDetailVariables.forEach(variable => {
         const [bin] = this.binVariable(byCode, variable, [cell], cell.getTime(), stepMs);
         if (bin?.value != undefined) extras[variable.code] = bin.value;
         if (variable.directionCode && bin?.direction != undefined) extras[variable.directionCode] = bin.direction;
+        if (bin?.from?.length) from[variable.code] = bin.from;
+        Object.assign(raw, bin?.raw);
       });
 
-      this.$gui.selectedPlatform = { ...platform, ...extras };
+      this.$gui.selectedPlatform = { ...platform, ...extras, from, raw };
     },
   },
   computed: {

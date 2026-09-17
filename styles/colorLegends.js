@@ -100,16 +100,16 @@ const COLOR_LEGENDS = {
 const VARIABLE_RANGES = {
   // Wind and currents
   WSPD: [0, 20],    // m/s
-  GSPD: [0, 25],    // m/s - gusts run above the mean, so a wider top
+  GSPD: [0, 20],    // m/s
   WRSP: [0, 20],    // m/s
   HCSP: [0, 1],     // m/s
 
   // Waves. The maximum wave in a record runs well above the significant
   // height, so it gets a range of its own rather than sharing VHM0's.
   VHM0: [0, 4],     // m
-  VZMX: [0, 7],     // m
+  VZMX: [0, 4],     // m
   VTM02: [0, 12],   // s
-  VTPK: [0, 16],    // s
+  VTPK: [0, 12],    // s
 
   // Temperatures - sea and air are spread differently, which is exactly why
   // a range can't belong to the unit group they share

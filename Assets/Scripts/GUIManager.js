@@ -173,6 +173,14 @@ class GUIManager {
     // direction and period at the spectral peak).
     { code: 'VTM02' },                       // average period, shown with VHM0
     { code: 'VZMX', directionCode: 'VPED' }, // maximum height + peak direction
+    // CF has four spellings of "maximum wave height" and datasets disagree on
+    // which to use - the catalogue only renames Puertos' Hmax to VZMX, and the
+    // ERDDAP/MSM waves come through as published. All four mean
+    // sea_surface_wave_maximum_height, so the panel takes whichever turns up
+    // (see maxWaveHeight) and colours it on VZMX's scale either way. Asking for
+    // all four costs nothing: the planner only requests codes a sensor
+    // actually publishes.
+    { code: 'VCMX' }, { code: 'VHMH' }, { code: 'VEMH' },
     { code: 'VTPK' },                        // peak period, shown with VZMX
     { code: 'GSPD', directionCode: 'GDIR' }, // wind gust
     { code: 'HCSP', directionCode: 'HCDT' }, // current, shallowest bin only

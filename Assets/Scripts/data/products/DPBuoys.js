@@ -527,7 +527,10 @@ class DPBuoys extends DP {
         const group = groups.get(candidate.source);
         if (group.sensors[candidate.sensorId] == undefined) group.sensors[candidate.sensorId] = [];
         if (!group.sensors[candidate.sensorId].includes(candidate.name)) group.sensors[candidate.sensorId].push(candidate.name);
-        group.codes.push({ code, sensorId: candidate.sensorId });
+        // `name` is what this source calls the variable - Puertos' 'Hm0' for
+        // VHM0, the MSM API's 'VMTA' for VTM02. Carried through so a reading
+        // can name both the standard code and the spelling it arrived under.
+        group.codes.push({ code, sensorId: candidate.sensorId, name: candidate.name });
       });
       if (groups.size === 0) break;
 
@@ -553,12 +556,12 @@ class DPBuoys extends DP {
           Object.entries(bySensor).forEach(([sensorId, values]) => {
             const standardized = this.standardize(source, values, sensorId);
             const instrument = this.sensorInstrument(source, buoyId, sensorId);
-            group.codes.forEach(({ code, sensorId: wantedSensor }) => {
+            group.codes.forEach(({ code, sensorId: wantedSensor, name: rawName }) => {
               if (sensorId !== wantedSensor) return;
               const value = standardized[code];
               if (value == undefined) return;
               if (points[code] == undefined) points[code] = {};
-              points[code][timestamp] = { value, sensor: sensorId, source: source.src, instrument };
+              points[code][timestamp] = { value, sensor: sensorId, source: source.src, instrument, rawName };
               delivered.add(code);
             });
           });

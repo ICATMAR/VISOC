@@ -44,17 +44,23 @@
           <template v-if="anyData">
             <!-- Current speed + direction arrow (TO direction: rotate dir-45) -->
             <div class="pd-value-item" v-if="sp.HCSP != null"
+              :title="groupTitle([{ label: 'Current speed', code: 'HCSP', value: sp.HCSP }, { label: 'Direction', code: 'HCDT', value: sp.HCDT, bearing: true }])"
               :style="{ background: $gui.colorFor('HCSP', sp.HCSP) }">
               <span class="pd-value-label">{{ $t('Current') }}</span>
               <span class="pd-value-number">
-                {{ format('HCSP', sp.HCSP) }}
+                <span class="pd-reading" :class="{ clickable: $gui.isUnitSwitchable('HCSP') }"
+                  :title="readingTitle('Current speed', 'HCSP', sp.HCSP)"
+                  @click="cycle('HCSP')">{{ format('HCSP', sp.HCSP) }}</span>
                 <i v-if="sp.HCDT != null" class="fa fa-location-arrow" :title="`${sp.HCDT.toFixed(0)}º`" :style="arrowStyle(sp.HCDT)"></i>
               </span>
             </div>
             <div class="pd-value-item" v-if="sp.TEMP != null"
+              :title="groupTitle([{ label: 'Temperature', code: 'TEMP', value: sp.TEMP }])"
               :style="{ background: $gui.colorFor('TEMP', sp.TEMP) }">
               <span class="pd-value-label">{{ $t('Temperature') }}</span>
-              <span class="pd-value-number">{{ format('TEMP', sp.TEMP) }}</span>
+              <span class="pd-value-number"><span class="pd-reading" :class="{ clickable: $gui.isUnitSwitchable('TEMP') }"
+                  :title="readingTitle('Temperature', 'TEMP', sp.TEMP)"
+                  @click="cycle('TEMP')">{{ format('TEMP', sp.TEMP) }}</span></span>
             </div>
           </template>
           <span class="pd-no-data" v-else>{{ $t('No data available') }}</span>
@@ -93,6 +99,7 @@ export default {
     this.initMap();
     this._onDocMouseMove = (e) => {
       if (!this.isDragging) return;
+      if (Math.abs(e.pageX - this.dragStartX) > 3) this.didDrag = true;
       if (this.$refs.valuesScroll)
         this.$refs.valuesScroll.scrollLeft = this.dragScrollLeft - (e.pageX - this.dragStartX);
     };
@@ -108,11 +115,43 @@ export default {
     return {
       buoyGIFURL: './Assets/Images/mockup/buoydto.gif',
       isDragging: false,
+      didDrag: false,   // this drag actually moved; see cycle()
       dragStartX: 0,
       dragScrollLeft: 0,
     }
   },
   methods: {
+    // "HCSP; VELO" - the standard code and, where the source spells it
+    // differently, the name it was published under. Same as the buoys panel.
+    codeLabel(code) {
+      const raw = this.sp?.raw?.[code];
+      return raw && raw !== code ? `${code}; ${raw}` : code;
+    },
+    // The whole chip in one tooltip - each reading with its code and unit,
+    // then the instrument and server behind it. On the chip rather than only
+    // on the number, since the label and padding are most of the hover area.
+    groupTitle(entries) {
+      const lines = entries
+        .filter(entry => entry.value != null && isFinite(entry.value))
+        .map(entry => `${this.$t(entry.label)} (${this.codeLabel(entry.code)}): `
+          + (entry.bearing ? `${entry.value.toFixed(0)}º` : this.format(entry.code, entry.value)));
+      (this.sp?.from?.[entries[0]?.code] ?? []).forEach(({ sensor, instrument, source }) => {
+        lines.push(`${this.$t('Sensor')}: ${sensor}${instrument ? ` (${instrument})` : ''}`);
+        lines.push(`${this.$t('Source')}: ${source}`);
+      });
+      return lines.join('\n');
+    },
+    readingTitle(label, code, value) {
+      const line = `${this.$t(label)} (${this.codeLabel(code)}): ${this.format(code, value)}`;
+      return this.$gui.isUnitSwitchable(code) ? `${line}\n${this.$t('Click to change units')}` : line;
+    },
+    // Clicking a reading switches the unit of its quantity app-wide. Ignored
+    // after a drag: this row is drag-to-scroll, and letting go of a scroll
+    // should not change everyone's units (see onScrollDragStart).
+    cycle(code) {
+      if (this.didDrag || !this.$gui.isUnitSwitchable(code)) return;
+      this.$gui.cycleUnit(code);
+    },
     // Written in whatever unit the user has picked for that quantity; the
     // values themselves are STANDARD (see data/variables.js). Same helper as
     // the buoys panel and MapCircleArrows, so a current is written the same
@@ -221,6 +260,7 @@ export default {
     },
     onScrollDragStart(e) {
       this.isDragging = true;
+      this.didDrag = false;
       this.dragStartX = e.pageX;
       this.dragScrollLeft = this.$refs.valuesScroll?.scrollLeft ?? 0;
       e.preventDefault();
@@ -318,5 +358,11 @@ export default {
 
 .map-clickable {
   cursor: pointer;
+}
+
+/* Underlined only where there is another unit to switch to. */
+.pd-reading.clickable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

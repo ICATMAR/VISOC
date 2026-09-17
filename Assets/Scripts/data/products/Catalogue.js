@@ -366,7 +366,10 @@ const dataProducts = [
           MeanDirPeak: {code: 'VPED'},
           WindSpeed: {code: 'WSPD'},
           WindDir: {code: 'WDIR'},
-          CurrentSpeed: {code: 'HCSP'},
+          // The one parameter this API does NOT report in its standard unit -
+          // the header says CurrentSpeed(cm/s), everything else already
+          // matches (Hm0 m, WindSpeed m/s, WaterTemp AirPressure mb = hPa).
+          CurrentSpeed: {code: 'HCSP', unitTransform: scaledBy(0.01)},
           CurrentDir: {code: 'HCDT'},
           WaterTemp: {code: 'TEMP'},
           AirTemp: {code: 'DRYT'},

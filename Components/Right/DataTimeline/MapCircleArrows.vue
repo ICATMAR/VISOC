@@ -19,7 +19,7 @@
            come apart. The legend's colours are pale, so the text goes black
            over them; a variable with no legend keeps the stylesheet's blue and
            its white text. -->
-      <div class="variableValue horizontal animatedLayer" :style="{
+      <div class="variableValue horizontal animatedLayer" :title="item.title" :style="{
         rotate: (item.angle - 90) + 'deg',
         '--maxZIndex': items.length,
         '--duration': (items.length * loopInterval) + 's',
@@ -41,9 +41,12 @@
 export default {
   name: "MapCircleArrows",
   props: {
-    wind:    { type: Object, default: null }, // { speed: km/h, dir: degrees }
-    waves:   { type: Object, default: null }, // { height: m,   dir: degrees }
-    current: { type: Object, default: null }, // { speed: m/s,  dir: degrees }
+    // All magnitudes in STANDARD units (see data/variables.js); `from` is the
+    // contributing sensors, as DTAPBuoys records them on selectedPlatform.
+    wind:    { type: Object, default: null }, // { speed, dir, gust, from }
+    waves:   { type: Object, default: null }, // { height, dir, period, from }
+    current: { type: Object, default: null }, // { speed, dir, from }
+    // `raw` on each: standard code -> the name the source published it under.
   },
   data() {
     return {
@@ -57,11 +60,42 @@ export default {
     // The magnitudes arrive STANDARD (see data/variables.js), so the unit they
     // are WRITTEN in is the user's choice, not this component's - switching
     // wind to knots anywhere switches these chips with it (GUIManager.unitFor).
-    // They used to be hardcoded, which had the wind labelled km/h while
-    // carrying m/s.
     format(code, value) {
       const { unit, decimals, toDisplay } = this.$gui.unitFor(code);
       return `${toDisplay(value).toFixed(decimals)} ${unit}`;
+    },
+    // The number alone. The chips ring a 100px circle, so a unit on each one
+    // costs more room than it earns - and the reading is repeated with its
+    // unit in the panel beside this, and in full in the tooltip below.
+    number(code, value) {
+      const { decimals, toDisplay } = this.$gui.unitFor(code);
+      return toDisplay(value).toFixed(decimals);
+    },
+    // Everything behind one arrow, which is where the detail went when the
+    // units came off the chips: each reading with its code, its unit, the
+    // direction as the SOURCE recorded it (not the bearing the chip is
+    // rotated to), and the instrument and server it all came from.
+    //
+    // `rows` are { label, code, value, bearing } - a bearing is printed in
+    // degrees rather than run through a unit. `raw` is what each code was
+    // published as (Puertos' 'Hm0' for VHM0), named alongside the standard
+    // code because which spelling a value arrived as is the first thing worth
+    // knowing when a number looks wrong. `from` is the contributing sensors,
+    // one entry each, since an averaged cell can mix them.
+    title(rows, from, raw) {
+      const named = code => {
+        const published = raw?.[code];
+        return published && published !== code ? `${code}; ${published}` : code;
+      };
+      const lines = rows
+        .filter(row => row.value != null && isFinite(row.value))
+        .map(row => `${this.$t(row.label)} (${named(row.code)}): `
+          + (row.bearing ? `${row.value.toFixed(0)}º` : this.format(row.code, row.value)));
+      (from ?? []).forEach(({ sensor, instrument, source }) => {
+        lines.push(`${this.$t('Sensor')}: ${sensor}${instrument ? ` (${instrument})` : ''}`);
+        lines.push(`${this.$t('Source')}: ${source}`);
+      });
+      return lines.join('\n');
     },
   },
   computed: {
@@ -72,14 +106,28 @@ export default {
     items() {
       const result = [];
       if (this.wind?.speed != null)
-        result.push({ name: 'Wind', value: this.format('WSPD', this.wind.speed), angle: this.wind.dir ?? 0,
-          color: this.$gui.colorFor('WSPD', this.wind.speed) });
+        result.push({ name: 'Wind', value: this.number('WSPD', this.wind.speed), angle: this.wind.dir ?? 0,
+          color: this.$gui.colorFor('WSPD', this.wind.speed),
+          title: this.title([
+            { label: 'Wind speed', code: 'WSPD', value: this.wind.speed },
+            { label: 'Direction',  code: 'WDIR', value: this.wind.dir, bearing: true },
+            { label: 'Wind gust',  code: 'GSPD', value: this.wind.gust },
+          ], this.wind.from, this.wind.raw) });
       if (this.waves?.height != null)
-        result.push({ name: 'Waves', value: this.format('VHM0', this.waves.height), angle: this.waves.dir ?? 0,
-          color: this.$gui.colorFor('VHM0', this.waves.height) });
+        result.push({ name: 'Waves', value: this.number('VHM0', this.waves.height), angle: this.waves.dir ?? 0,
+          color: this.$gui.colorFor('VHM0', this.waves.height),
+          title: this.title([
+            { label: 'Wave height', code: 'VHM0',  value: this.waves.height },
+            { label: 'Direction',   code: 'VMDR',  value: this.waves.dir, bearing: true },
+            { label: 'Wave period', code: 'VTM02', value: this.waves.period },
+          ], this.waves.from, this.waves.raw) });
       if (this.current?.speed != null)
-        result.push({ name: 'Currents', value: this.format('HCSP', this.current.speed), angle: (this.current.dir + 180) % 360 ?? 0,
-          color: this.$gui.colorFor('HCSP', this.current.speed) });
+        result.push({ name: 'Currents', value: this.number('HCSP', this.current.speed), angle: (this.current.dir + 180) % 360 ?? 0,
+          color: this.$gui.colorFor('HCSP', this.current.speed),
+          title: this.title([
+            { label: 'Current speed', code: 'HCSP', value: this.current.speed },
+            { label: 'Direction',     code: 'HCDT', value: this.current.dir, bearing: true },
+          ], this.current.from, this.current.raw) });
       return result;
     }
   },
@@ -129,7 +177,7 @@ export default {
   background: var(--blue);
   padding-right: 2px;
   padding-left: 4px;
-  border-radius: 0 4px 4px 0;
+  border-radius: 4px;
 }
 .variableValue > span {
   z-index: 1;
