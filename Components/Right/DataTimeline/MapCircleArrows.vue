@@ -32,7 +32,15 @@
         textShadow: item.color ? 'none' : undefined
         }">
         <div class="variableArrow" :style="{ background: item.color }"></div>
-        <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ item.value }}</span>
+        <!-- Both halves inside the SAME rotated box. Rotating them separately
+             would spin each in place and leave them in flex order, so a chip
+             on the lower half of the circle would read "m/s 1.2". -->
+        <span class="chipReading" :style="{ rotate: textRotation(item.angle) }">
+          <span>{{ item.value }}</span>
+          <span class="chipUnit" :class="{ clickable: item.switchable }"
+            :title="item.switchable ? $t('Change units') : ''"
+            @click.stop="cycleUnit(item)">{{ item.unit }}</span>
+        </span>
       </div>
     </template>
 
@@ -66,6 +74,12 @@ export default {
     format(code, value) {
       const { unit, decimals, toDisplay } = this.$gui.unitFor(code);
       return `${toDisplay(value).toFixed(decimals)} ${unit}`;
+    },
+    // Switches the unit of this reading's QUANTITY, app-wide - the same
+    // GUIManager.cycleUnit the panel's readings and the timeline's variable bar
+    // use, so one click here moves every wind reading in the app at once.
+    cycleUnit(item) {
+      if (item.switchable) this.$gui.cycleUnit(item.code);
     },
     // The number alone. The chips ring a 100px circle, so a unit on each one
     // costs more room than it earns - and the reading is repeated with its
@@ -109,7 +123,8 @@ export default {
     items() {
       const result = [];
       if (this.wind?.speed != null)
-        result.push({ name: 'Wind', value: this.number('WSPD', this.wind.speed), angle: this.wind.dir ?? 0,
+        result.push({ name: 'Wind', code: 'WSPD', unit: this.$gui.unitFor('WSPD').unit,
+          switchable: this.$gui.isUnitSwitchable('WSPD'), value: this.number('WSPD', this.wind.speed), angle: this.wind.dir ?? 0,
           color: this.$gui.colorFor('WSPD', this.wind.speed),
           title: this.title([
             { label: 'Wind speed', code: 'WSPD', value: this.wind.speed },
@@ -117,7 +132,8 @@ export default {
             { label: 'Wind gust',  code: 'GSPD', value: this.wind.gust },
           ], this.wind.from, this.wind.raw) });
       if (this.waves?.height != null)
-        result.push({ name: 'Waves', value: this.number('VHM0', this.waves.height), angle: this.waves.dir ?? 0,
+        result.push({ name: 'Waves', code: 'VHM0', unit: this.$gui.unitFor('VHM0').unit,
+          switchable: this.$gui.isUnitSwitchable('VHM0'), value: this.number('VHM0', this.waves.height), angle: this.waves.dir ?? 0,
           color: this.$gui.colorFor('VHM0', this.waves.height),
           title: this.title([
             { label: 'Wave height', code: 'VHM0',  value: this.waves.height },
@@ -125,7 +141,8 @@ export default {
             { label: 'Wave period', code: 'VTM02', value: this.waves.period },
           ], this.waves.from, this.waves.raw) });
       if (this.current?.speed != null)
-        result.push({ name: 'Currents', value: this.number('HCSP', this.current.speed), angle: (this.current.dir + 180) % 360 ?? 0,
+        result.push({ name: 'Currents', code: 'HCSP', unit: this.$gui.unitFor('HCSP').unit,
+          switchable: this.$gui.isUnitSwitchable('HCSP'), value: this.number('HCSP', this.current.speed), angle: (this.current.dir + 180) % 360 ?? 0,
           color: this.$gui.colorFor('HCSP', this.current.speed),
           title: this.title([
             { label: 'Current speed', code: 'HCSP', value: this.current.speed },
@@ -213,6 +230,38 @@ export default {
   color: black;
   text-shadow: none;
   font-weight: bold;
+}
+
+.chipReading {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.chipReading > span {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: black;
+  text-shadow: none;
+  white-space: nowrap;
+  letter-spacing: -0.4px;
+}
+
+/* Deliberately quieter than the number it follows: the reading is the thing
+   being read, the unit is a label on it that happens to also be a control.
+   font-weight is declared rather than left alone because the rule above sets
+   bold on the box these sit in, and an inherited value loses to a declared
+   one. */
+.chipUnit {
+  font-size: 0.6rem!important;
+  font-weight: normal;
+  opacity: 0.6;
+}
+
+/* Underlined only where there is another unit to go to - the signal the
+   variable bar and the detail panel already use for this same gesture. */
+.chipUnit.clickable {
+  text-decoration: underline;
 }
 
 .variableArrow {
