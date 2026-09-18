@@ -77,7 +77,7 @@ export default {
 .legend {
   max-width: 200px;
   width: 100%;
-  height: 18px;
+  height: 14px;
   margin-left: 10px;
   border-radius: 9px;
   overflow: hidden;

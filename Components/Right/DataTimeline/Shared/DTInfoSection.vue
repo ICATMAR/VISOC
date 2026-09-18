@@ -222,15 +222,30 @@
 
 
 <script>
-// Where to send someone who clicks an institution's name. Here rather than in
-// the catalogue: it is a display concern, and `institution` there is free text
-// that several buoys share.
-const INSTITUTION_URLS = {
-  'ICATMAR': 'https://icatmar.cat',
-  'ICM-CSIC': 'https://www.icm.csic.es',
-  'CEFREM': 'https://cefrem.univ-perp.fr/',
-  'Puertos del Estado': 'https://www.puertos.es',
+// Everything the view needs about an institution: where to link its name, the
+// logo washed into the panel background, and the filter that turns that logo
+// white. Here rather than in the catalogue - it is a display concern, and
+// `institution` there is free text several buoys share.
+//
+// The PNGs are dark artwork on transparency, so inverting them is enough.
+// logo-PdE.svg is full colour, which an invert alone would turn into a
+// different colour rather than white - saturate(0%) strips the colour first.
+const DEFAULT_LOGO_FILTER = 'invert(1)';
+const INSTITUTIONS = {
+  'ICATMAR':  { url: 'https://icatmar.cat',          logo: './Assets/Images/institutions/ICATMAR.png' },
+  'ICM-CSIC': { url: 'https://www.icm.csic.es',      logo: './Assets/Images/institutions/ICM-CSIC.png' },
+  'CEFREM':   { url: 'https://cefrem.univ-perp.fr/', logo: './Assets/Images/institutions/CEFREM.png' },
+  'Puertos del Estado': {
+    url: 'https://www.puertos.es',
+    logo: './Assets/Images/logos/logo-PdE.svg',
+    filter: 'saturate(0%) hue-rotate(78deg) brightness(200%) contrast(102%)',
+  },
 };
+
+// 'ICATMAR / ICM-CSIC' -> ['ICATMAR', 'ICM-CSIC']. The catalogue writes joint
+// ownership with a slash, and each half is its own organisation.
+const institutionsOf = value =>
+  String(value ?? '').split('/').map(name => name.trim()).filter(Boolean);
 
 const LICENSE_URLS = {
   'CC-BY-4.0': 'https://creativecommons.org/licenses/by/4.0/',
@@ -306,11 +321,8 @@ export default {
     // 'ICATMAR / ICM-CSIC' -> two entries. The catalogue writes joint
     // ownership with a slash, and each half is its own organisation.
     buoyInstitutions() {
-      return String(this.buoyStation?.institution ?? '')
-        .split('/')
-        .map(name => name.trim())
-        .filter(Boolean)
-        .map(name => ({ name, url: INSTITUTION_URLS[name] }));
+      return institutionsOf(this.buoyStation?.institution)
+        .map(name => ({ name, url: INSTITUTIONS[name]?.url }));
     },
     buoyCoords() {
       const buoy = this.buoyStation;
@@ -343,15 +355,41 @@ export default {
       if (this.drifterStation?.type === 'SVP')  return this.svpIconURL;
       return this.driftIconURL;
     },
+    // One background layer per institution, so a jointly run platform shows
+    // both marks rather than neither - the old single derived path turned
+    // 'ICATMAR / ICM-CSIC' into a filename that does not exist.
+    //
+    // The filter is one value for the whole element, so mixed artwork cannot
+    // be washed two different ways; the first institution that asks for a
+    // filter sets it. That holds as the catalogue stands (Puertos del Estado
+    // never shares a platform) and would need two elements if it ever changes.
     institutionBgStyle() {
-      let name = null;
-      if (this.hfrStation)          name = this.hfrStation.owner;
-      else if (this.isHFRContext)   name = 'ICATMAR';
-      else if (this.buoyStation)    name = this.buoyStation.institution;
-      else if (this.drifterStation) name = this.drifterStation.institution;
-      if (!name) return {};
-      const url = './Assets/Images/institutions/' + name.replace(/[\/\\]/g, '-') + '.png';
-      return { '--inst-logo': 'url(\'' + url + '\')' };
+      let value = null;
+      if (this.hfrStation)          value = this.hfrStation.owner;
+      else if (this.isHFRContext)   value = 'ICATMAR';
+      else if (this.buoyStation)    value = this.buoyStation.institution;
+      else if (this.drifterStation) value = this.drifterStation.institution;
+
+      const names = institutionsOf(value);
+      if (!names.length) return {};
+
+      // An institution with no entry falls back to the name-derived path, so
+      // adding one is still just a matter of dropping a PNG in. No separator
+      // to strip: institutionsOf has already split on it.
+      const entries = names.map(name => INSTITUTIONS[name]
+        ?? { logo: './Assets/Images/institutions/' + name + '.png' });
+
+      const share = 100 / entries.length;
+      return {
+        '--inst-logo': entries.map(entry => `url('${entry.logo}')`).join(', '),
+        '--inst-logo-size': entries.length === 1
+          ? 'contain'
+          : entries.map(() => `${(share * 0.9).toFixed(0)}% auto`).join(', '),
+        '--inst-logo-position': entries.length === 1
+          ? 'center'
+          : entries.map((entry, index) => `${(share * (index + 0.5)).toFixed(0)}% center`).join(', '),
+        '--inst-filter': entries.find(entry => entry.filter)?.filter ?? DEFAULT_LOGO_FILTER,
+      };
     },
   },
   methods: {
@@ -479,11 +517,13 @@ export default {
   position: absolute;
   inset: 10%;
   background-image: var(--inst-logo, none);
-  background-size: contain;
-  background-position: center;
+  background-size: var(--inst-logo-size, contain);
+  background-position: var(--inst-logo-position, center);
   background-repeat: no-repeat;
   opacity: 0.07;
-  filter: invert(1);
+  /* Per institution: dark PNGs only need inverting, full-colour SVGs have to
+     lose their colour first (see INSTITUTIONS). */
+  filter: var(--inst-filter, invert(1));
   pointer-events: none;
 }
 
@@ -519,14 +559,14 @@ export default {
 .info-rows {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   width: 100%;
 }
 
 .info-row {
   display: flex;
   flex-direction: row;
-  gap: 6px;
+  gap: 12px;
   align-items: baseline;
   font-size: small;
 }
@@ -536,6 +576,7 @@ export default {
   text-shadow: none;
   flex-shrink: 0;
   min-width: 120px;
+  text-align: right;
 }
 
 .info-value {
