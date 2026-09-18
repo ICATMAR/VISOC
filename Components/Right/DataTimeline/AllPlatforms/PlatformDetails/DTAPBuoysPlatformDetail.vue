@@ -113,12 +113,19 @@
                 <i v-if="sp.HCDT != null" class="fa fa-location-arrow" :title="`${sp.HCDT.toFixed(0)}º`" :style="arrowStyle(sp.HCDT, false)"></i>
               </span>
             </div>
-            <div class="pd-value-item" :title="groupTitle([{ label: 'Temperature', code: 'TEMP', value: sp.TEMP }])" v-if="sp.TEMP != null"
+            <div class="pd-value-item" :title="groupTitle([{ label: 'Water temp.', code: 'TEMP', value: sp.TEMP }])" v-if="sp.TEMP != null"
               :style="{ background: $gui.colorFor('TEMP', sp.TEMP) }">
-              <span class="pd-value-label">{{ $t('Temperature') }}</span>
+              <span class="pd-value-label">{{ $t('Water temp.') }}</span>
               <span class="pd-value-number"><span class="pd-reading" :class="{ clickable: $gui.isUnitSwitchable('TEMP') }"
-                  :title="readingTitle('Temperature', 'TEMP', sp.TEMP)"
+                  :title="readingTitle('Water temp.', 'TEMP', sp.TEMP)"
                   @click="cycle('TEMP')">{{ format('TEMP', sp.TEMP) }}</span></span>
+            </div>
+            <div class="pd-value-item" :title="groupTitle([{ label: 'Air temp.', code: 'DRYT', value: sp.DRYT }])" v-if="sp.DRYT != null"
+              :style="{ background: $gui.colorFor('DRYT', sp.DRYT) }">
+              <span class="pd-value-label">{{ $t('Air temp.') }}</span>
+              <span class="pd-value-number"><span class="pd-reading" :class="{ clickable: $gui.isUnitSwitchable('DRYT') }"
+                  :title="readingTitle('Air temp.', 'DRYT', sp.DRYT)"
+                  @click="cycle('DRYT')">{{ format('DRYT', sp.DRYT) }}</span></span>
             </div>
             <div class="pd-value-item" :title="`Salinity (${codeLabel('PSAL')}): ${sp.PSAL.toFixed(1)} PSU`" v-if="sp.PSAL != null"
               :style="{ background: $gui.colorFor('PSAL', sp.PSAL) }">
@@ -374,7 +381,8 @@ export default {
     },
     anyData() {
       const p = this.sp;
-      return p && (p.VHM0 != null || p.WSPD != null || p.HCSP != null || p.TEMP != null);
+      return p && (p.VHM0 != null || p.WSPD != null || p.HCSP != null
+        || p.TEMP != null || p.DRYT != null);
     },
     // The maximum wave height under whichever of CF's four spellings this buoy
     // publishes (see GUIManager.buoyDetailVariables). They all mean
