@@ -2,7 +2,17 @@
   <div class="map-arrows-circle">
     <div class="map-arrows-center"></div>
 
-    <template v-for="(item, index) in items" :key="index">
+    <!-- Keyed by the COUNT as well as the index, so a chip appearing or
+         disappearing remounts all of them together. The depthLoop animation
+         staggers the chips with a negative animation-delay, and that only
+         spaces them evenly if every element's animation starts in the same
+         frame. Keyed by index alone, a third chip arriving (a cell that has
+         currents, after one that didn't) would mount on its own and begin its
+         cycle from whenever that happened, while the other two carried on from
+         when the panel opened - leaving two chips stuck on the same z-index,
+         ordered by DOM position instead of rotating. Remounting also re-reads
+         the --duration and --maxZIndex the count just changed. -->
+    <template v-for="(item, index) in items" :key="items.length + '-' + index">
       <!-- Spoke: a hairline from the centre out to the chip, turned to the
            same bearing. -->
       <div class="variableSpoke" :style="{ rotate: (item.angle - 90) + 'deg' }"></div>
