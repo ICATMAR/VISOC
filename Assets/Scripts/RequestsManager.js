@@ -115,7 +115,7 @@ class RequestsManager {
 
   // Returns hours since last valid data point for a station. Mockup data
   // products only - HFR stations read theirs from the live sources instead
-  // (DPHFRNetwork.getICATMARStationsLastUpdate()).
+  // (DPHFRNetwork.getICATMARStations()).
   getLastUpdateHoursAgo(id, type) {
     if (type === 'drifter') {
       const d = this.getDrifterStation(id);

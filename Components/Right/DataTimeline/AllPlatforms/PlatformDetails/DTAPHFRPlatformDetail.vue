@@ -14,7 +14,7 @@
       <div class="pd-header">
         <span>{{ $t('HFR station') }}</span>
         <span>·</span>
-        <span class="pd-coords">{{ station.lat.toFixed(4) }}° N, {{ station.lon.toFixed(4) }}° E</span>
+        <span class="pd-coords">{{ coordsLabel }}</span>
         <button class="pd-copy-btn clickable" @click="copyCoords" :title="$t('Copy coordinates')">
           <i class="fa fa-copy"></i>
         </button>
@@ -82,7 +82,11 @@ export default {
   created() {
     this.map = undefined;
     this.markerOverlay = undefined;
-    this.loadLastUpdates();
+    // Static catalogue first so a station already selected renders (and its
+    // map draws) on this tick, then whatever the live sources add - the same
+    // two-step the map overlay and every buoy view use.
+    this.stations = this.$dataService.hfrnetwork.getIcatmarNetwork().stations;
+    this.loadStations();
   },
   mounted() {
     if (!this.station) return;
@@ -96,7 +100,7 @@ export default {
       element: iconEl,
       positioning: 'center-center',
       stopEvent: false,
-      position: ol.proj.fromLonLat([this.station.lon, this.station.lat]),
+      position: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
     });
     this.map.addOverlay(this.markerOverlay);
     this._onDocMouseMove = (e) => {
@@ -119,7 +123,7 @@ export default {
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
-      lastUpdates: null, // { stationId: Date } - null until the live metadata has loaded
+      stations: [],
     }
   },
   methods: {
@@ -139,7 +143,7 @@ export default {
           }),
         ],
         view: new ol.View({
-          center: ol.proj.fromLonLat([this.station.lon, this.station.lat]),
+          center: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
           zoom: 11
         })
       });
@@ -148,7 +152,7 @@ export default {
       const mainMap = this.$gui.olMap;
       if (!mainMap || !this.station) return;
       const view = mainMap.getView();
-      const coords = ol.proj.fromLonLat([this.station.lon, this.station.lat]);
+      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
       const targetZoom = view.getZoom() < 7 ? 11 : view.getZoom();
       const mapSize = mainMap.getSize(); // [width, height]
       const bottomCovered = 380; // data timeline + platform detail
@@ -159,9 +163,10 @@ export default {
       const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
       view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
     },
+    // Rounded on screen, exact on the clipboard: the panel is too narrow for
+    // full precision, but a pasted position is meant to be used.
     copyCoords() {
-      const text = `${this.station.lat.toFixed(4)}, ${this.station.lon.toFixed(4)}`;
-      navigator.clipboard?.writeText(text);
+      navigator.clipboard?.writeText(`${this.station.latitude}, ${this.station.longitude}`);
     },
     onScrollDragStart(e) {
       this.isDragging = true;
@@ -169,16 +174,15 @@ export default {
       this.dragScrollLeft = this.$refs.valuesScroll?.scrollLeft ?? 0;
       e.preventDefault();
     },
-    // When each station last published, from the live sources - the same
-    // metadata the map's status dots read, so the two always agree. Shared
-    // with the map via getAllNetworks()' memoization, so this costs no extra
-    // requests.
-    async loadLastUpdates() {
+    // Position, coverage box and freshness as the live sources report them -
+    // the same station objects the map's status dots read, so the two can't
+    // disagree. Shared with the map via getAllNetworks()' memoization, so this
+    // costs no extra requests; on failure the static catalogue stays up.
+    async loadStations() {
       try {
-        this.lastUpdates = await this.$dataService.hfrnetwork.getICATMARStationsLastUpdate(this.$dataService.hfrstations);
+        this.stations = await this.$dataService.hfrnetwork.getICATMARStations(this.$dataService.hfrstations);
       } catch (error) {
-        console.error('Error loading HFR station last update times:', error);
-        this.lastUpdates = {};
+        console.error('Error loading HFR stations:', error);
       }
     },
     formatTimeAgo(hours) {
@@ -194,8 +198,13 @@ export default {
   },
   computed: {
     station() {
-      if (!this.$gui.selectedPlatform?.stationId) return null;
-      return this.$requests.getHFRStation(this.$gui.selectedPlatform.stationId);
+      const id = this.$gui.selectedPlatform?.stationId;
+      if (!id) return null;
+      return this.stations.find(station => station.id === id) ?? null;
+    },
+    coordsLabel() {
+      if (!this.station) return '';
+      return `${this.station.latitude.toFixed(2)}° N, ${this.station.longitude.toFixed(2)}° E`;
     },
     sp() { return this.$gui.selectedPlatform; },
     formattedDate() {
@@ -212,11 +221,12 @@ export default {
       const m = Math.abs(offsetMins) % 60;
       return m ? `UTC${sign}${h}:${String(m).padStart(2, '0')}` : `UTC${sign}${h}`;
     },
-    // Hours since this station last published, or null while the live
-    // metadata is still loading / when no source reports a coverage end.
+    // Hours since this station last published, or null until a source reports
+    // a coverage end for it (the static catalogue carries none, so this stays
+    // null through the first paint).
     lastUpdateHours() {
-      const date = this.station && this.lastUpdates?.[this.station.id];
-      return date ? (Date.now() - date.getTime()) / 3600000 : null;
+      const endStr = this.station?.metadata?.time_coverage_end;
+      return endStr ? (Date.now() - new Date(endStr).getTime()) / 3600000 : null;
     },
     // active < 3h, delayed 3-24h, inactive beyond that - the same thresholds
     // the map's station dots use (MapOverlayHFRStations.stationStatus), so a
@@ -241,10 +251,13 @@ export default {
     },
   },
   watch: {
-    '$gui.selectedPlatform'() {
+    // The station object, not selectedPlatform: that also changes on every
+    // bar click (same station, new date), and it fires again when the live
+    // sources replace the static entry with one carrying the real position.
+    station() {
       if (!this.map || !this.station) return;
       this.imgError = false;
-      const coords = ol.proj.fromLonLat([this.station.lon, this.station.lat]);
+      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
       this.markerOverlay?.setPosition(coords);
       this.map.getView().animate({ center: coords, duration: 300 });
     }

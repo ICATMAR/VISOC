@@ -5,13 +5,32 @@ import SourceErddap from './SourceErddap.js';
 // Kept from the network's (the 'Total' dataset's) NC_GLOBAL attributes - shared
 // across every station, so kept once instead of repeated on each of them.
 const NETWORK_METADATA_KEYS = ['acknowledgement', 'institution', 'site_code','citation', 'comment', 'distribution_statement', 'license', 'summary'];
-// Kept from each station's NC_GLOBAL attributes.
-const STATION_METADATA_KEYS = ['doa_estimation_method', 'institution', 'network', 'title', 'sensor_model', 'summary', 'wmo_platform_code', 'time_coverage_start', 'time_coverage_end'];
+// Kept from each station's NC_GLOBAL attributes. manufacturer and
+// last_calibration_date are here because the app shows both, and the EU HFR
+// Node is the only place either is published - the static catalogue never
+// carried them, and the hardcoded calibration dates they were read off years
+// ago have since drifted (AREN/PBCN/GNST were recalibrated in May 2026).
+const STATION_METADATA_KEYS = ['doa_estimation_method', 'institution', 'network', 'title', 'sensor_model', 'manufacturer', 'summary', 'wmo_platform_code', 'last_calibration_date', 'time_coverage_start', 'time_coverage_end'];
 
 function pick(metadata, keys) {
   const picked = {};
   keys.forEach(key => { if (metadata[key] !== undefined) picked[key] = metadata[key]; });
   return picked;
+}
+
+// Where a station's data actually lands, from ERDDAP's geospatial_* bounds -
+// the box its radials cover, which reaches tens of kilometres offshore and is
+// nothing like the site itself. Written in the same { minLat, minLon, maxLat,
+// maxLon } shape the catalogue writes its bboxes in. undefined unless all four
+// bounds are present and numeric: a half-known box can't be fitted to.
+function coverageFrom(metadata) {
+  const coverage = {
+    minLat: Number(metadata['geospatial_lat_min']),
+    minLon: Number(metadata['geospatial_lon_min']),
+    maxLat: Number(metadata['geospatial_lat_max']),
+    maxLon: Number(metadata['geospatial_lon_max']),
+  };
+  return Object.values(coverage).every(Number.isFinite) ? coverage : undefined;
 }
 
 class SourceErddapEUHFR extends Source {
@@ -63,6 +82,7 @@ class SourceErddapEUHFR extends Source {
         metadata,
         startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
         endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+        coverage: coverageFrom(metadata),
       };
     }));
 
@@ -121,12 +141,14 @@ class SourceErddapEUHFR extends Source {
         metadata,
         startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
         endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+        coverage: coverageFrom(metadata),
       };
 
       return {
         id,
         latitude: Number(metadata['site_lat']),
         longitude: Number(metadata['site_lon']),
+        coverage: coverageFrom(metadata),
         metadata: pick(metadata, STATION_METADATA_KEYS),
       };
     }));
@@ -178,12 +200,14 @@ class SourceErddapEUHFR extends Source {
           metadata,
           startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
           endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+          coverage: coverageFrom(metadata),
         };
 
         return {
           id: station,
           latitude: Number(metadata['site_lat']),
           longitude: Number(metadata['site_lon']),
+          coverage: coverageFrom(metadata),
           metadata: pick(metadata, STATION_METADATA_KEYS),
         };
       }));
