@@ -25,7 +25,7 @@
       <div class="pd-status">
         <div class="pd-status-dot" :class="status"></div>
         <span>{{ $t(statusLabel) }}</span>
-        <span class="pd-last-update">· {{ lastUpdateText }}</span>
+        <span class="pd-last-update" v-if="lastUpdateText">· {{ lastUpdateText }}</span>
       </div>
 
       <!-- Line 3: date + local/UTC toggle -->
@@ -82,6 +82,7 @@ export default {
   created() {
     this.map = undefined;
     this.markerOverlay = undefined;
+    this.loadLastUpdates();
   },
   mounted() {
     if (!this.station) return;
@@ -118,6 +119,7 @@ export default {
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
+      lastUpdates: null, // { stationId: Date } - null until the live metadata has loaded
     }
   },
   methods: {
@@ -167,6 +169,18 @@ export default {
       this.dragScrollLeft = this.$refs.valuesScroll?.scrollLeft ?? 0;
       e.preventDefault();
     },
+    // When each station last published, from the live sources - the same
+    // metadata the map's status dots read, so the two always agree. Shared
+    // with the map via getAllNetworks()' memoization, so this costs no extra
+    // requests.
+    async loadLastUpdates() {
+      try {
+        this.lastUpdates = await this.$dataService.hfrnetwork.getICATMARStationsLastUpdate(this.$dataService.hfrstations);
+      } catch (error) {
+        console.error('Error loading HFR station last update times:', error);
+        this.lastUpdates = {};
+      }
+    },
     formatTimeAgo(hours) {
       if (hours == null) return '';
       if (hours < 1) return 'Less than 1h ago';
@@ -198,15 +212,29 @@ export default {
       const m = Math.abs(offsetMins) % 60;
       return m ? `UTC${sign}${h}:${String(m).padStart(2, '0')}` : `UTC${sign}${h}`;
     },
+    // Hours since this station last published, or null while the live
+    // metadata is still loading / when no source reports a coverage end.
+    lastUpdateHours() {
+      const date = this.station && this.lastUpdates?.[this.station.id];
+      return date ? (Date.now() - date.getTime()) / 3600000 : null;
+    },
+    // active < 3h, delayed 3-24h, inactive beyond that - the same thresholds
+    // the map's station dots use (MapOverlayHFRStations.stationStatus), so a
+    // station never reads one way on the map and another way here. The map's
+    // further 'offline' tier (older than 30 days) has no dot of its own in a
+    // platform detail, so it stays 'inactive' here.
     status() {
-      return this.station ? this.$requests.getStationStatus(this.station.id, 'hfr') : 'inactive';
+      const hours = this.lastUpdateHours;
+      if (hours == null) return 'unknown';
+      if (hours < 3) return 'active';
+      if (hours <= 24) return 'delayed';
+      return 'inactive';
     },
     statusLabel() {
-      return { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[this.status] ?? 'Inactive';
+      return { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[this.status] ?? 'Unknown';
     },
     lastUpdateText() {
-      if (!this.station) return '';
-      return this.formatTimeAgo(this.$requests.getLastUpdateHoursAgo(this.station.id, 'hfr'));
+      return this.formatTimeAgo(this.lastUpdateHours);
     },
     hfrDashboard() {
       return this.$gui.dashboards.find(d => d.id === 'hfr') ?? { icon: '', name: 'HFR currents' };

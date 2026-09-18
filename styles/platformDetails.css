@@ -121,6 +121,7 @@
 .pd-status-dot.delayed  { background: #ffc107; box-shadow: 0 0 4px #ffc10788; }
 .pd-status-dot.static  { background: none; box-shadow: 0 0 4px #757575; border: solid 1px #bbbbbb;}
 .pd-status-dot.inactive { background: #757575; }
+.pd-status-dot.unknown  { background: none; border: solid 1px rgba(255, 255, 255, 0.35); }
 
 .pd-last-update {
   opacity: 0.65;

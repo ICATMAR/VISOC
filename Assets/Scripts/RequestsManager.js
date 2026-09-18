@@ -56,13 +56,6 @@ class RequestsManager {
   _drifterTrajCache = {};   // id → native-cadence trajectory (for maps)
   _drifterHourlyCache = {}; // `id_totalHours` → hourly resample (for timeline)
 
-  // Hours since last valid data point per HFR station (used for status + time-ago display).
-  // active ≤ 3h, delayed 3–24h, inactive > 24h
-  _mockLastUpdateHours = {
-    CNET: 1,   CREU: 0.5, BEGU: 2,   TOSS: 8,
-    AREN: 1.5, PBCN: 72,  GNST: 1,   SCAL: 2,
-  };
-
   // Force a trailing gap (hours of null) at the end of generated buoy data to simulate inactivity.
   // active ≤ 2h, delayed 2–24h, inactive > 24h
   _buoyDataGaps = {
@@ -120,7 +113,9 @@ class RequestsManager {
     return this._drifterHourlyCache[key];
   }
 
-  // Returns hours since last valid data point for a station.
+  // Returns hours since last valid data point for a station. Mockup data
+  // products only - HFR stations read theirs from the live sources instead
+  // (DPHFRNetwork.getICATMARStationsLastUpdate()).
   getLastUpdateHoursAgo(id, type) {
     if (type === 'drifter') {
       const d = this.getDrifterStation(id);
@@ -137,12 +132,12 @@ class RequestsManager {
       }
       return this._buoyDataGaps[id] ?? 1;
     }
-    return this._mockLastUpdateHours[id] ?? 1;
+    return 1;
   }
 
   // Returns 'active', 'delayed', or 'inactive' based on hours since last update.
-  // Buoys:  active ≤ 2h, delayed 2–24h, inactive > 24h
-  // HFR:    active ≤ 3h, delayed 3–24h, inactive > 24h
+  // Buoys:    active ≤ 2h, delayed 2–24h, inactive > 24h
+  // Drifters: active ≤ 3h, delayed 3–24h, inactive > 24h
   getStationStatus(id, type) {
     const hours = this.getLastUpdateHoursAgo(id, type);
     const delayThreshold = type === 'buoy' ? 2 : 3;

@@ -11,14 +11,28 @@ class DPHFRNetwork extends DP {
     return hfrIcatmarNetwork;
   }
 
-  // Get all networks (each { total, stations }) from all sources.
+  // Every network (each { total, stations }) from all sources - see
+  // loadAllNetworks(). That load is a few dozen requests and more than one
+  // component needs what it returns (the map's status dots, the HFR platform
+  // detail's status line), so it's memoized here: they share one load instead
+  // of each triggering its own. Dropped again if it fails, so a later call
+  // can retry.
+  getAllNetworks(stationsProduct) {
+    if (!this._allNetworksPromise) {
+      this._allNetworksPromise = this.loadAllNetworks(stationsProduct)
+        .catch(error => { this._allNetworksPromise = undefined; throw error; });
+    }
+    return this._allNetworksPromise;
+  }
+
   // DPHFRNetwork has no sources of its own - station discovery belongs to
   // DPHFRStations (its EU HFR Node source already carries every ICATMAR
   // station dataset), so stationsProduct is required here. A network's
   // startDate/endDate might later come from its stations' latest data
   // instead of total's (a Total file is usually generated later than the
   // stations feeding it) - that would need totalsProduct passed in too.
-  async getAllNetworks(stationsProduct) {
+  // Call getAllNetworks() rather than this - it's the memoized entry point.
+  async loadAllNetworks(stationsProduct) {
     const euHFRSource = stationsProduct.sources.find(s => s instanceof SourceErddapEUHFR);
     const githubSource = stationsProduct.sources.find(s => s instanceof SourceGithubHFR);
 
@@ -48,7 +62,7 @@ class DPHFRNetwork extends DP {
     if (githubSource) {
       await githubSource.loadingPromise;
       // Modify end date of icatmar stations
-      const icatmarNetwork = hfrNetworks.find(net => net.stations.some(s => hfrIcatmarNetwork.stations.some(icatmarStation => icatmarStation.id === s.id)));
+      const icatmarNetwork = this.findICATMARNetwork(hfrNetworks);
       if (icatmarNetwork) {
         icatmarNetwork.stations.forEach(station => {
           const endDate = githubSource.stations[station.id]?.endDate;
@@ -58,6 +72,28 @@ class DPHFRNetwork extends DP {
     }
 
     return hfrNetworks;
+  }
+
+  // The live ICATMAR group out of getAllNetworks()' networks - matched by its
+  // stations, since the groups carry the EU HFR Node's own network names.
+  findICATMARNetwork(networks) {
+    return networks.find(net => net.stations.some(s => hfrIcatmarNetwork.stations.some(icatmarStation => icatmarStation.id === s.id)));
+  }
+
+  // When each ICATMAR station last published, keyed by station id - read off
+  // the live time_coverage_end, which getAllNetworks() has already replaced
+  // with the GitHub repo's own end date wherever the repo knows one (ERDDAP
+  // regularly lags days behind the files, so its value alone reports stations
+  // as stale while their data is actually arriving). Stations with no
+  // coverage end on either source are left out.
+  async getICATMARStationsLastUpdate(stationsProduct) {
+    const networks = await this.getAllNetworks(stationsProduct);
+    const lastUpdate = {};
+    (this.findICATMARNetwork(networks)?.stations ?? []).forEach(station => {
+      const endStr = station.metadata?.time_coverage_end;
+      if (endStr) lastUpdate[station.id] = new Date(endStr);
+    });
+    return lastUpdate;
   }
 
   // Keeps every value already in staticObj; only fills in keys staticObj is
