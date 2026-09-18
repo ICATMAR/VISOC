@@ -71,9 +71,9 @@ class GUIManager {
       const absH = Math.floor(Math.abs(offsetMinutes) / 60);
       const absM = Math.abs(offsetMinutes) % 60;
       const str = absM > 0 ? `${absH}:${String(absM).padStart(2, '0')}` : `${absH}`;
-      return `(UTC${sign}${str})`;
+      return `UTC${sign}${str}`;
     }
-    return '(UTC)';
+    return 'UTC';
   }
   // Timezone-aware helpers used by all timeline grid components
   timelineHours(date) {
