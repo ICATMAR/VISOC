@@ -100,29 +100,60 @@
             <span class="info-label">Platform type</span>
             <span class="info-value">Meteo-oceanographic moored buoy</span>
           </div>
-          <div class="info-row">
+          <!-- One entry per institution: a buoy can be run by more than one
+               (SOMO is 'ICATMAR / ICM-CSIC'), each linked where we know the
+               address. -->
+          <div class="info-row" v-if="buoyInstitutions.length">
             <span class="info-label">Institution</span>
-            <a href="https://icatmar.cat" target="_blank" rel="noopener" class="info-link">ICATMAR</a>
+            <span class="info-value">
+              <template v-for="(inst, index) in buoyInstitutions" :key="inst.name">
+                <span v-if="index"> / </span>
+                <a v-if="inst.url" :href="inst.url" target="_blank" rel="noopener" class="info-link">{{ inst.name }}</a>
+                <span v-else>{{ inst.name }}</span>
+              </template>
+            </span>
           </div>
-          <div class="info-row">
-            <span class="info-label">Manufacturer</span>
-            <span class="info-value">{{ buoyStation.manufacturer }}</span>
+          <!-- Whole metres: the unit group's one decimal is right for a sensor
+               depth and noise on a water column. -->
+          <!-- Same wording and same copy button as the platform detail's
+               header, so a position reads and copies identically in both. -->
+          <div class="info-row" v-if="buoyCoords">
+            <span class="info-label">Position</span>
+            <span class="info-value info-coords">{{ buoyCoords }}
+              <button class="pd-copy-btn clickable" @click="copyBuoyCoords" :title="$t('Copy coordinates')">
+                <i class="fa fa-copy"></i>
+              </button>
+            </span>
           </div>
-          <div class="info-row">
+          <div class="info-row" v-if="buoyStation.depth != undefined">
             <span class="info-label">Depth</span>
-            <span class="info-value">{{ buoyStation.depth }} m</span>
+            <span class="info-value">{{ amount('DEPTH', buoyStation.depth, 0) }}
+              <span class="info-unit" :class="{ clickable: $gui.isUnitSwitchable('DEPTH') }"
+                :title="$gui.isUnitSwitchable('DEPTH') ? $t('Change units') : ''"
+                @click="cycleUnit('DEPTH')">{{ unitOf('DEPTH') }}</span></span>
           </div>
-          <div class="info-row">
+          <div class="info-row" v-if="buoyStation.distanceToCoast != undefined">
             <span class="info-label">Distance to coast</span>
-            <span class="info-value">{{ buoyStation.distanceCoast }} mn</span>
+            <span class="info-value">{{ amount('DISTCOAST', buoyStation.distanceToCoast) }}
+              <span class="info-unit" :class="{ clickable: $gui.isUnitSwitchable('DISTCOAST') }"
+                :title="$gui.isUnitSwitchable('DISTCOAST') ? $t('Change units') : ''"
+                @click="cycleUnit('DISTCOAST')">{{ unitOf('DISTCOAST') }}</span></span>
           </div>
-          <div class="info-row">
+          <div class="info-row" v-if="buoyStation.installed">
             <span class="info-label">Installed</span>
             <span class="info-value">{{ formatInstallDate(buoyStation.installed) }}</span>
           </div>
-          <div class="info-row">
+          <div class="info-row" v-if="buoyStation.license">
             <span class="info-label">License</span>
-            <a :href="network.licenseUrl" target="_blank" rel="noopener" class="info-link">{{ network.licenseLabel }}</a>
+            <a v-if="buoyLicenseUrl" :href="buoyLicenseUrl" target="_blank" rel="noopener" class="info-link">{{ buoyStation.license }}</a>
+            <span v-else class="info-value">{{ buoyStation.license }}</span>
+          </div>
+          <!-- Who to credit, and how to cite. Several sentences long where
+               every other value is a word or two, so this one is capped and
+               wraps (see .info-ack). -->
+          <div class="info-row" v-if="buoyAcknowledgement">
+            <span class="info-label">Acknowledgement</span>
+            <span class="info-value info-ack">{{ buoyAcknowledgement }}</span>
           </div>
         </div>
       </div>
@@ -191,8 +222,31 @@
 
 
 <script>
+// Where to send someone who clicks an institution's name. Here rather than in
+// the catalogue: it is a display concern, and `institution` there is free text
+// that several buoys share.
+const INSTITUTION_URLS = {
+  'ICATMAR': 'https://icatmar.cat',
+  'ICM-CSIC': 'https://www.icm.csic.es',
+  'CEFREM': 'https://cefrem.univ-perp.fr/',
+  'Puertos del Estado': 'https://www.puertos.es',
+};
+
+const LICENSE_URLS = {
+  'CC-BY-4.0': 'https://creativecommons.org/licenses/by/4.0/',
+};
+
 export default {
   name: "DTInfoSection",
+  // The buoy catalogue, static first (synchronous, so a buoy already selected
+  // resolves immediately) then refined once the live sources merge in - the
+  // same two-step every other buoy view uses.
+  created() {
+    this.buoys = this.$dataService.buoys.getBuoys();
+    this.$dataService.buoys.loadBuoys()
+      .then(buoys => { this.buoys = buoys; })
+      .catch(error => console.error('Error loading buoys for the info section:', error));
+  },
   data() {
     return {
       radarIconURL: './Assets/Icons/radar.svg',
@@ -200,6 +254,7 @@ export default {
       driftIconURL: './Assets/Icons/drifter.svg',
       codeIconURL: './Assets/Icons/code.svg',
       svpIconURL: './Assets/Icons/svp.svg',
+      buoys: [],
     }
   },
   computed: {
@@ -239,11 +294,39 @@ export default {
       return this.$gui.selectedDashboard === 'buoys'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'buoys');
     },
+    // The real catalogue (DPBuoys), not RequestsManager's mock list - that one
+    // holds five invented buoys whose ids only coincidentally match three of
+    // the thirteen real ones, so ten buoys showed no metadata at all.
     buoyStation() {
       if (!this.isBuoyContext) return null;
       const id = this.$gui.selectedPlatform?.stationId;
       if (!id) return null;
-      return this.$requests.getBuoyStation(id);
+      return this.buoys.find(buoy => buoy.id === id) ?? null;
+    },
+    // 'ICATMAR / ICM-CSIC' -> two entries. The catalogue writes joint
+    // ownership with a slash, and each half is its own organisation.
+    buoyInstitutions() {
+      return String(this.buoyStation?.institution ?? '')
+        .split('/')
+        .map(name => name.trim())
+        .filter(Boolean)
+        .map(name => ({ name, url: INSTITUTION_URLS[name] }));
+    },
+    buoyCoords() {
+      const buoy = this.buoyStation;
+      if (buoy?.latitude == undefined || buoy?.longitude == undefined) return '';
+      return `${buoy.latitude.toFixed(2)}° N, ${buoy.longitude.toFixed(2)}° E`;
+    },
+    buoyLicenseUrl() {
+      return LICENSE_URLS[this.buoyStation?.license];
+    },
+    // Whitespace collapsed to single spaces: the catalogue writes these across
+    // several indented lines and ERDDAP serves them with the indentation still
+    // in, which HTML would fold anyway - but not for a copy, a title, or
+    // anything else that reads the string rather than renders it.
+    buoyAcknowledgement() {
+      const text = this.buoyStation?.acknowledgement;
+      return text ? String(text).replace(/\s+/g, ' ').trim() : '';
     },
     isDrifterContext() {
       return this.$gui.selectedDashboard === 'drifters'
@@ -272,6 +355,42 @@ export default {
     },
   },
   methods: {
+    // A measurement in whatever unit the user has picked for its quantity.
+    //
+    // Precision comes from the MAGNITUDE, not from the unit group. The groups
+    // are tuned for readings on a chart - coastDistance carries 0 decimals,
+    // which suits an offshore distance and rounds a buoy 1.24 km out to "1 km"
+    // - whereas these are fixed facts about a mooring, spanning 0.24 km to
+    // 1200 m in one panel. `decimals` forces a value where a field knows
+    // better (a water column wants whole metres however deep it is).
+    //
+    // Trailing zeros are dropped, so 0.5 doesn't become 0.50.
+    //
+    // The NUMBER only - the unit is rendered separately, since it is the part
+    // that is styled apart and the part you click.
+    amount(code, value, decimals) {
+      const unit = this.$gui.unitFor(code);
+      const shown = unit.toDisplay(value);
+      const magnitude = Math.abs(shown);
+      const places = decimals ?? (magnitude >= 10 ? 0 : magnitude >= 1 ? 1 : 2);
+      return Number(shown.toFixed(places));
+    },
+    unitOf(code) {
+      return this.$gui.unitFor(code).unit;
+    },
+    // Steps that quantity to its next unit, app-wide - the same
+    // GUIManager.cycleUnit the timeline's variable bar and the value chips
+    // use, so putting depth into feet here puts it into feet everywhere.
+    // Plain decimal degrees, not the displayed string - what gets pasted into
+    // a chart plotter or a search box, the same as the detail panel copies.
+    copyBuoyCoords() {
+      const buoy = this.buoyStation;
+      if (buoy?.latitude == undefined || buoy?.longitude == undefined) return;
+      navigator.clipboard?.writeText(`${buoy.latitude.toFixed(2)}, ${buoy.longitude.toFixed(2)}`);
+    },
+    cycleUnit(code) {
+      if (this.$gui.isUnitSwitchable(code)) this.$gui.cycleUnit(code);
+    },
     formatInstallDate(iso) {
       if (!iso || iso === 'unknown') return '—';
       const d = new Date(iso);
@@ -284,6 +403,19 @@ export default {
 
 
 <style scoped>
+/* The unit sits quieter than the number it belongs to, and carries the
+   click. Underlined only where there is another unit to go to - the signal the
+   variable bar and the detail panel's readings already use for this gesture. */
+.info-unit {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.info-unit.clickable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .info-section {
   min-width: 620px;
   background: var(--lightBlue);
@@ -409,6 +541,27 @@ export default {
 .info-value {
   color: white;
   text-shadow: 0 0 3px black;
+  /* A flex item defaults to min-width:auto, which is its longest word - fine
+     for text, but it has to be able to shrink before it can wrap at all. */
+  min-width: 0;
+  user-select: text;
+}
+
+/* Keeps the copy button on the same baseline as the coordinates rather than
+   letting it sit as a block of its own. */
+.info-coords {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+/* The one value long enough to need more than a line. Capped rather than left
+   to the panel's width so it breaks at a comfortable measure instead of
+   stretching the row; the URL at the end is one long token, so it is allowed
+   to break mid-word rather than push the line out. */
+.info-ack {
+  max-width: 420px;
+  overflow-wrap: anywhere;
 }
 
 .info-link {

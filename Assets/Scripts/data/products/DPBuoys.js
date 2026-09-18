@@ -12,7 +12,11 @@ const REREQUEST_HOUR_WINDOW_FROM_NOW = 1;
 
 // Fields that are merged one for one across sources - everything else on a
 // buoy (its id, its sensors, its dates) is merged by rules of its own below.
-const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth'];
+const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth',
+  // When the hull went in the water. Only the static catalogue knows it -
+  // no source publishes it - so without it here it was dropped from every
+  // buoy a source covers, which is all of them.
+  'installed'];
 // Same, for a sensor - kept atomic (first source wins outright), unlike
 // 'variables' below which is merged key by key instead. 'metadata' is
 // deliberately atomic: ERDDAP's dataset-level attributes (institution,
