@@ -150,6 +150,11 @@ class GUIManager {
   buoyVariables = [
     { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, range: VARIABLE_RANGES.WSPD },
     { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, range: VARIABLE_RANGES.VHM0 },
+    // No fromDirection: HCDT is where the water is GOING (CF's
+    // direction_of_sea_water_velocity), unlike the wind and the swell above,
+    // which are reported as where they come from. So the arrow draws the
+    // heading as recorded, with no half turn.
+    { label: 'Currents',    code: 'HCSP', directionCode: 'HCDT', range: VARIABLE_RANGES.HCSP },
     { label: 'Water temperature', code: 'TEMP', range: VARIABLE_RANGES.TEMP },
     { label: 'Air temperature',   code: 'DRYT', range: VARIABLE_RANGES.DRYT },
   ];
@@ -183,7 +188,10 @@ class GUIManager {
     { code: 'VCMX' }, { code: 'VHMH' }, { code: 'VEMH' },
     { code: 'VTPK' },                        // peak period, shown with VZMX
     { code: 'GSPD', directionCode: 'GDIR' }, // wind gust
-    { code: 'HCSP', directionCode: 'HCDT' }, // current, shallowest bin only
+    // HCSP/HCDT are NOT here: currents are a timeline variable now, so they
+    // are already fetched and binned for every buoy, and buoyClicked copies
+    // them onto the selection like any other. Listing them again would only
+    // re-plan work already done.
   ];
   get buoyDetailCodes() {
     return [...new Set(this.buoyDetailVariables.flatMap(v => [v.code, v.directionCode].filter(Boolean)))];

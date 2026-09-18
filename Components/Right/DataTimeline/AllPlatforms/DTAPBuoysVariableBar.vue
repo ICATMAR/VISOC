@@ -1,9 +1,9 @@
 <template>
-  <!-- Three siblings rather than one wrapper, so they become flex items of
-       DTAllPlatforms' .bottom-bar directly: the trigger and the unit sit on
-       the same row as the HFR currents/Buoys/Drifters tabs, while the options
-       take a full row's width and so wrap onto their own line below (the bar
-       is a wrapping flex container). -->
+  <!-- Siblings rather than one wrapper, so they become flex items of
+       DTAllPlatforms' .bottom-bar directly: the trigger, the unit and the
+       legend sit on the same row as the HFR currents/Buoys/Drifters tabs,
+       while the options take a full row's width and so wrap onto their own
+       line below (the bar is a wrapping flex container). -->
   <button class="clickable variable-trigger" @click="isOpen = !isOpen"
     :title="$t('Choose variable')">
     <span>{{ $t(selected.label) }}</span>
@@ -18,6 +18,19 @@
     :title="switchable ? $t('Change units') : ''"
     @click="switchable && $gui.cycleUnit(selected.code)">{{ unit.unit }}</span>
 
+  <!-- The scale the cells are painted on. Hidden on narrow windows by a media
+       query rather than a resize listener - it is the WINDOW's width that
+       decides, which is exactly what a media query watches, and nothing here
+       has to re-render when it changes.
+
+       Wrapped rather than placed directly: .bottom-bar puts padding-left on
+       each of its children, which on the legend itself would open a gap inside
+       its own rounded pill. On a wrapper it is just the spacing it was meant
+       to be. -->
+  <span class="variable-legend">
+    <DTColorLegend :code="selected.code" :range="selected.range" />
+  </span>
+
   <div v-if="isOpen" class="horizontal wrap variable-options">
     <button v-for="item in $gui.buoyVariables" :key="item.code" class="clickable"
       :class="{ 'selectedOption': item.code === $gui.selectedBuoyVariableCode }"
@@ -27,9 +40,11 @@
 
 
 <script>
+import DTColorLegend from '../Shared/DTColorLegend.vue';
 
 export default {
   name: "DTAPBuoysVariableBar",
+  components: { DTColorLegend },
   data() {
     return {
       isOpen: false,
@@ -87,6 +102,21 @@ export default {
 .variable-unit.clickable {
   text-decoration: underline;
   font-size: 0.7rem;
+}
+
+/* Sits beside the unit, and only when there is room for it: below 700px the
+   tabs and the picker already fill the row. */
+.variable-legend {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .variable-legend {
+    display: none;
+  }
 }
 
 /* A full row of its own: .bottom-bar wraps, so a 100% basis pushes this

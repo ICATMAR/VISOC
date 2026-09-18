@@ -1,18 +1,19 @@
 <template>
-  <!-- The colour scale a set of cells is painted with: the unit, then the
-       gradient with its stops labelled where they actually fall.
-       Not currently placed anywhere - it was the buoys timeline's legend until
-       the variable picker became a dropdown, and is kept whole for wherever it
-       is wanted next. Give it a `code` (which legend and which unit) and a
-       `range` IN STANDARD UNITS (what the gradient spans). -->
+  <!-- The colour scale a set of cells is painted with, labelled where the
+       colours actually change. No unit picker of its own: wherever this is
+       placed the unit is already on show next to it, and two controls for one
+       setting is one too many. The tick numbers still follow whatever unit is
+       chosen - see ticks().
+
+       Give it a `code` (which legend) and a `range` IN STANDARD UNITS (what
+       the gradient spans). -->
   <div class="horizontal legend">
-    <span class="legend-unit" :class="{ clickable: switchable }"
-      :title="switchable ? $t('Change units') : ''"
-      @click="switchable && $gui.cycleUnit(code)">{{ unit.unit }}</span>
+    <span class="legend-cap" :style="{ background: endColor(0) }"></span>
     <div class="legend-scale" :style="{ background: gradient }">
       <span v-for="tick in ticks" :key="tick.percent" class="legend-tick"
         :style="{ left: tick.percent + '%' }">{{ tick.label }}</span>
     </div>
+    <span class="legend-cap" :style="{ background: endColor(1) }"></span>
   </div>
 </template>
 
@@ -22,8 +23,19 @@
 export default {
   name: "DTColorLegend",
   props: {
-    code: { type: String, required: true },  // standard code - picks the legend and the unit
+    code: { type: String, required: true },  // standard code - picks the legend
     range: { type: Array, required: true },  // [min, max] in STANDARD units
+  },
+  methods: {
+    // The flat colour the gradient starts and ends on. The caps carry it a
+    // little past each end, which is what gives the first and last tick
+    // somewhere to sit: centred on their own value they would otherwise hang
+    // half off the bar, and shoving them inward puts them over the wrong
+    // colour.
+    endColor(end) {
+      const [, [r, g, b]] = end === 0 ? this.stops[0] : this.stops[this.stops.length - 1];
+      return `rgb(${r}, ${g}, ${b})`;
+    },
   },
   computed: {
     stops() {
@@ -31,9 +43,6 @@ export default {
     },
     unit() {
       return this.$gui.unitFor(this.code);
-    },
-    switchable() {
-      return this.$gui.isUnitSwitchable(this.code);
     },
     // Built straight from the legend's own [t, [r,g,b]] stops (t already
     // normalized 0..1), so this always matches colorLegends.js without a
@@ -43,8 +52,8 @@ export default {
       return `linear-gradient(to right, ${colors.join(', ')})`;
     },
     // Labelled at the legend's OWN stops rather than at even intervals - the
-    // stops are where the colour actually changes, so that is where a number
-    // is worth reading off.
+    // stops are where the colour changes, so that is where a number is worth
+    // reading off.
     //
     // The range is standard, so the LABELS convert while the gradient behind
     // them doesn't move: the colours mean the same thing in any unit, only the
@@ -66,24 +75,20 @@ export default {
 
 <style scoped>
 .legend {
-  max-width: 320px;
+  max-width: 200px;
   width: 100%;
-  height: 22px;
-  border-radius: 11px;
+  height: 18px;
+  margin-left: 10px;
+  border-radius: 9px;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.25);
+  align-self: center;
 }
 
-.legend-unit {
-  flex: 0 0 auto;
-  padding: 0 8px;
-  font-size: 0.7rem;
-  line-height: 22px;
-  white-space: nowrap;
-}
-
-.legend-unit.clickable {
-  text-decoration: underline;
+/* Flat run of the end colour, so the outermost labels have a readable place to
+   sit without being pushed off the value they mark. */
+.legend-cap {
+  flex: 0 0 12px;
+  height: 100%;
 }
 
 .legend-scale {
@@ -92,26 +97,16 @@ export default {
   height: 100%;
 }
 
-/* Centred on the value it marks, so a label sits over its own colour. The
-   first and last would half-overflow the bar, so they are pulled inside. */
+/* Centred on the value it marks, so a label sits over its own colour - the
+   caps are what make that safe at both ends. */
 .legend-tick {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: rgba(0, 0, 0, 0.8);
   text-shadow: none;
   white-space: nowrap;
   pointer-events: none;
-}
-
-.legend-tick:first-child {
-  transform: translate(0, -50%);
-  padding-left: 2px;
-}
-
-.legend-tick:last-child {
-  transform: translate(-100%, -50%);
-  padding-right: 2px;
 }
 </style>
