@@ -86,9 +86,27 @@ a {
 #brand img {
   height: 1.7rem;
   /* The mini logo has dark-blue artwork, which would vanish on the bar */
-  background: white;
   border-radius: 50%;
-  padding: 2px;
+  border: 1px solid var(--lightBlue);
+}
+
+/* 'Updated X min ago' / 'Next update in X min', across from the menu button */
+#update-status {
+  position: absolute;
+  left: 0.7rem;
+  bottom: 0;
+  height: var(--top-bar-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 0.6rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+#next-update {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 #menu-button {
@@ -213,6 +231,8 @@ a {
 
 #list-table .header-row {
   top: calc(var(--top-bar-height) + var(--safe-top));
+  background: var(--darkBlue);
+  color: white;
 }
 
 #buoy-table .header-row {
@@ -240,11 +260,12 @@ a {
 .header-cell i {
   font-size: 0.95rem;
   margin-bottom: 0.1rem;
-  color: var(--blue);
+  color: var(--lightBlue);
 }
 
 .header-cell .unit {
-  color: var(--lightGray);
+  color: white;
+  opacity: 0.7;
 }
 
 .header-cell.clickable:hover .unit {
@@ -290,29 +311,62 @@ a {
   color: rgba(var(--darkBlueRGB), 0.3);
 }
 
-/* A value that comes from a forecast rather than a measurement: italic, and
-   striped like the forecast rows' time cells - wherever it is shown. The
-   stripes are an image over the cell's legend colour (set inline as
-   background-color, see cellHTML), so the colour still reads through. */
-.cell.forecast .cell-main {
-  font-style: italic;
-}
-
+/* A value that comes from a model rather than a measurement: a triangle in
+   its top-right corner, wherever it is shown. The cell's colour is left
+   alone, so the colour scale reads the same for both. Tapping one says which
+   model it comes from (see showToast). */
 .cell.forecast,
 .forecast-sample {
-  background-image: repeating-linear-gradient(135deg,
-      rgba(255, 255, 255, 0.55) 0 4px,
-      transparent 4px 9px);
+  position: relative;
+}
+
+.cell.forecast {
+  cursor: help;
+}
+
+.cell.forecast::after,
+.forecast-sample::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 0.5rem 0.5rem 0;
+  border-color: transparent var(--blue) transparent transparent;
 }
 
 .forecast-sample {
   display: inline-block;
-  width: 0.8rem;
-  height: 0.8rem;
+  width: 0.9rem;
+  height: 0.9rem;
   vertical-align: middle;
-  margin-right: 0.2rem;
+  margin-right: 0.25rem;
   border: 1px solid var(--line);
-  background-color: rgba(var(--lightBlueRGB), 0.6);
+  background: white;
+  overflow: hidden;
+}
+
+/* "This comes from a model" message, at the bottom of the screen */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.2rem + var(--safe-bottom));
+  z-index: 35;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.6rem;
+  background: var(--darkBlue);
+  color: white;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.3s ease;
+}
+
+#toast.fading {
+  opacity: 0;
 }
 
 .arrow {
@@ -422,11 +476,6 @@ a {
   line-height: 1.1;
 }
 
-/* The column title already says the unit - the list has no room to repeat it */
-#list-table .cell-main .unit {
-  display: none;
-}
-
 .buoy-name {
   font-size: 0.66rem;
   font-style: italic;
@@ -469,16 +518,6 @@ a {
   color: var(--lightGray);
 }
 
-.legend .measured-sample,
-.legend .predicted-sample {
-  display: inline-block;
-  width: 0.8rem;
-  height: 0.8rem;
-  vertical-align: middle;
-  border: 1px solid var(--line);
-  margin-right: 0.2rem;
-}
-
 
 /* -------------------------------------------------------------- BUOY VIEW */
 
@@ -499,16 +538,12 @@ a {
   border-right: 1px solid var(--line);
 }
 
-.measured-sample,
 .measurement .time-cell {
   background: white;
 }
 
-.predicted-sample,
 .prediction .time-cell {
-  background: repeating-linear-gradient(135deg,
-      rgba(var(--lightBlueRGB), 0.16) 0 5px,
-      rgba(var(--lightBlueRGB), 0.32) 5px 10px);
+  background: rgba(var(--lightBlueRGB), 0.22);
 }
 
 /* Where "now" falls within its row */

@@ -136,7 +136,9 @@ const state = {
   buoysById: new Map(),   // every buoy, real and virtual, hidden ones included
   buoys: [],              // the ones listed, north to south
   latest: new Map(),      // buoyId -> { loading, columns: { <id>: { values, date, forecast } }, lastUpdate }
-  listUpdatedAt: undefined,
+  listUpdatedAt: undefined, // when the last refresh finished
+  nextUpdateAt: undefined,  // when the next one is due (see scheduleRefresh)
+  refreshing: false,
   // The buoy open in the BUOY/INFO views:
   // { buoyId, observations, forecasts: { <column id>: result }, followNow }
   detail: undefined,
@@ -405,7 +407,7 @@ function forecastAt(data, date, column) {
     const value = data[best.timestamp][code]?.value;
     if (value != undefined) values[code] = value;
   });
-  return { values, date: new Date(best.timestamp) };
+  return { values, date: new Date(best.timestamp), model: data[best.timestamp][column.code].model };
 }
 
 // Latest readings of one buoy for the list. Any column without a recent
@@ -450,9 +452,13 @@ async function loadLatest(buoy) {
 }
 
 async function refreshList() {
-  state.listUpdatedAt = new Date();
+  state.refreshing = true;
+  renderUpdateStatus();
   await Promise.all(state.buoys.map(buoy => loadLatest(buoy)));
+  state.refreshing = false;
+  state.listUpdatedAt = new Date();
   renderList();
+  renderUpdateStatus();
 }
 
 // Average of a column over the readings that fall in one interval. Speeds,
@@ -541,9 +547,13 @@ function intervalStart(date, hours) {
 
 // -------------------------------------------------------------- RENDERING
 
-// One data cell. `detailed` adds the second line (maximum wave, gusts) the
-// buoy view has room for.
-function cellHTML(column, values, { forecast = false, detailed = false } = {}) {
+// One data cell. `detailed` adds the second line the buoy view has room for
+// (maximum wave, gusts); `list` is the main view's narrower layout, with the
+// wave period and the gusts on a second line instead.
+//
+// A forecast cell carries the model it comes from (`model`, its id), for the
+// message a tap on it shows (see showToast).
+function cellHTML(column, values, { forecast = false, model, detailed = false, list = false } = {}) {
   const magnitude = values?.[column.code];
   if (magnitude == undefined) return '<div class="cell empty">–</div>';
 
@@ -554,12 +564,13 @@ function cellHTML(column, values, { forecast = false, detailed = false } = {}) {
   const direction = column.directionCode ? values[column.directionCode] : undefined;
   if (direction != undefined) main += arrowHTML(direction, column.fromDirection);
   main += `<span class="value">${value.text}</span><span class="unit">${escapeHTML(value.unit)}</span>`;
+  let sub = '';
   if (column.periodCode && values[column.periodCode] != undefined) {
     const period = formatValue(column.periodCode, values[column.periodCode]);
-    main += `<span class="secondary">&nbsp;${period.text}${escapeHTML(period.unit)}</span>`;
+    if (list) sub = `${period.text} ${escapeHTML(period.unit)}`;
+    else main += `<span class="secondary">&nbsp;${period.text}${escapeHTML(period.unit)}</span>`;
   }
 
-  let sub = '';
   if (detailed && column.maxCodes) {
     const height = column.maxCodes.map(code => values[code]).find(v => v != undefined);
     if (height != undefined) {
@@ -569,14 +580,12 @@ function cellHTML(column, values, { forecast = false, detailed = false } = {}) {
       sub = `Max: ${h.text}${escapeHTML(h.unit)}${p ? `, ${p.text}${escapeHTML(p.unit)}` : ''}`;
     }
   }
-  if (detailed && column.gustCode && values[column.gustCode] != undefined) {
+  if ((detailed || list) && column.gustCode && values[column.gustCode] != undefined) {
     const gust = formatValue(column.gustCode, values[column.gustCode]);
-    sub = `Gusts: ${gust.text} ${escapeHTML(gust.unit)}`;
+    sub = `Gust: ${gust.text} ${escapeHTML(gust.unit)}`;
   }
 
-  const title = forecast ? ' title="Forecast"' : '';
-  // background-color, not background: a forecast cell's stripes are a
-  // background-image on top of it (see styles.css)
+  const title = forecast ? ` title="Model forecast" data-model="${escapeHTML(model ?? '')}"` : '';
   const style = background ? ` style="background-color: ${background}"` : '';
   return `<div class="cell${forecast ? ' forecast' : ''}"${style}${title}>`
     + `<div class="cell-main">${main}</div>${sub ? `<div class="cell-sub">${sub}</div>` : ''}</div>`;
@@ -606,7 +615,6 @@ function renderList() {
   });
   el('list-table').innerHTML = html;
 
-  el('list-updated').textContent = state.listUpdatedAt ? `Updated ${formatHour(state.listUpdatedAt)}${gui.timelineUseLocalTime ? '' : ' UTC'}` : '';
 }
 
 function buoyRowHTML(buoy) {
@@ -614,7 +622,7 @@ function buoyRowHTML(buoy) {
   const cells = COLUMNS.map(column => {
     if (!latest || latest.loading) return loadingCellHTML();
     const entry = latest.columns[column.id];
-    return cellHTML(column, entry?.values, { forecast: entry?.forecast });
+    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, list: true });
   }).join('');
 
   return `<div class="row buoy-row" data-buoy="${escapeHTML(buoy.id)}" role="button" tabindex="0">`
@@ -680,7 +688,10 @@ function renderBuoyTable() {
         return cellHTML(column, observation, { detailed: true });
       }
       const forecast = aggregateColumn(forecastBins[column.id][i], column);
-      if (forecast) return cellHTML(column, forecast, { detailed: true, forecast: true });
+      // The model of the interval's first hour - an interval only spans two
+      // models at the hour one takes over from the other
+      const model = forecastBins[column.id][i].find(record => record[column.code])?.[column.code].model;
+      if (forecast) return cellHTML(column, forecast, { detailed: true, forecast: true, model });
       // Still waiting for one of them
       if (detail.observations == undefined || detail.forecasts[column.id] == undefined) return loadingCellHTML();
       return cellHTML(column, undefined);
@@ -696,8 +707,7 @@ function renderBuoyTable() {
       + `<div class="time-cell">${formatHourShort(start)}</div>${cells}${nowLine}</div>`;
   }
 
-  html += '<div class="legend"><span><span class="measured-sample"></span>Measurement</span>'
-    + '<span><span class="predicted-sample"></span>Forecast</span>'
+  html += '<div class="legend"><span><span class="forecast-sample"></span>Model forecast (tap a value for the model)</span>'
     + '<span><i class="fa-solid fa-circle-info"></i> Sources in the info panel</span></div>';
 
   el('buoy-table').innerHTML = html;
@@ -1057,6 +1067,8 @@ function setupEvents() {
 
   el('list-table').addEventListener('click', event => {
     if (cycleUnitFrom(event)) return;
+    // A forecast value explains itself instead of opening the buoy
+    if (forecastCellFrom(event)) return;
     const row = event.target.closest('[data-buoy]');
     if (!row) return;
     const buoyId = row.dataset.buoy;
@@ -1070,6 +1082,7 @@ function setupEvents() {
 
   el('buoy-table').addEventListener('click', event => {
     if (cycleUnitFrom(event)) return;
+    if (forecastCellFrom(event)) return;
     if (!event.target.closest('[data-toggle-timezone]')) return;
     gui.timelineUseLocalTime = !gui.timelineUseLocalTime;
     if (state.detail) state.detail.followNow = true;
@@ -1115,7 +1128,8 @@ function setupEvents() {
   // Coming back to the app after a while: refresh right away instead of
   // waiting for the next tick
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && Date.now() - (state.listUpdatedAt ?? 0) > REFRESH_INTERVAL) refresh();
+    // (a phone throttles timers in the background, so the scheduled one may be late)
+    if (document.visibilityState === 'visible' && Date.now() >= (state.nextUpdateAt ?? 0)) refresh();
   });
 }
 
@@ -1128,10 +1142,75 @@ function cycleUnitFrom(event) {
   return true;
 }
 
+// A tap on a forecast value says it comes from a model, and which one
+function forecastCellFrom(event) {
+  const cell = event.target.closest('.cell.forecast');
+  if (!cell) return false;
+  const label = modelLabel(cell.dataset.model);
+  showToast(`This value is not a measurement: it comes from a model forecast${label ? ` (${label})` : ''}.`);
+  return true;
+}
+
+// A model id as the catalogue labels it - 'AROME-HD', 'WAVEWATCH III forced
+// by AROME (2.6 km)', ... - looked up in the forecast products' sources
+function modelLabel(id) {
+  if (!id) return undefined;
+  for (const product of forecastProducts.values()) {
+    for (const source of product.sources) {
+      const model = source.models?.find(m => m.id === id);
+      if (model) return `${model.label}${model.resolution ? `, ${model.resolution}` : ''}`;
+      if (source.model === id) return `${source.label}${source.resolution ? `, ${source.resolution}` : ''}`;
+    }
+  }
+  return id;
+}
+
+let toastTimeout;
+function showToast(text) {
+  const toast = el('toast');
+  toast.textContent = text;
+  toast.hidden = false;
+  toast.classList.remove('fading');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    toast.classList.add('fading');
+    toastTimeout = setTimeout(() => { toast.hidden = true; }, 300);
+  }, 3500);
+}
+
 function refresh() {
   refreshList();
   // The old values stay on screen until the new ones land
   if (state.detail) loadDetail(state.detail);
+  scheduleRefresh();
+}
+
+// Every REFRESH_INTERVAL from the last refresh - a timeout rather than an
+// interval, so refreshing early (coming back to the app) restarts the count.
+let refreshTimeout;
+function scheduleRefresh() {
+  clearTimeout(refreshTimeout);
+  state.nextUpdateAt = new Date(Date.now() + REFRESH_INTERVAL);
+  refreshTimeout = setTimeout(refresh, REFRESH_INTERVAL);
+  renderUpdateStatus();
+}
+
+// 'Updated X min ago' / 'Next update in X min', top left of the top bar
+function renderUpdateStatus() {
+  const minutesFrom = date => Math.round(Math.abs(date - Date.now()) / MINUTE);
+  let updated = 'Loading…';
+  if (state.listUpdatedAt) {
+    const ago = minutesFrom(state.listUpdatedAt);
+    updated = ago < 1 ? 'Updated just now' : `Updated ${ago} min ago`;
+  }
+  let next = '';
+  if (state.refreshing && state.listUpdatedAt) next = 'Updating…';
+  else if (state.nextUpdateAt) {
+    const left = Math.ceil((state.nextUpdateAt - Date.now()) / MINUTE);
+    next = left <= 1 ? 'Next update in <1 min' : `Next update in ${left} min`;
+  }
+  el('updated-ago').textContent = updated;
+  el('next-update').textContent = next;
 }
 
 
@@ -1149,6 +1228,7 @@ async function start() {
   setBuoys(allBuoysProduct.getBuoys());
   route();
   refreshList();
+  scheduleRefresh();
 
   // Then the merged, live view of every buoy (positions, sensors, coverage)
   const loading = allBuoysProduct.loadBuoys().then(buoys => {
@@ -1160,7 +1240,8 @@ async function start() {
   await Promise.race([loading, new Promise(resolve => setTimeout(resolve, LOADING_TIMEOUT))]);
   hideLoading();
 
-  setInterval(refresh, REFRESH_INTERVAL);
+  // Keeps the minutes in the top bar current between refreshes
+  setInterval(renderUpdateStatus, 15 * 1000);
 }
 
 start();

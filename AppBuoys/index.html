@@ -54,8 +54,13 @@
 
   <!-- Fixed in every view: logo + name centred, menu on the right -->
   <header id="top-bar">
+    <!-- How fresh the data is, and when it is next refreshed (see renderUpdateStatus) -->
+    <div id="update-status" aria-live="polite">
+      <span id="updated-ago">Loading…</span>
+      <span id="next-update"></span>
+    </div>
     <a id="brand" href="#" title="ICATMAR Buoys">
-      <img src="../Assets/Icons/icatmar-mini-logo.svg" alt="">
+      <img src="../Assets/Images/logos/logo-icatmar-icon.svg" alt="">
       <span>ICATMAR</span>
     </a>
     <button id="menu-button" class="icon-button" title="Menu" aria-label="Menu">
@@ -69,8 +74,7 @@
     <section id="view-list" class="view">
       <div id="list-table" class="data-table"></div>
       <div class="legend">
-        <span><span class="forecast-sample"></span>Forecast (no measurement in the last 3 h)</span>
-        <span id="list-updated"></span>
+        <span><span class="forecast-sample"></span>Model forecast (no measurement in the last 3 h)</span>
       </div>
     </section>
 
@@ -152,6 +156,9 @@
   </section>
 
   <!-- Same loading screen as boiasomorrostro/wind -->
+  <!-- "This value comes from a model" message (see showToast in main.js) -->
+  <div id="toast" role="status" hidden></div>
+
   <div id="loading">
     <div id="loading-logo">
       <img src="../Assets/Images/logos/logo-icatmar-negatiu.svg" alt="ICATMAR">
