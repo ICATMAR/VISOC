@@ -728,11 +728,12 @@ function cellHTML(column, values, { forecast = false, model, info, detailed = fa
 
 const loadingCellHTML = () => '<div class="cell"><div class="spinner-small"></div></div>';
 
-// Column titles. Tapping one cycles its unit (km/h, kn, ...), same as the menu.
+// Column titles. Tapping one offers its units (km/h, kn, ...) to choose
+// from, same as the menu - see openUnitPopup.
 function headerRowHTML(firstCell) {
   return `<div class="row header-row">${firstCell}${COLUMNS.map(column => {
     const switchable = gui.isUnitSwitchable(column.code);
-    return `<button class="header-cell${switchable ? ' clickable' : ''}" data-cycle-unit="${switchable ? column.code : ''}"`
+    return `<button class="header-cell${switchable ? ' clickable' : ''}" data-unit-code="${switchable ? column.code : ''}"`
       + ` title="${switchable ? 'Change unit' : ''}">`
       + `<i class="${column.icon}"></i><span>${column.label}</span><span class="unit">${escapeHTML(gui.unitFor(column.code).unit)}</span></button>`;
   }).join('')}</div>`;
@@ -851,7 +852,7 @@ function renderBuoyTable() {
       + `<div class="time-cell">${formatHourShort(start)}</div>${cells}${nowLine}</div>`;
   }
 
-  html += '<div class="legend"><span><span class="forecast-sample"></span>Model forecast (tap a value for the model)</span>'
+  html += '<div class="legend"><span><span class="forecast-sample"></span>Model forecast</span>'
     + '<span><i class="fa-solid fa-circle-info"></i> Sources in the info panel</span></div>';
 
   el('buoy-table').innerHTML = html;
@@ -1319,7 +1320,7 @@ function setupEvents() {
   window.addEventListener('hashchange', route);
 
   el('list-table').addEventListener('click', event => {
-    if (cycleUnitFrom(event)) return;
+    if (unitHeaderFrom(event)) return;
     // A forecast value explains itself instead of opening the buoy
     if (infoCellFrom(event) || forecastCellFrom(event)) return;
     const row = event.target.closest('[data-buoy]');
@@ -1334,7 +1335,7 @@ function setupEvents() {
   });
 
   el('buoy-table').addEventListener('click', event => {
-    if (cycleUnitFrom(event)) return;
+    if (unitHeaderFrom(event)) return;
     if (infoCellFrom(event) || forecastCellFrom(event)) return;
     if (!event.target.closest('[data-toggle-timezone]')) return;
     gui.timelineUseLocalTime = !gui.timelineUseLocalTime;
@@ -1343,7 +1344,7 @@ function setupEvents() {
   });
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
-  el('toast').addEventListener('click', () => { el('toast').hidden = true; });
+  el('toast').addEventListener('click', () => fadeOut(el('toast')));
   el('map-back').addEventListener('click', () => goBack('#/'));
   el('map-button').addEventListener('click', () => {
     wa('map_open');
@@ -1369,7 +1370,28 @@ function setupEvents() {
 
   el('menu-button').addEventListener('click', () => setMenuOpen(true));
   el('menu-close').addEventListener('click', () => setMenuOpen(false));
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') setMenuOpen(false); });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    setMenuOpen(false);
+    closeUnitPopup();
+  });
+
+  // A unit applies it; a tap anywhere else on the popup just closes it
+  el('unit-popup').addEventListener('click', event => {
+    const button = event.target.closest('[data-unit-group]');
+    if (button) {
+      gui.selectedUnits = { ...gui.selectedUnits, [button.dataset.unitGroup]: button.dataset.unit };
+      settingsChanged();
+    }
+    closeUnitPopup();
+  });
+  // Anywhere else closes it - except the column title that opened it, whose
+  // own click is still on its way up here
+  document.addEventListener('click', event => {
+    if (el('unit-popup').hidden) return;
+    if (event.target.closest('#unit-popup, [data-unit-code]')) return;
+    closeUnitPopup();
+  });
 
   el('unit-pickers').addEventListener('click', event => {
     const button = event.target.closest('[data-unit-group]');
@@ -1393,12 +1415,35 @@ function setupEvents() {
 }
 
 // A tap on a column title switches its unit
-function cycleUnitFrom(event) {
-  const header = event.target.closest('[data-cycle-unit]');
-  if (!header || !header.dataset.cycleUnit) return false;
-  gui.cycleUnit(header.dataset.cycleUnit);
-  settingsChanged();
+// A tap on a column title offers the units of its quantity - nothing changes
+// until one is picked
+function unitHeaderFrom(event) {
+  const header = event.target.closest('[data-unit-code]');
+  if (!header || !header.dataset.unitCode) return false;
+  openUnitPopup(header.dataset.unitCode);
   return true;
+}
+
+// The units a code's quantity can be shown in, as a row of buttons at the
+// bottom of the screen. Picking one applies it everywhere (and saves it, like
+// the menu does); tapping anywhere else closes it unchanged.
+function openUnitPopup(code) {
+  const group = gui.variable(code)?.unitGroup;
+  const options = UNIT_GROUPS[group];
+  if (!options || options.length < 2) return;
+
+  const picker = UNIT_PICKERS.find(p => p.group === group);
+  const selected = gui.unitFor(code).unit;
+  el('unit-popup').innerHTML = `<div class="unit-popup-title">${picker ? `<i class="${picker.icon}"></i>${picker.label}` : 'Unit'}</div>`
+    + `<div class="segmented">${options.map(option => `<button data-unit-group="${group}" data-unit="${escapeHTML(option.unit)}"`
+    + ` class="${option.unit === selected ? 'selected' : ''}">${escapeHTML(option.unit)}</button>`).join('')}</div>`
+    + '<div class="unit-popup-note">Units can also be changed in the menu</div>';
+  el('toast').hidden = true; // replaced at once - the popup takes its place
+  showFading(el('unit-popup'));
+}
+
+function closeUnitPopup() {
+  fadeOut(el('unit-popup'));
 }
 
 // A tap on a forecast value says it comes from a model, and which one
@@ -1434,17 +1479,35 @@ function modelLabel(id) {
   return id;
 }
 
+// Messages and the unit popup fade out rather than vanish, however they are
+// closed - on their own after a while, by a tap on them, or by a tap elsewhere.
+// FADE_MS matches the opacity transition in styles.css.
+const FADE_MS = 300;
+
+function showFading(element) {
+  clearTimeout(element.fadeTimeout);
+  element.classList.remove('fading');
+  element.hidden = false;
+}
+
+function fadeOut(element) {
+  if (element.hidden || element.classList.contains('fading')) return;
+  element.classList.add('fading');
+  clearTimeout(element.fadeTimeout);
+  element.fadeTimeout = setTimeout(() => {
+    element.hidden = true;
+    element.classList.remove('fading');
+  }, FADE_MS);
+}
+
 let toastTimeout;
 function showToast(text, duration = 3500) {
   const toast = el('toast');
+  closeUnitPopup();
   toast.textContent = text;
-  toast.hidden = false;
-  toast.classList.remove('fading');
+  showFading(toast);
   clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => {
-    toast.classList.add('fading');
-    toastTimeout = setTimeout(() => { toast.hidden = true; }, 300);
-  }, duration);
+  toastTimeout = setTimeout(() => fadeOut(toast), duration);
 }
 
 function refresh() {

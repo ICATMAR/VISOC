@@ -334,7 +334,7 @@ a {
   top: 0;
   right: 0;
   border-style: solid;
-  border-width: 0 0.5rem 0.5rem 0;
+  border-width: 0 0.75rem 0.75rem 0;
   border-color: transparent var(--blue) transparent transparent;
 }
 
@@ -370,6 +370,53 @@ a {
 
 #toast.fading {
   opacity: 0;
+  pointer-events: none;
+}
+
+/* Units of one column, offered when its title is tapped - same place and look
+   as the message above */
+#unit-popup {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.2rem + var(--safe-bottom));
+  z-index: 36;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.6rem;
+  background: var(--darkBlue);
+  color: white;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  /* Fades out when closed, like the messages (see fadeOut) */
+  transition: opacity 0.3s ease;
+}
+
+#unit-popup.fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.unit-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.unit-popup-title i {
+  color: var(--lightBlue);
+}
+
+.unit-popup-note {
+  font-size: 0.65rem;
+  opacity: 0.6;
 }
 
 /* A measured cell in the buoy view: a tap says where it comes from (one line
