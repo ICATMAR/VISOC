@@ -1,58 +1,71 @@
 <template>
-  <!-- Which variable the buoy rows draw, and what its colours mean. Sits below
-       DTAllPlatforms' HFR currents/Buoys/Drifters tabs - only relevant to the
-       Buoys view, so it isn't part of that shared bar. The selection lives on
-       $gui because DTAPBuoys needs it too (see buoyVariables there). -->
-  <div class="vertical variable-bar">
-    <div class="horizontal wrap button-group variable-menu">
-      <button v-for="item in $gui.buoyVariables" :key="item.code" class="clickable"
-        :class="{ 'selectedOption': $gui.selectedBuoyVariableCode === item.code }"
-        @click="$gui.selectedBuoyVariableCode = item.code"><span>{{ $t(item.label) }}</span></button>
-    </div>
+  <!-- Siblings rather than one wrapper, so they become flex items of
+       DTAllPlatforms' .bottom-bar directly: the trigger, the unit and the
+       legend sit on the same row as the HFR currents/Buoys/Drifters tabs,
+       while the options take a full row's width and so wrap onto their own
+       line below (the bar is a wrapping flex container). -->
+  <button class="clickable variable-trigger" @click="isOpen = !isOpen"
+    :title="$t('Choose variable')">
+    <span>{{ $t(selected.label) }}</span>
+    <i class="fa-solid" :class="isOpen ? 'fa-angle-up' : 'fa-angle-down'"></i>
+  </button>
 
-    <!-- The scale the cells are coloured by: unit first, then the gradient
-         with its own stops labelled where they actually fall. -->
-    <div class="horizontal legend">
-      <span class="legend-unit">{{ selected.unit }}</span>
-      <div class="legend-scale" :style="{ background: legendGradient }">
-        <span v-for="tick in ticks" :key="tick.percent" class="legend-tick"
-          :style="{ left: tick.percent + '%' }">{{ tick.label }}</span>
-      </div>
-    </div>
+  <!-- Units, in the app's usual "click me to change" styling. Switching is by
+       QUANTITY, not by variable, so putting wind into knots here puts every
+       wind reading in the app into knots - and nothing refetches, since only
+       the drawing changes (see GUIManager.unitFor). -->
+  <span class="variable-unit" :class="{ clickable: switchable }"
+    :title="switchable ? $t('Change units') : ''"
+    @click="switchable && $gui.cycleUnit(selected.code)">{{ unit.unit }}</span>
+
+  <!-- The scale the cells are painted on. Hidden on narrow windows by a media
+       query rather than a resize listener - it is the WINDOW's width that
+       decides, which is exactly what a media query watches, and nothing here
+       has to re-render when it changes.
+
+       Wrapped rather than placed directly: .bottom-bar puts padding-left on
+       each of its children, which on the legend itself would open a gap inside
+       its own rounded pill. On a wrapper it is just the spacing it was meant
+       to be. -->
+  <span class="variable-legend">
+    <DTColorLegend :code="selected.code" :range="selected.range" />
+  </span>
+
+  <div v-if="isOpen" class="horizontal wrap variable-options">
+    <button v-for="item in $gui.buoyVariables" :key="item.code" class="clickable"
+      :class="{ 'selectedOption': item.code === $gui.selectedBuoyVariableCode }"
+      @click="choose(item)"><span>{{ $t(item.label) }}</span></button>
   </div>
 </template>
 
 
 <script>
+import DTColorLegend from '../Shared/DTColorLegend.vue';
 
 export default {
   name: "DTAPBuoysVariableBar",
+  components: { DTColorLegend },
+  data() {
+    return {
+      isOpen: false,
+    }
+  },
+  methods: {
+    choose(item) {
+      this.$gui.selectedBuoyVariableCode = item.code;
+      this.isOpen = false;
+    },
+  },
   computed: {
     selected() {
       return this.$gui.selectedBuoyVariable;
     },
-    // A CSS gradient built straight from the legend's own [t, [r,g,b]] stops
-    // (t already normalized 0..1), so this always matches colorLegends.js
-    // without a second copy of the stops to keep in sync. The same scale the
-    // cells are coloured by (see DTAPBuoys.cellColor).
-    legendGradient() {
-      const colors = this.stops.map(([t, [r, g, b]]) => `rgb(${r}, ${g}, ${b}) ${t * 100}%`);
-      return `linear-gradient(to right, ${colors.join(', ')})`;
+    // { unit, decimals, toDisplay } for whatever the user has picked
+    unit() {
+      return this.$gui.unitFor(this.selected.code);
     },
-    stops() {
-      return this.$gui.colorLegend(this.selected.code);
-    },
-    // Labelled at the legend's OWN stops rather than at even intervals - the
-    // stops are where the colour actually changes, so that is where a number
-    // is worth reading off. Their positions are the same 0..1 the gradient
-    // uses, mapped onto the variable's range.
-    ticks() {
-      const [min, max] = this.selected.range;
-      const decimals = max - min > 10 ? 0 : this.selected.decimals;
-      return this.stops.map(([t]) => ({
-        percent: t * 100,
-        label: (min + t * (max - min)).toFixed(decimals),
-      }));
+    switchable() {
+      return this.$gui.isUnitSwitchable(this.selected.code);
     },
   },
 }
@@ -61,65 +74,73 @@ export default {
 
 
 <style scoped>
-.variable-bar {
-  background: var(--blue);
-  border-top: 1px white solid;
-  padding: 4px 10px 8px;
+.variable-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border: none;
+  border-radius: 10px;
+  padding: 0px 8px;
+  margin-left: 10px;
+  margin-right: 5px;
+}
+
+.variable-trigger:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.variable-trigger > i {
+  font-size: 0.65rem;
+}
+
+.variable-unit {
+  font-style: italic;
+  align-self: center;
+}
+
+.variable-unit.clickable {
+  text-decoration: underline;
+  font-size: 0.7rem;
+}
+
+/* Sits beside the unit, and only when there is room for it: below 700px the
+   tabs and the picker already fill the row. */
+.variable-legend {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .variable-legend {
+    display: none;
+  }
+}
+
+/* A full row of its own: .bottom-bar wraps, so a 100% basis pushes this
+   below the tabs instead of squeezing in beside them. */
+.variable-options {
+  flex-basis: 100%;
+  padding: 4px 0 0;
   gap: 4px;
 }
 
-.variable-menu {
-  padding: 0;
-}
-
-.variable-menu > button {
+.variable-options > button {
+  border-radius: 10px;
+  padding: 0px 12px;
+  border: none;
+  background: rgb(0 0 0 / 0%);
   font-size: small;
 }
 
-.legend {
-  max-width: 320px;
-  width: 100%;
-  height: 22px;
-  border-radius: 11px;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.25);
+.variable-options > button:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
 
-.legend-unit {
-  flex: 0 0 auto;
-  padding: 0 8px;
-  font-size: 0.7rem;
-  line-height: 22px;
-  white-space: nowrap;
-}
-
-.legend-scale {
-  position: relative;
-  flex: 1;
-  height: 100%;
-}
-
-/* Centred on the value it marks, so a label sits over its own colour. The
-   first and last would half-overflow the bar, so they are nudged inside by
-   the same trick the ends of a slider use. */
-.legend-tick {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 0.65rem;
-  color: rgba(0, 0, 0, 0.8);
-  text-shadow: none;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.legend-tick:first-child {
-  transform: translate(0, -50%);
-  padding-left: 2px;
-}
-
-.legend-tick:last-child {
-  transform: translate(-100%, -50%);
-  padding-right: 2px;
+.variable-options > button.selectedOption {
+  background: var(--red);
+  box-shadow: 0 0 4px black;
 }
 </style>

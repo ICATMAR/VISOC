@@ -1,4 +1,5 @@
-import COLOR_LEGENDS from '../../styles/colorLegends.js';
+import COLOR_LEGENDS, { VARIABLE_RANGES } from '../../styles/colorLegends.js';
+import { VARIABLES, UNIT_GROUPS } from './data/variables.js';
 
 class GUIManager {
 
@@ -70,7 +71,7 @@ class GUIManager {
       const absH = Math.floor(Math.abs(offsetMinutes) / 60);
       const absM = Math.abs(offsetMinutes) % 60;
       const str = absM > 0 ? `${absH}:${String(absM).padStart(2, '0')}` : `${absH}`;
-      return `Local time (UTC${sign}${str})`;
+      return `UTC${sign}${str}`;
     }
     return 'UTC';
   }
@@ -87,22 +88,115 @@ class GUIManager {
     return date.toLocaleString(locale, options);
   }
 
+  // UNITS
+  // Everything outside the view layer is in standard units (see
+  // data/variables.js); this is the only place another unit exists, and it
+  // only affects what is DRAWN. Nothing refetches when it changes - the block
+  // cache holds standard values, so a unit switch is a re-render.
+  //
+  // Keyed by unit group, holding the chosen unit. A group with no entry uses
+  // its first option, which is always the standard one.
+  selectedUnits = {};
+
+  // The unit a value should be shown in, and how to get there: { unit,
+  // decimals, toDisplay }. Always answers, so no caller has to check - a code
+  // whose quantity isn't switchable (a direction, a salinity) comes back with
+  // its own standard unit and an identity conversion.
+  unitFor(code) {
+    const variable = VARIABLES[code];
+    const options = UNIT_GROUPS[variable?.unitGroup];
+    if (!options) return { unit: variable?.unit, decimals: 1, toDisplay: value => value };
+    return options.find(option => option.unit === this.selectedUnits[variable.unitGroup]) ?? options[0];
+  }
+
+  // Whether a code's quantity has more than one unit to offer - what a picker
+  // should check before making itself clickable.
+  isUnitSwitchable(code) {
+    return (UNIT_GROUPS[VARIABLES[code]?.unitGroup]?.length ?? 0) > 1;
+  }
+
+  // Steps a code's quantity to its next unit. By group, not by code, so
+  // switching the wind on one row switches every wind reading in the app.
+  cycleUnit(code) {
+    const group = VARIABLES[code]?.unitGroup;
+    const options = UNIT_GROUPS[group];
+    if (!options || options.length < 2) return;
+    const next = options[(options.indexOf(this.unitFor(code)) + 1) % options.length];
+    this.selectedUnits = { ...this.selectedUnits, [group]: next.unit };
+  }
+
+  // What a code means - long name, CF standard name, standard unit
+  variable(code) {
+    return VARIABLES[code];
+  }
+
   // BUOY TIMELINE VARIABLES
   // What the buoy timeline can draw, one at a time (see DTAPBuoysVariableBar
   // for the picker and DTAPBuoys for the cells). `code` is the magnitude shown
   // as a number and coloured by the legend; `directionCode`, where there is
-  // one, is drawn as an arrow instead of a second number. `range` is what the
-  // colour legend is normalized over - it has to match the units the values
-  // arrive in (see the catalogue's mapping), not the units of some other
-  // convention: WSPD is m/s here, so 0-20 rather than 0-40 kn.
+  // one, is drawn as an arrow instead of a second number.
+  //
+  // `range` is what the colour legend is normalized over, in STANDARD units
+  // (see data/variables.js) - deliberately not per display unit. TEMP and DRYT
+  // share a unit group but not a range, so a range can't belong to the unit;
+  // and since the values being coloured are standard too, a cell keeps exactly
+  // its colour when the unit changes. Only the legend's end labels convert.
+  //
+  // The unit and its decimals are no longer here: they follow the code's
+  // quantity and whatever the user has picked for it (see unitFor).
+  //
   // `fromDirection` marks the ones reported as where the wind/swell comes FROM,
   // which is the opposite of where the arrow should point.
   buoyVariables = [
-    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, unit: 'm/s', decimals: 1, range: [0, 20] },
-    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, unit: 'm',   decimals: 1, range: [0, 4]  },
-    { label: 'Water temp.', code: 'TEMP', unit: 'ºC', decimals: 1, range: [10, 28] },
-    { label: 'Air temp.',   code: 'DRYT', unit: 'ºC', decimals: 1, range: [0, 35]  },
+    { label: 'Wind',        code: 'WSPD', directionCode: 'WDIR', fromDirection: true, range: VARIABLE_RANGES.WSPD },
+    { label: 'Waves',       code: 'VHM0', directionCode: 'VMDR', fromDirection: true, range: VARIABLE_RANGES.VHM0 },
+    // No fromDirection: HCDT is where the water is GOING (CF's
+    // direction_of_sea_water_velocity), unlike the wind and the swell above,
+    // which are reported as where they come from. So the arrow draws the
+    // heading as recorded, with no half turn.
+    { label: 'Currents',    code: 'HCSP', directionCode: 'HCDT', range: VARIABLE_RANGES.HCSP },
+    { label: 'Water temperature', code: 'TEMP', range: VARIABLE_RANGES.TEMP },
+    { label: 'Air temperature',   code: 'DRYT', range: VARIABLE_RANGES.DRYT },
   ];
+  // What a CELL CLICK goes and fetches, on top of the codes above. Everything
+  // the platform detail panel shows but the timeline never draws.
+  //
+  // Deliberately NOT part of buoyVariableCodes: those are requested for every
+  // buoy over the whole timeline window on a five-minute poll, and adding ten
+  // more columns to that would multiply what every ERDDAP query transfers for
+  // data almost nobody looks at. These are asked for one buoy, over one cell,
+  // only once someone actually opens the panel - and the block cache keeps the
+  // answer, so clicking around the same day is free after the first click.
+  //
+  // `directionCode` pairs a magnitude with its heading so the two are averaged
+  // together (a direction is vector-averaged weighted by its magnitude, which
+  // needs both); a code with no direction just stands alone.
+  buoyDetailVariables = [
+    { code: 'PSAL' },                        // salinity
+    // Two groups in the panel: the sea state (average height, mean direction,
+    // average period) and the biggest wave of the interval (maximum height,
+    // direction and period at the spectral peak).
+    { code: 'VTM02' },                       // average period, shown with VHM0
+    { code: 'VZMX', directionCode: 'VPED' }, // maximum height + peak direction
+    // CF has four spellings of "maximum wave height" and datasets disagree on
+    // which to use - the catalogue only renames Puertos' Hmax to VZMX, and the
+    // ERDDAP/MSM waves come through as published. All four mean
+    // sea_surface_wave_maximum_height, so the panel takes whichever turns up
+    // (see maxWaveHeight) and colours it on VZMX's scale either way. Asking for
+    // all four costs nothing: the planner only requests codes a sensor
+    // actually publishes.
+    { code: 'VCMX' }, { code: 'VHMH' }, { code: 'VEMH' },
+    { code: 'VTPK' },                        // peak period, shown with VZMX
+    { code: 'GSPD', directionCode: 'GDIR' }, // wind gust
+    // HCSP/HCDT are NOT here: currents are a timeline variable now, so they
+    // are already fetched and binned for every buoy, and buoyClicked copies
+    // them onto the selection like any other. Listing them again would only
+    // re-plan work already done.
+  ];
+  get buoyDetailCodes() {
+    return [...new Set(this.buoyDetailVariables.flatMap(v => [v.code, v.directionCode].filter(Boolean)))];
+  }
+
   selectedBuoyVariableCode = 'WSPD';
   get selectedBuoyVariable() {
     return this.buoyVariables.find(v => v.code === this.selectedBuoyVariableCode) ?? this.buoyVariables[0];
@@ -167,6 +261,50 @@ class GUIManager {
   // check for undefined first.
   colorLegend(code) {
     return COLOR_LEGENDS[code] ?? COLOR_LEGENDS.BLANK;
+  }
+
+  // Whether a code has a colour scale of its own - a palette AND a range to
+  // spread it over (see styles/colorLegends.js). Not the same question as
+  // colorLegend(), which always answers.
+  hasColorLegend(code) {
+    return COLOR_LEGENDS[code] != undefined && VARIABLE_RANGES[code] != undefined;
+  }
+
+  // The [min, max] a code's colour scale spans, in STANDARD units.
+  rangeFor(code) {
+    return VARIABLE_RANGES[code];
+  }
+
+  // The colour a value should be painted, as a CSS rgb() string - the single
+  // place the timeline cells, the platform detail's value chips and the map's
+  // circle arrows all get their background from, so one reading is the same
+  // colour wherever it is drawn.
+  //
+  // `value` and `range` are both STANDARD (see data/variables.js), so this
+  // needs no unit conversion: a value keeps its exact colour when the user
+  // switches to knots, and nothing drifts on a converted range's rounding.
+  //
+  // Returns undefined - rather than a colour - when there is nothing to say:
+  // no value, no palette, or no range. The caller then leaves its own default
+  // background in place instead of painting over it with a guess.
+  colorFor(code, value, range = this.rangeFor(code)) {
+    if (value == undefined || range == undefined) return undefined;
+    const stops = COLOR_LEGENDS[code];
+    if (stops == undefined) return undefined;
+
+    // Clamped: the range is where the interesting values are, not a bound on
+    // what the variable can be, so anything beyond it takes the end colour.
+    const t = Math.min(Math.max((value - range[0]) / (range[1] - range[0]), 0), 1);
+    for (let i = 0; i < stops.length - 1; i++) {
+      const [t0, from] = stops[i];
+      const [t1, to] = stops[i + 1];
+      if (t > t1) continue;
+      const f = t1 === t0 ? 0 : (t - t0) / (t1 - t0);
+      const channel = j => Math.round(from[j] + (to[j] - from[j]) * f);
+      return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
+    }
+    const [, last] = stops[stops.length - 1];
+    return `rgb(${last[0]}, ${last[1]}, ${last[2]})`;
   }
 }
 

@@ -12,7 +12,11 @@ const REREQUEST_HOUR_WINDOW_FROM_NOW = 1;
 
 // Fields that are merged one for one across sources - everything else on a
 // buoy (its id, its sensors, its dates) is merged by rules of its own below.
-const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth'];
+const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth',
+  // When the hull went in the water. Only the static catalogue knows it -
+  // no source publishes it - so without it here it was dropped from every
+  // buoy a source covers, which is all of them.
+  'installed'];
 // Same, for a sensor - kept atomic (first source wins outright), unlike
 // 'variables' below which is merged key by key instead. 'metadata' is
 // deliberately atomic: ERDDAP's dataset-level attributes (institution,
@@ -34,7 +38,7 @@ const STATIC_FIELDS = ['name'];
 // winner would depend on whatever order the source happened to list its
 // sensors in. Lower index wins; a sensor not listed here sorts after every
 // one that is (see sensorPriority below).
-const SENSOR_PRIORITY = ['RM_YOUNG', 'GILL'];
+const SENSOR_PRIORITY = ['GILL', 'RM_YOUNG'];
 
 function sensorPriority(sensorId) {
   const index = SENSOR_PRIORITY.indexOf(sensorId);
@@ -88,6 +92,11 @@ class DPBuoys extends DP {
     // doesn't change once it has been recorded, so anything outside the
     // re-request window is answered from here and never asked for twice.
     this.cache = new BlockCache({ rerequestHourWindowFromNow: REREQUEST_HOUR_WINDOW_FROM_NOW });
+
+    // Which sources can serve a given buoy, filled by loadBuoys(). Empty
+    // rather than undefined from the start: readVariablesData() reads it
+    // without awaiting the load, and gets "no buoys yet" instead of throwing.
+    this.providers = new Map();
   }
 
   // Get buoys
@@ -237,6 +246,15 @@ class DPBuoys extends DP {
     return data;
   }
 
+  // What a source says a buoy's sensor actually measures with - ERDDAP's
+  // `instrument` dataset attribute, the MSM API's own sensor naming, or the
+  // SOMO repository's declared table (see each source). Undefined where the
+  // source doesn't say, which is a fine answer: the sensor id still
+  // identifies it, the instrument only names it more precisely.
+  sensorInstrument(source, buoyId, sensorId) {
+    return source.getBuoy?.(buoyId)?.sensors?.find(sensor => sensor.id === sensorId)?.instrument;
+  }
+
   // Which standard codes a source's sensor publishes, and under which of its
   // OWN variable names - the inverse of standardizeVariables(), needed because
   // a request has to name the source's columns ('Corr_WindS'), not the code
@@ -353,6 +371,42 @@ class DPBuoys extends DP {
     return { codes: [...codes], startDate, endDate, warnings, promises };
   }
 
+  // ONE buoy, ONE set of codes, on demand - what a cell click uses to pull in
+  // the variables the timeline never fetches (see GUIManager.buoyDetailCodes).
+  //
+  // Same machinery as getVariablesData, narrowed to a single buoy: the point
+  // is that these columns stay out of the five-minutely request for every buoy
+  // over the whole window. Asking for salinity, gusts, maximum waves and
+  // currents there would multiply what each ERDDAP query transfers, for values
+  // that are only ever read when someone opens the detail panel.
+  //
+  // Goes through the same block cache, so a second click anywhere in the same
+  // day costs no request at all.
+  async getBuoyDetailData(buoyId, codes, startDate, endDate) {
+    await this.loadBuoys();
+
+    const sources = (this.providers.get(buoyId) ?? []).filter(source => source.servesData);
+    if (sources.length === 0) return { buoyId, data: {}, used: {}, missing: [...codes], errors: [] };
+
+    await Promise.all(sources.map(source => source.getEndDate().catch(error => {
+      console.error(`Could not check how fresh ${source.src} is:`, error);
+    })));
+
+    // planVariablesData plans every buoy it knows; only this one's plan is
+    // wanted. A code nothing publishes simply gets no candidates and comes
+    // back in `missing`, which is the honest answer - not an error.
+    const { byBuoy } = this.planVariablesData(codes, startDate, endDate);
+    const candidatesByCode = byBuoy[buoyId];
+    if (candidatesByCode == undefined) return { buoyId, data: {}, used: {}, missing: [...codes], errors: [] };
+
+    const result = await this.fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate);
+    // fetchBuoyVariables only ever sees the codes that HAVE candidates, so a
+    // code nothing on this buoy publishes would otherwise vanish from the
+    // answer entirely. It was asked about, so it is reported back as missing.
+    const unpublished = [...codes].filter(code => candidatesByCode[code] == undefined);
+    return { ...result, missing: [...result.missing, ...unpublished] };
+  }
+
   // One buoy's values for [startDate, endDate], served from the block cache and
   // requesting only what it doesn't already hold.
   //
@@ -399,6 +453,43 @@ class DPBuoys extends DP {
       });
     }));
 
+    // Read back from the cache rather than from what was just fetched: the
+    // window asked for usually spans blocks that were already held, and this
+    // is the one place that knows how to put both halves together.
+    return { ...this.collectFromCache(buoyId, codes, startDate, endDate), errors };
+  }
+
+  // Everything the block cache already holds for [startDate, endDate], with no
+  // awaits and no requests - the SAME shape getVariablesData's promises
+  // resolve to, so a caller can paint from this immediately and let the
+  // promises refine it in place.
+  //
+  // This is what lets a view be disposable. The measurements live in the cache
+  // on this singleton, not in a component's data(), so a timeline that is
+  // unmounted and remounted (switching All Platforms tabs) repaints instantly
+  // from here instead of spinning while it re-asks for data the app never
+  // lost. Deliberately synchronous: a single await and the caller is back to
+  // rendering an empty grid for a tick, which is the whole problem.
+  //
+  // Only buoys the cache has actually been asked about appear, and a buoy that
+  // was asked and had nothing comes back with an empty `data`. That is a
+  // different answer from not appearing at all - "nothing to show" versus
+  // "nobody has looked yet" - and it is the distinction a spinner turns on.
+  readVariablesData(codes, startDate, endDate) {
+    const wanted = [...codes];
+    // this.providers as it stands, NOT a fresh loadBuoys(): staying
+    // synchronous is the point. Before the first load it is empty, so a cold
+    // start seeds nothing and the rows spin exactly as they did before.
+    return [...this.providers.keys()]
+      .filter(buoyId => wanted.some(code => this.cache.covers(`${buoyId}|${code}`)))
+      .map(buoyId => this.collectFromCache(buoyId, wanted, startDate, endDate));
+  }
+
+  // The cache's answer for one buoy, assembled into the result shape above.
+  // Shared by readVariablesData and fetchBuoyVariables so the two can never
+  // disagree about what a result looks like: they feed the same table, and a
+  // shape that differed between them would make it flicker on every poll.
+  collectFromCache(buoyId, codes, startDate, endDate) {
     const data = {};
     const used = {};
     codes.forEach(code => {
@@ -408,9 +499,7 @@ class DPBuoys extends DP {
         if (used[code] == undefined) used[code] = { source: point.source, sensor: point.sensor };
       });
     });
-
-    const missing = codes.filter(code => used[code] == undefined);
-    return { buoyId, data, used, missing, errors };
+    return { buoyId, data, used, missing: codes.filter(code => used[code] == undefined) };
   }
 
   // One span's worth of values, working down each code's ranked candidates
@@ -442,7 +531,10 @@ class DPBuoys extends DP {
         const group = groups.get(candidate.source);
         if (group.sensors[candidate.sensorId] == undefined) group.sensors[candidate.sensorId] = [];
         if (!group.sensors[candidate.sensorId].includes(candidate.name)) group.sensors[candidate.sensorId].push(candidate.name);
-        group.codes.push({ code, sensorId: candidate.sensorId });
+        // `name` is what this source calls the variable - Puertos' 'Hm0' for
+        // VHM0, the MSM API's 'VMTA' for VTM02. Carried through so a reading
+        // can name both the standard code and the spelling it arrived under.
+        group.codes.push({ code, sensorId: candidate.sensorId, name: candidate.name });
       });
       if (groups.size === 0) break;
 
@@ -467,12 +559,13 @@ class DPBuoys extends DP {
         Object.entries(rows).forEach(([timestamp, bySensor]) => {
           Object.entries(bySensor).forEach(([sensorId, values]) => {
             const standardized = this.standardize(source, values, sensorId);
-            group.codes.forEach(({ code, sensorId: wantedSensor }) => {
+            const instrument = this.sensorInstrument(source, buoyId, sensorId);
+            group.codes.forEach(({ code, sensorId: wantedSensor, name: rawName }) => {
               if (sensorId !== wantedSensor) return;
               const value = standardized[code];
               if (value == undefined) return;
               if (points[code] == undefined) points[code] = {};
-              points[code][timestamp] = { value, sensor: sensorId, source: source.src };
+              points[code][timestamp] = { value, sensor: sensorId, source: source.src, instrument, rawName };
               delivered.add(code);
             });
           });

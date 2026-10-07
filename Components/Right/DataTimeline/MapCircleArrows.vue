@@ -2,7 +2,20 @@
   <div class="map-arrows-circle">
     <div class="map-arrows-center"></div>
 
-    <template v-for="(item, index) in items" :key="index">
+    <!-- Keyed by the COUNT as well as the index, so a chip appearing or
+         disappearing remounts all of them together. The depthLoop animation
+         staggers the chips with a negative animation-delay, and that only
+         spaces them evenly if every element's animation starts in the same
+         frame. Keyed by index alone, a third chip arriving (a cell that has
+         currents, after one that didn't) would mount on its own and begin its
+         cycle from whenever that happened, while the other two carried on from
+         when the panel opened - leaving two chips stuck on the same z-index,
+         ordered by DOM position instead of rotating. Remounting also re-reads
+         the --duration and --maxZIndex the count just changed. -->
+    <template v-for="(item, index) in items" :key="items.length + '-' + index">
+      <!-- Spoke: a hairline from the centre out to the chip, turned to the
+           same bearing. -->
+      <div class="variableSpoke" :style="{ rotate: (item.angle - 90) + 'deg' }"></div>
       <!-- Variable name label -->
       <div class="variableName animatedLayer" :style="{
         rotate: (item.angle - 90) + 'deg',
@@ -12,15 +25,32 @@
         }">
         <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ $t(item.name) }}</span>
       </div>
-      <!-- Variable value + arrow -->
-      <div class="variableValue horizontal animatedLayer" :style="{
+      <!-- Variable value + arrow. Painted with the variable's own colour
+           legend (GUIManager.colorFor), the same scale the buoys timeline and
+           the panel's value chips use, so one reading reads the same colour
+           everywhere. The pointer takes the same colour as the chip, or they
+           come apart. The legend's colours are pale, so the text goes black
+           over them; a variable with no legend keeps the stylesheet's blue and
+           its white text. -->
+      <div class="variableValue horizontal animatedLayer" :title="item.title" :style="{
         rotate: (item.angle - 90) + 'deg',
         '--maxZIndex': items.length,
         '--duration': (items.length * loopInterval) + 's',
-        '--delay': (-index * loopInterval) + 's'
+        '--delay': (-index * loopInterval) + 's',
+        background: item.color,
+        color: item.color ? 'black' : undefined,
+        textShadow: item.color ? 'none' : undefined
         }">
-        <div class="variableArrow"></div>
-        <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ item.value }}</span>
+        <div class="variableArrow" :style="{ background: item.color }"></div>
+        <!-- Both halves inside the SAME rotated box. Rotating them separately
+             would spin each in place and leave them in flex order, so a chip
+             on the lower half of the circle would read "m/s 1.2". -->
+        <span class="chipReading" :style="{ rotate: textRotation(item.angle) }">
+          <span>{{ item.value }}</span>
+          <span class="chipUnit" :class="{ clickable: item.switchable }"
+            :title="item.switchable ? $t('Change units') : ''"
+            @click.stop="cycleUnit(item)">{{ item.unit }}</span>
+        </span>
       </div>
     </template>
 
@@ -32,9 +62,12 @@
 export default {
   name: "MapCircleArrows",
   props: {
-    wind:    { type: Object, default: null }, // { speed: km/h, dir: degrees }
-    waves:   { type: Object, default: null }, // { height: m,   dir: degrees }
-    current: { type: Object, default: null }, // { speed: m/s,  dir: degrees }
+    // All magnitudes in STANDARD units (see data/variables.js); `from` is the
+    // contributing sensors, as DTAPBuoys records them on selectedPlatform.
+    wind:    { type: Object, default: null }, // { speed, dir, gust, from }
+    waves:   { type: Object, default: null }, // { height, dir, period, from }
+    current: { type: Object, default: null }, // { speed, dir, from }
+    // `raw` on each: standard code -> the name the source published it under.
   },
   data() {
     return {
@@ -44,17 +77,87 @@ export default {
   methods: {
     textRotation(angle) {
       return angle > 180 ? '180deg' : '0deg';
-    }
+    },
+    // The magnitudes arrive STANDARD (see data/variables.js), so the unit they
+    // are WRITTEN in is the user's choice, not this component's - switching
+    // wind to knots anywhere switches these chips with it (GUIManager.unitFor).
+    format(code, value) {
+      const { unit, decimals, toDisplay } = this.$gui.unitFor(code);
+      return `${toDisplay(value).toFixed(decimals)} ${unit}`;
+    },
+    // Switches the unit of this reading's QUANTITY, app-wide - the same
+    // GUIManager.cycleUnit the panel's readings and the timeline's variable bar
+    // use, so one click here moves every wind reading in the app at once.
+    cycleUnit(item) {
+      if (item.switchable) this.$gui.cycleUnit(item.code);
+    },
+    // The number alone. The chips ring a 100px circle, so a unit on each one
+    // costs more room than it earns - and the reading is repeated with its
+    // unit in the panel beside this, and in full in the tooltip below.
+    number(code, value) {
+      const { decimals, toDisplay } = this.$gui.unitFor(code);
+      return toDisplay(value).toFixed(decimals);
+    },
+    // Everything behind one arrow, which is where the detail went when the
+    // units came off the chips: each reading with its code, its unit, the
+    // direction as the SOURCE recorded it (not the bearing the chip is
+    // rotated to), and the instrument and server it all came from.
+    //
+    // `rows` are { label, code, value, bearing } - a bearing is printed in
+    // degrees rather than run through a unit. `raw` is what each code was
+    // published as (Puertos' 'Hm0' for VHM0), named alongside the standard
+    // code because which spelling a value arrived as is the first thing worth
+    // knowing when a number looks wrong. `from` is the contributing sensors,
+    // one entry each, since an averaged cell can mix them.
+    title(rows, from, raw) {
+      const named = code => {
+        const published = raw?.[code];
+        return published && published !== code ? `${code}; ${published}` : code;
+      };
+      const lines = rows
+        .filter(row => row.value != null && isFinite(row.value))
+        .map(row => `${this.$t(row.label)} (${named(row.code)}): `
+          + (row.bearing ? `${row.value.toFixed(0)}º` : this.format(row.code, row.value)));
+      (from ?? []).forEach(({ sensor, instrument, source }) => {
+        lines.push(`${this.$t('Sensor')}: ${sensor}${instrument ? ` (${instrument})` : ''}`);
+        lines.push(`${this.$t('Source')}: ${source}`);
+      });
+      return lines.join('\n');
+    },
   },
   computed: {
+    // `color` is undefined for anything the legends don't cover, which leaves
+    // the chip its stylesheet background rather than painting a guess over it.
+    // The ranges in colorLegends.js are standard too, so the magnitudes go to
+    // colorFor untouched - only format() converts.
     items() {
       const result = [];
       if (this.wind?.speed != null)
-        result.push({ name: 'Wind', value: `${this.wind.speed.toFixed(0)} km/h`, angle: this.wind.dir ?? 0 });
+        result.push({ name: 'Wind', code: 'WSPD', unit: this.$gui.unitFor('WSPD').unit,
+          switchable: this.$gui.isUnitSwitchable('WSPD'), value: this.number('WSPD', this.wind.speed), angle: this.wind.dir ?? 0,
+          color: this.$gui.colorFor('WSPD', this.wind.speed),
+          title: this.title([
+            { label: 'Wind speed', code: 'WSPD', value: this.wind.speed },
+            { label: 'Direction',  code: 'WDIR', value: this.wind.dir, bearing: true },
+            { label: 'Wind gust',  code: 'GSPD', value: this.wind.gust },
+          ], this.wind.from, this.wind.raw) });
       if (this.waves?.height != null)
-        result.push({ name: 'Waves', value: `${this.waves.height.toFixed(1)} m`, angle: this.waves.dir ?? 0 });
+        result.push({ name: 'Waves', code: 'VHM0', unit: this.$gui.unitFor('VHM0').unit,
+          switchable: this.$gui.isUnitSwitchable('VHM0'), value: this.number('VHM0', this.waves.height), angle: this.waves.dir ?? 0,
+          color: this.$gui.colorFor('VHM0', this.waves.height),
+          title: this.title([
+            { label: 'Wave height', code: 'VHM0',  value: this.waves.height },
+            { label: 'Direction',   code: 'VMDR',  value: this.waves.dir, bearing: true },
+            { label: 'Wave period', code: 'VTM02', value: this.waves.period },
+          ], this.waves.from, this.waves.raw) });
       if (this.current?.speed != null)
-        result.push({ name: 'Currents', value: `${this.current.speed.toFixed(1)} m/s`, angle: (this.current.dir + 180) % 360 ?? 0 });
+        result.push({ name: 'Currents', code: 'HCSP', unit: this.$gui.unitFor('HCSP').unit,
+          switchable: this.$gui.isUnitSwitchable('HCSP'), value: this.number('HCSP', this.current.speed), angle: (this.current.dir + 180) % 360 ?? 0,
+          color: this.$gui.colorFor('HCSP', this.current.speed),
+          title: this.title([
+            { label: 'Current speed', code: 'HCSP', value: this.current.speed },
+            { label: 'Direction',     code: 'HCDT', value: this.current.dir, bearing: true },
+          ], this.current.from, this.current.raw) });
       return result;
     }
   },
@@ -66,8 +169,11 @@ export default {
 .map-arrows-circle {
   position: absolute;
   z-index: 1;
-  width: 100px;
-  height: 100px;
+  /* Named so the spoke can be a fraction of it instead of another magic
+     number to keep in step with the size below. */
+  --radius: 50px;
+  width: calc(var(--radius) * 2);
+  height: calc(var(--radius) * 2);
   border-radius: 50%;
   border: 1px solid #ffffff6b;
   /* Center the circle on the map center (where the marker dot sits) */
@@ -87,6 +193,29 @@ export default {
   border-radius: 50%;
 }
 
+/* Laid out like everything else in here: the element sits at the circle's
+   centre, `rotate` turns it about that centre, and the translate then pushes
+   it outward along the turned axis - individual transform properties apply
+   before `transform`, which is what makes that order work. translateX(50%)
+   puts its inner end at the centre, so it reaches out by its own width. */
+.variableSpoke {
+  position: absolute;
+  width: calc(var(--radius) * 0.9);
+  height: 1px;
+  background: white;
+  opacity: 0.7;
+  transform: translateX(50%);
+  pointer-events: none;
+  /* Behind every chip, not just its own. DOM order alone wouldn't do it: the
+     spokes are interleaved with the chips, so the second item's spoke would
+     paint over the first item's chip whenever that chip's cycling z-index came
+     back round to 0. The circle sets z-index on itself, so it is a stacking
+     context and this stays inside it - and the circle's own background is
+     transparent, so there is nothing here for the line to disappear behind.
+     The border sits at the full radius, past this line's 0.9 reach. */
+  z-index: -1;
+}
+
 .variableName {
   position: absolute;
   transform: translateX(calc(50% + 52px));
@@ -104,10 +233,45 @@ export default {
   background: var(--blue);
   padding-right: 2px;
   padding-left: 4px;
-  border-radius: 0 4px 4px 0;
+  border-radius: 4px;
 }
 .variableValue > span {
   z-index: 1;
+  color: black;
+  text-shadow: none;
+  font-weight: bold;
+}
+
+.chipReading {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.chipReading > span {
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: black;
+  text-shadow: none;
+  white-space: nowrap;
+  letter-spacing: -0.4px;
+}
+
+/* Deliberately quieter than the number it follows: the reading is the thing
+   being read, the unit is a label on it that happens to also be a control.
+   font-weight is declared rather than left alone because the rule above sets
+   bold on the box these sit in, and an inherited value loses to a declared
+   one. */
+.chipUnit {
+  font-size: 0.6rem!important;
+  font-weight: normal;
+  opacity: 0.6;
+}
+
+/* Underlined only where there is another unit to go to - the signal the
+   variable bar and the detail panel already use for this same gesture. */
+.chipUnit.clickable {
+  text-decoration: underline;
 }
 
 .variableArrow {

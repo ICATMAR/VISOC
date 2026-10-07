@@ -2,17 +2,18 @@
   <!-- Selected view -->
   <component :is="currentView" v-if="currentView"></component>
 
-  <!-- Bottom options -->
+  <!-- Bottom options. Wraps, which is what lets the variable picker open a
+       second row underneath without a container of its own. -->
   <div class="horizontal wrap button-group bottom-bar">
     <button v-for="view in views" :key="view.label" class="clickable"
       :class="{ 'selectedOption': selectedView === view }"
       @click="selectView(view)"><span>{{ $t(view.label) }}</span></button>
-  </div>
 
-  <!-- Buoys-only: which variable the rows' colours read as, and the legend
-       for it. Below the tab bar above, not part of it - it doesn't apply to
-       HFR currents/Drifters. -->
-  <DTAPBuoysVariableBar v-if="selectedView.dashboardId === 'buoys'" />
+    <!-- Buoys-only: which variable the rows are drawn from, and its unit.
+         Sits on this row; opening it adds a row of variables below. Doesn't
+         apply to HFR currents or Drifters. -->
+    <DTAPBuoysVariableBar v-if="selectedView.dashboardId === 'buoys'" />
+  </div>
 </template>
 
 

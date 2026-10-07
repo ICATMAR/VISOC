@@ -18,10 +18,13 @@
       </div>
       <!-- Variable names and units -->
       <div class="horizontal variable-names-row">
-        <div class="vertical variable-names-subcontainer">
+        <!-- Also what the per-row spinners are positioned against: these
+             names line up with the grid's rows, so measuring them is how the
+             overlay knows where each row sits (see measureRows). -->
+        <div class="vertical variable-names-subcontainer" ref="namesColumn">
           <span v-for="v in variables" :key="v.name"
             :class="{ 'active-var': v.name === activeVar || v.name === selectedVar, 'var-name-clickable': true }"
-            @click="$emit('varClick', v)">{{ $t(v.name) }}</span>
+            @click="$emit('varClick', v)"><span v-if="v.loading" class="spinner-border name-spinner"></span>{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
           <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
@@ -41,8 +44,14 @@
 
       <!-- Timeline container -->
       <div class="horizontal table-container" ref="tableContainer">
-        <div class="vertical" style="align-self: flex-start">
+        <div class="vertical timeline-inner">
           <slot name="grid"></slot>
+          <!-- Where "now" falls on the timeline. Lives here rather than in
+               each view so every timeline gets it from one place, and sits
+               inside the scrolling container so it travels with the columns
+               it marks. Non-interactive, and hidden when now is outside the
+               range the timeline is showing. -->
+          <div v-if="isNowInRange" class="now-line" :style="{ left: nowLineLeft + 'px' }"></div>
         </div>
       </div>
 
@@ -54,12 +63,38 @@
       <!-- Info section -->
       <DTInfoSection></DTInfoSection>
     </div>
+
+    <!-- One spinner per row still waiting on its data, each sitting on its own
+         row and centred on what the user can see.
+         Deliberately a sibling of the scrolling container rather than a child
+         of it: anything inside .table-and-info-container is laid out against
+         the CONTENT, so it slides away as the timeline is scrolled - at the
+         hourly zoom the grid is thousands of pixels wide, which is why a
+         spinner in a colspan cell is never actually on screen. -->
+    <!-- <div v-if="loadingRows.length" class="timeline-loading"> -->
+        <div  class="timeline-loading">
+
+      <span v-for="row in loadingRows" :key="row.name"
+        class="spinner-border row-spinner" :style="{ top: row.top + 'px' }"></span>
+    </div>
   </div>
 </template>
 
 
 <script>
 import DTInfoSection from './DTInfoSection.vue';
+
+// Fallback width of one timeline column, in px - the real one is measured off
+// a rendered cell (see measureCell), this only covers the moment before the
+// grid exists. Keep it in step with .dt-table td in DTTimelineGrid.vue.
+const CELL_WIDTH_PX = 38;
+
+// How often the now-line is moved. Deliberately not requestAnimationFrame:
+// at the finest zoom a column is an hour wide, so the line travels about
+// 0.6 px per MINUTE - repainting 60 times a second would burn battery to
+// animate something that cannot be seen to move. Half a minute is already
+// sub-pixel.
+const NOW_TICK_MS = 30000;
 
 export default {
   name: "DTLayout",
@@ -83,10 +118,18 @@ export default {
   },
   mounted() {
     this.resetScroll();
+    this.measureCell();
+    this.measureRows();
+    // Rows shift when the pane is resized, and nothing else tells us
+    this.onResize = () => { this.measureCell(); this.measureRows(); };
+    window.addEventListener('resize', this.onResize);
+    this.nowTimer = setInterval(() => { this.now = Date.now(); }, NOW_TICK_MS);
   },
   // Clean up global listeners if component is destroyed
   beforeUnmount() {
     this.stopDragging();
+    window.removeEventListener('resize', this.onResize);
+    clearInterval(this.nowTimer);
   },
   data() {
     return {
@@ -94,9 +137,44 @@ export default {
       isDragging: false,
       startX: 0,
       scrollLeft: 0,
+      // Now-line
+      now: Date.now(),
+      cellWidth: CELL_WIDTH_PX,
+      rowTops: [], // middle of each row, in px - see measureRows
     }
   },
   methods: {
+    // Takes the column width from a cell the grid actually rendered, rather
+    // than trusting a constant here to stay in step with a stylesheet in
+    // another file.
+    //
+    // Specifically an .hourCell: that row has exactly one cell per column,
+    // whereas the day row above it spans a whole day per cell (colspan) and
+    // the data rows below can span the lot (a loading or no-data message).
+    // Measuring any of those would scale the line by however many columns
+    // that cell happened to cover.
+    measureCell() {
+      this.$nextTick(() => {
+        const cell = this.$refs.tableContainer?.querySelector('.dt-table td.hourCell');
+        if (cell?.offsetWidth) this.cellWidth = cell.offsetWidth;
+      });
+    },
+    // The vertical middle of each row, relative to this component's own box -
+    // taken from the names column, whose entries line up one-for-one with the
+    // grid's rows. Measured rather than worked out from row heights and header
+    // heights, which are spread across two stylesheets and would go stale the
+    // moment either changed.
+    measureRows() {
+      this.$nextTick(() => {
+        const names = this.$refs.namesColumn;
+        if (!names || !this.$el?.getBoundingClientRect) return;
+        const top = this.$el.getBoundingClientRect().top;
+        this.rowTops = [...names.children].map(row => {
+          const box = row.getBoundingClientRect();
+          return box.top - top + box.height / 2;
+        });
+      });
+    },
     currentIntervalIdx() {
       const idx = this.intervalOptions.findIndex(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
       return idx >= 0 ? idx : 0;
@@ -164,6 +242,30 @@ export default {
     },
   },
   computed: {
+    // Rows still waiting, each with the y it should be drawn at. Read off the
+    // rows themselves (`loading`), so a view only has to say it once - HFR's
+    // stations and totals already carry that flag, and DTAPBuoys sets its own.
+    // A row whose position hasn't been measured yet is skipped rather than
+    // drawn at the top of the table.
+    loadingRows() {
+      return (this.variables ?? [])
+        .map((variable, index) => ({ name: variable.name, loading: variable.loading, top: this.rowTops[index] }))
+        .filter(row => row.loading && row.top != undefined);
+    },
+    isNowInRange() {
+      return this.now >= this.$gui.timelineStartDate.getTime()
+        && this.now <= this.$gui.timelineEndDate.getTime();
+    },
+    // How far along the grid "now" falls, in px. Counted in COLUMNS rather
+    // than as a fraction of the range: the grid lays out one column per step
+    // from the start, so its last column can run past the end date when the
+    // range isn't a whole number of steps - a percentage of the total width
+    // would then sit up to a column off.
+    nowLineLeft() {
+      const elapsedMs = this.now - this.$gui.timelineStartDate.getTime();
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+      return (elapsedMs / stepMs) * this.cellWidth;
+    },
     hasUnits() {
       return this.variables.some(v => v.unit != undefined);
     },
@@ -183,9 +285,22 @@ export default {
   },
   watch: {
     isComponentVisible(isVisible) {
-      if (isVisible)
+      if (isVisible) {
         this.resetScroll();
-    }
+        // Nothing has a size while the pane is hidden, so both measurements
+        // have to be taken again once it is back
+        this.measureCell();
+        this.measureRows();
+      }
+    },
+    // The grid relays out on a zoom, so the column width is worth taking again
+    '$gui.timelineEffectiveIntervalMinutes'() {
+      this.measureCell();
+    },
+    // Rows appearing or disappearing move everything below them
+    variables() {
+      this.measureRows();
+    },
   },
   components: {
     DTInfoSection
@@ -199,6 +314,33 @@ export default {
 .data-timeline-container {
   min-width: 100%;
   background: var(--lightBlue);
+  position: relative; /* what .timeline-loading is centred against */
+}
+
+/* Centred on the visible timeline, above everything (the now-line is 3, the
+   drifters' sticky labels go to 6). Transparent to the mouse so the timeline
+   underneath can still be dragged while it loads. */
+.timeline-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 8;
+}
+
+/* One per waiting row: `top` is set inline from the measured row middle, and
+   translate(-50%,-50%) is what actually centres it on that point. On a disc so
+   it reads against both the pale table and the blue names column behind it. */
+.row-spinner {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-width: 3px;
+  color: black;
+  border-radius: 50%;
 }
 
 .table-and-info-container {
@@ -213,6 +355,35 @@ export default {
 }
 .table-and-info-container:active {
   cursor: grabbing;
+}
+
+/* Sized to sit inside a 23px name row without pushing it taller */
+.name-spinner {
+  width: 9px;
+  height: 9px;
+  border-width: 2px;
+  margin-right: 4px;
+  color: black;
+  vertical-align: middle;
+}
+
+.timeline-inner {
+  align-self: flex-start;
+  position: relative; /* what the now-line is positioned against */
+}
+
+/* Above the ordinary cells, below the drifters' sticky row labels (which go
+   up to 6) - the line should pass behind a label that is pinned to the left
+   edge rather than cut across it. */
+.now-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--red);
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.6;
 }
 
 .table-container {

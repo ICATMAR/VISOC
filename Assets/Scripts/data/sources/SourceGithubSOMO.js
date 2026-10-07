@@ -36,6 +36,21 @@ const SENSORS = [
   { id: 'CTD', file: 'SBE37_SMPO.dat' },
 ];
 
+// What each table's readings were actually taken with. The logger files don't
+// say: their TOA5 header names the datalogger (a CR1000X) and the program, not
+// the instruments wired into it, so unlike ERDDAP (which publishes an
+// `instrument` attribute) this has to be declared here.
+//
+// TODO: METEO is a placeholder - its columns (Corr_WindDir/Corr_WindS, BP, RH,
+// AirTemp) could be a Gill or an R.M. Young anemometer plus a separate
+// pressure/humidity probe, and the file doesn't distinguish them. Fill in the
+// real model(s), or split the table into per-instrument sensors if the wind
+// and the air readings come from different ones.
+const INSTRUMENTS = {
+  METEO: 'MaxiMet Marine GMX500',
+  CTD: 'CTD SBE37', // the file is SBE37_SMPO.dat and the columns are SBE37Temp/Cond/Pres/Sal - a Sea-Bird SBE37
+};
+
 // This server's own columns (everything but TIMESTAMP - see parseTOA5),
 // hardcoded from the tables' own headers rather than read from the catalogue's
 // mapping: standardizing is the product's job, not the source's (see
@@ -142,6 +157,7 @@ class SourceGithubSOMO extends SourceBuoys {
       sensors: SENSORS.map(sensor => ({
         ...sensor,
         url: BASE_URL + sensor.file,
+        instrument: INSTRUMENTS[sensor.id],
         variables: Object.fromEntries((KNOWN_VARIABLES[sensor.id] ?? []).map(name => [name, {}])),
       })),
       // latitude/longitude/dates are discovered, see load() and loadTable()

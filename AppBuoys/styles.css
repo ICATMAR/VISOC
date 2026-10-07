@@ -1,0 +1,1028 @@
+/* ICATMAR Buoys app. Mobile first: every view is one column of rows, capped
+   in width and centred on a bigger screen. Colours are VISOC's
+   (styles/globalStyle.css), the group gradients VISAP's port palette
+   (https://github.com/ICATMAR/VISAP/blob/master/data/palette.js). */
+
+:root {
+  --blue: rgb(20, 120, 167);
+  --blueRGB: 20, 120, 167;
+  --darkBlue: rgb(15, 48, 98);
+  --darkBlueRGB: 15, 48, 98;
+  --lightBlue: rgb(82, 181, 217);
+  --lightBlueRGB: 82, 181, 217;
+  --red: rgb(255, 115, 105);
+  --redRGB: 255, 115, 105;
+  --gray: rgb(78, 78, 78);
+  --lightGray: rgb(128, 128, 128);
+
+  --background: rgb(244, 246, 249);
+  --line: rgba(var(--darkBlueRGB), 0.08);
+  --now: rgb(229, 57, 53);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --top-bar-height: 3rem;
+  --view-header-height: 3rem;
+  --max-width: 760px;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--background);
+  color: var(--darkBlue);
+  -webkit-text-size-adjust: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: var(--blue);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+
+/* ---------------------------------------------------------------- TOP BAR */
+
+#top-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  height: calc(var(--top-bar-height) + var(--safe-top));
+  padding-top: var(--safe-top);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--darkBlue);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+}
+
+#brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-size: 1.05rem;
+}
+
+#brand img {
+  height: 1.7rem;
+  /* The mini logo has dark-blue artwork, which would vanish on the bar */
+  border-radius: 50%;
+  border: 1px solid var(--lightBlue);
+}
+
+/* 'Updated X min ago' / 'Next update in X min', across from the menu button */
+#update-status {
+  position: absolute;
+  left: 0.7rem;
+  bottom: 0;
+  height: var(--top-bar-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: 0.6rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  /* Never into the centred logo: half the bar minus half the logo and some
+     room. A translation that doesn't fit is cut with an ellipsis. */
+  max-width: calc(50vw - 5.4rem);
+}
+
+#update-status {
+  /* A button: tapping it refreshes the data now */
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.6rem;
+  text-align: left;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+#update-status:hover #update-label {
+  text-decoration: underline;
+}
+
+#update-status span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#update-time {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+#menu-button {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.25rem;
+  color: white;
+}
+
+.icon-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  font-size: 1.15rem;
+}
+
+.icon-button:hover {
+  background: rgba(var(--lightBlueRGB), 0.2);
+}
+
+
+/* ------------------------------------------------------------------ VIEWS */
+
+#views {
+  padding-top: calc(var(--top-bar-height) + var(--safe-top));
+  padding-bottom: calc(1.5rem + var(--safe-bottom));
+}
+
+.view {
+  max-width: var(--max-width);
+  margin: 0 auto;
+}
+
+/* Back / title / buttons row on top of the buoy, info and menu views. Sticks
+   under the top bar while the rows scroll. */
+.view-header {
+  position: sticky;
+  top: calc(var(--top-bar-height) + var(--safe-top));
+  z-index: 10;
+  height: var(--view-header-height);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.3rem;
+  /* Same dark style as the column titles (see .header-row) */
+  background: var(--darkBlue);
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.view-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.view-title span:first-child {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.view-title span + span {
+  font-size: 0.8rem;
+  color: white;
+  opacity: 0.7;
+}
+
+.toggle-button {
+  height: 1.9rem;
+  min-width: 3.2rem;
+  padding: 0 0.5rem;
+  border: 1px solid rgba(var(--lightBlueRGB), 0.6);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.toggle-button:hover {
+  background: rgba(var(--lightBlueRGB), 0.3);
+}
+
+
+/* ----------------------------------------------------------------- TABLES */
+
+/* Both tables are grids of divs rather than <table>s: a row has to be able to
+   hold the absolutely positioned "now" line, and the main view's group label
+   has to span a variable number of rows. */
+.data-table {
+  background: white;
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--first-column) repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+#list-table {
+  --first-column: 5.4rem;
+}
+
+#buoy-table {
+  --first-column: 3.3rem;
+}
+
+/* Column titles: icon, name and unit. Tapping one cycles its unit. Same dark
+   style in the list and the buoy view. */
+.header-row {
+  position: sticky;
+  z-index: 5;
+  background: var(--darkBlue);
+  color: white;
+  border-bottom: 1px solid rgba(var(--darkBlueRGB), 0.2);
+}
+
+#list-table .header-row {
+  top: calc(var(--top-bar-height) + var(--safe-top));
+}
+
+#buoy-table .header-row {
+  top: calc(var(--top-bar-height) + var(--view-header-height) + var(--safe-top));
+}
+
+#list-table .header-row {
+  /* Leaves room for the group label column */
+  padding-left: 1.6rem;
+}
+
+.header-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.1rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-align: center;
+  border: none;
+  background: none;
+}
+
+.header-cell i {
+  font-size: 0.95rem;
+  margin-bottom: 0.1rem;
+  color: var(--lightBlue);
+}
+
+.header-cell .unit {
+  color: white;
+  opacity: 0.7;
+}
+
+.header-cell.clickable:hover .unit {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.7rem;
+  padding: 0.25rem 0.15rem;
+  font-size: 0.82rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.cell-main {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.cell-main .value {
+  font-weight: 600;
+}
+
+.cell-main .unit,
+.cell-main .secondary {
+  font-size: 0.72rem;
+}
+
+.cell-sub {
+  font-size: 0.64rem;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.cell.empty {
+  color: rgba(var(--darkBlueRGB), 0.3);
+}
+
+/* A value that comes from a model rather than a measurement: a triangle in
+   its top-right corner, wherever it is shown. The cell's colour is left
+   alone, so the colour scale reads the same for both. Tapping one says which
+   model it comes from (see showToast). */
+.cell.forecast,
+.forecast-sample {
+  position: relative;
+}
+
+.cell.forecast {
+  cursor: help;
+}
+
+.cell.forecast::after,
+.forecast-sample::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 0.75rem 0.75rem 0;
+  border-color: transparent var(--blue) transparent transparent;
+}
+
+.forecast-sample {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  vertical-align: middle;
+  margin-right: 0.25rem;
+  border: 1px solid var(--line);
+  background: white;
+  overflow: hidden;
+}
+
+/* "This comes from a model" message, at the bottom of the screen */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.2rem + var(--safe-bottom));
+  z-index: 35;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  padding: 0.55rem 0.9rem;
+  border-radius: 0.6rem;
+  background: var(--darkBlue);
+  color: white;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.3s ease;
+}
+
+#toast.fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Units of one column, offered when its title is tapped - same place and look
+   as the message above */
+#unit-popup {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.2rem + var(--safe-bottom));
+  z-index: 36;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 0.6rem;
+  background: var(--darkBlue);
+  color: white;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  /* Fades out when closed, like the messages (see fadeOut) */
+  transition: opacity 0.3s ease;
+}
+
+#unit-popup.fading {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.unit-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.unit-popup-title i {
+  color: var(--lightBlue);
+}
+
+.unit-popup-note {
+  font-size: 0.65rem;
+  opacity: 0.6;
+}
+
+/* A measured cell in the buoy view: a tap says where it comes from (one line
+   per fact - see observationInfo), and a tap on the message closes it */
+.cell.has-info {
+  cursor: pointer;
+}
+
+#toast {
+  white-space: pre-line;
+  cursor: pointer;
+}
+
+.arrow {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  fill: var(--darkBlue);
+}
+
+.spinner-small {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid rgba(var(--blueRGB), 0.25);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+
+/* -------------------------------------------------------------- MAIN VIEW */
+
+.group {
+  display: flex;
+  border-bottom: 2px solid rgba(var(--darkBlueRGB), 0.25);
+}
+
+/* Name of the stretch of coast, read bottom to top */
+.group-label {
+  width: 1.6rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  color: white;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
+}
+
+.group-rows {
+  flex: 1;
+  min-width: 0;
+}
+
+.group-rows .row:last-child {
+  border-bottom: none;
+}
+
+/* One gradient per stretch of coast, north at the top - the colours of the
+   fishing ports along it, north to south, from VISAP's palette. The label is
+   rotated 180deg, so the gradient runs "to top" to come out north-to-south. */
+.group-costaBrava {
+  background: linear-gradient(to top,
+      rgb(0, 115, 156),    /* Llançà */
+      rgb(0, 153, 204),    /* Roses */
+      rgb(0, 126, 204),    /* L'Escala */
+      rgb(35, 134, 255),   /* Palamós */
+      rgb(93, 196, 255),   /* Sant Feliu de Guíxols */
+      rgb(192, 204, 255)); /* Blanes */
+}
+
+.group-barcelones {
+  background: linear-gradient(to top,
+      rgb(236, 217, 255),  /* Montgat */
+      rgb(255, 179, 255),  /* Badalona */
+      rgb(255, 153, 255),  /* Barcelona */
+      rgb(255, 153, 255)); /* Sitges */
+  color: var(--darkBlue);
+  text-shadow: none;
+}
+
+.group-tarragonaEbre {
+  background: linear-gradient(to top,
+      rgb(255, 0, 102),    /* Tarragona */
+      rgb(255, 0, 0),      /* Cambrils */
+      rgb(255, 76, 6),     /* L'Ametlla de Mar */
+      rgb(255, 102, 0),    /* L'Ampolla */
+      rgb(255, 153, 51),   /* Deltebre */
+      rgb(255, 192, 0),    /* La Ràpita */
+      rgb(255, 255, 0));   /* Sant Carles de la Ràpita */
+}
+
+.buoy-row {
+  cursor: pointer;
+}
+
+.buoy-row:hover {
+  background: rgba(var(--lightBlueRGB), 0.08);
+}
+
+.buoy-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.3rem 0.4rem;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.buoy-code {
+  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1.1;
+}
+
+.buoy-name {
+  font-size: 0.66rem;
+  font-style: italic;
+  color: var(--gray);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.62rem;
+  color: var(--lightGray);
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid rgba(var(--darkBlueRGB), 0.3);
+}
+
+/* Same colours as VISOC's platform details (styles/platformDetails.css) */
+.status-dot.active   { background: #4caf50; border: none; box-shadow: 0 0 4px #4caf5088; }
+.status-dot.delayed  { background: #ffc107; border: none; box-shadow: 0 0 4px #ffc10788; }
+.status-dot.inactive { background: #757575; border: none; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.7rem;
+  color: var(--lightGray);
+}
+
+
+/* -------------------------------------------------------------- BUOY VIEW */
+
+.day-row {
+  padding: 0.3rem 0.7rem;
+  background: var(--darkBlue);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.time-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-right: 1px solid var(--line);
+}
+
+.measurement .time-cell {
+  background: white;
+}
+
+.prediction .time-cell {
+  background: rgba(var(--lightBlueRGB), 0.22);
+}
+
+/* Where "now" falls within its row */
+.now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--now);
+  opacity: 0.7;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* On the right edge, where the centred cell contents leave room - on the left
+   it would cover the row's time */
+.now-line span {
+  position: absolute;
+  left: 0.7rem;
+  top: -0.55rem;
+  padding: 0 0.25rem;
+  border-radius: 0.5rem;
+  background: var(--now);
+  color: white;
+  font-size: 0.55rem;
+  font-weight: 600;
+  line-height: 1.1rem;
+}
+
+#buoy-table .legend {
+  background: var(--background);
+}
+
+
+/* --------------------------------------------------------------- MAP VIEW */
+
+.map-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem auto 1rem;
+  padding: 0.6rem 1.6rem;
+  border: none;
+  border-radius: 2rem;
+  background: var(--darkBlue);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.map-button i {
+  color: var(--lightBlue);
+}
+
+.map-button:hover {
+  background: var(--blue);
+}
+
+#view-map {
+  max-width: none;
+}
+
+/* Fills the screen under the title bar - interactive, unlike the info map */
+#buoys-map {
+  position: fixed;
+  top: calc(var(--top-bar-height) + var(--view-header-height) + var(--safe-top));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--darkBlue);
+}
+
+
+/* -------------------------------------------------------------- INFO VIEW */
+
+#info-content {
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#info-status {
+  padding-right: 0.5rem;
+  font-size: 0.7rem;
+}
+
+/* On the dark title bar */
+#info-status .status {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.info-map {
+  position: relative;
+  height: 14rem;
+  border-radius: 0.6rem;
+  overflow: hidden;
+  background: rgba(var(--lightBlueRGB), 0.25);
+  /* Non-interactive: a picture of where the buoy is, not a map to explore */
+  pointer-events: none;
+}
+
+.info-map .attribution,
+#buoys-map .attribution {
+  position: absolute;
+  z-index: 2;
+  right: 0.3rem;
+  bottom: 0.2rem;
+  font-size: 0.55rem;
+  color: white;
+  text-shadow: 0 0 3px black;
+}
+
+.info-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+
+.info-photos figure {
+  margin: 0;
+}
+
+.info-photos img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 0.6rem;
+  background: rgba(var(--lightBlueRGB), 0.15);
+}
+
+.info-photos figcaption {
+  font-size: 0.7rem;
+  color: var(--lightGray);
+  padding-top: 0.2rem;
+}
+
+.info-card {
+  background: white;
+  border-radius: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.info-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.info-card p {
+  margin: 0.3rem 0;
+}
+
+.info-rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.8rem;
+  row-gap: 0.25rem;
+}
+
+.info-rows .label {
+  color: var(--lightGray);
+}
+
+.info-rows .value {
+  overflow-wrap: anywhere;
+}
+
+.info-card ul {
+  margin: 0.2rem 0;
+  padding-left: 1.1rem;
+}
+
+.info-card li {
+  margin: 0.15rem 0;
+}
+
+.info-note {
+  font-size: 0.72rem;
+  color: var(--lightGray);
+}
+
+
+/* ------------------------------------------------------------------- MENU */
+
+#menu {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow-y: auto;
+  /* Dark throughout, like the title bars - light text on dark blue */
+  background: var(--darkBlue);
+  color: white;
+  padding-top: var(--safe-top);
+  padding-bottom: calc(1.5rem + var(--safe-bottom));
+}
+
+#menu .view-header {
+  top: 0;
+}
+
+#menu-content {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+#menu-content h2 {
+  margin: 1.3rem 0 0.5rem;
+  font-size: 1rem;
+  color: white;
+}
+
+#menu-content p {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+#menu-content a {
+  color: var(--lightBlue);
+}
+
+.picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.picker-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.picker-label i {
+  width: 1.1rem;
+  color: var(--lightBlue);
+  text-align: center;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid rgba(var(--lightBlueRGB), 0.6);
+  border-radius: 1rem;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.segmented button {
+  min-width: 2.8rem;
+  padding: 0.2rem 0.6rem;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+  font-size: 0.78rem;
+}
+
+.segmented button + button {
+  border-left: 1px solid rgba(var(--lightBlueRGB), 0.4);
+}
+
+.segmented button:hover {
+  background: rgba(var(--lightBlueRGB), 0.25);
+}
+
+.segmented button.selected {
+  background: var(--lightBlue);
+  color: var(--darkBlue);
+  font-weight: 600;
+}
+
+#menu-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.2rem;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#menu-logos img {
+  height: 2.6rem;
+  max-width: 40%;
+}
+
+
+/* ---------------------------------------------------------------- LOADING */
+
+/* Same as boiasomorrostro/wind's loading screen */
+#loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: var(--darkBlue);
+  color: white;
+  text-align: center;
+  z-index: 40;
+  transition: opacity 0.6s ease;
+}
+
+#loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#loading-logo img {
+  display: block;
+  width: min(60vw, 220px);
+  height: auto;
+}
+
+#loading-message {
+  font-size: 0.9rem;
+  max-width: 22rem;
+}
+
+.spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--lightBlue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Each data source as it is checked, like boiasomorrostro/wind's messages */
+#loading-sources {
+  width: min(100%, 22rem);
+  text-align: left;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+#loading-sources h3 {
+  margin: 0.7rem 0 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--lightBlue);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#loading-sources ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#loading-sources li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.12rem 0;
+}
+
+#loading-sources .mark {
+  width: 0.8rem;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+#loading-sources .ok .mark { color: #4caf50; }
+#loading-sources .failed .mark { color: var(--red); }
+#loading-sources .pending { opacity: 0.7; }
+
+#loading-sources .pending .mark .spinner-small {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.25);
+  border-top-color: var(--lightBlue);
+  vertical-align: -0.05rem;
+}
+
+#loading-sources .detail {
+  opacity: 0.65;
+}
+
+@keyframes spin {
+  to { rotate: 360deg; }
+}

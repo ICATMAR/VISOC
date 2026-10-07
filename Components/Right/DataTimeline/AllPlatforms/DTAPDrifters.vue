@@ -577,7 +577,7 @@ export default {
 .name-var {
   height: 22px; display: flex; align-items: center; justify-content: flex-end;
   padding-right: 8px; text-align: right;
-  font-size: x0.7rem; color: rgba(0, 0, 0, 0.7);
+  font-size: 0.7rem; color: rgba(0, 0, 0, 0.7);
 }
 .temp-unit { cursor: pointer; color: inherit; text-shadow: none; }
 

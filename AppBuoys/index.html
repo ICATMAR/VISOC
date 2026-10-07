@@ -1,0 +1,201 @@
+<!DOCTYPE HTML>
+<html lang="en">
+
+<head>
+  <meta charset=utf-8>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ICATMAR Buoys</title>
+  <meta name="description" content="Real-time measurements and forecasts of ICATMAR's and Puertos del Estado's buoys along the Catalan coast.">
+  <meta name="author" content="Gerard Llorach Tó">
+  <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico" />
+  <meta name="theme-color" content="#0F3063">
+
+  <!-- Installable app (PWA): manifest + icons make the browser offer "Add
+       to Home screen" / "Install app". apple-* tags cover iOS Safari, which
+       ignores the manifest for icon/status-bar purposes. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ICATMAR Buoys">
+
+  <!-- Font Awesome -->
+  <!-- https://github.com/FortAwesome/Font-Awesome -->
+  <link rel="stylesheet" type="text/css" href="../lib/font-awesome/css/all.min.css">
+
+  <!-- Font poppins -->
+  <!-- https://fonts.google.com/specimen/Poppins -->
+  <link rel="stylesheet" type="text/css" href="../lib/font-poppins/font-poppins.css" />
+
+  <link rel="stylesheet" type="text/css" href="styles.css" />
+
+  <!-- Tracker/Analytics -->
+  <script>
+    // Queues wa() calls made before the deferred wa.js below has loaded and
+    // taken over window.wa (tracker.js flushes window.wa.q once it does).
+    window.wa = window.wa || function () { (window.wa.q = window.wa.q || []).push(arguments); };
+
+    // Chromium/Android only: fires once, right when the user finishes
+    // installing via the browser's install prompt.
+    window.addEventListener('appinstalled', () => wa('pwa_installed'));
+
+    // iOS has no install event at all, so this is what stands in for it: it
+    // fires on every load that is already running from the home-screen icon,
+    // the only signal iOS gives that the app was installed.
+    if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+      wa('pwa_launch_standalone');
+    }
+  </script>
+  <script defer src="https://analytics.icatmar.cat/wa.js" data-site="Buoys App"></script>
+</head>
+
+<body>
+
+  <!-- Fixed in every view: logo + name centred, menu on the right -->
+  <header id="top-bar">
+    <!-- When the data is next refreshed - tapping it refreshes now (see
+         renderUpdateStatus and forceRefresh) -->
+    <button id="update-status" aria-live="polite" data-i18n-title="update.refreshTitle">
+      <span id="update-label" data-i18n="update.loading">Loading…</span>
+      <span id="update-time"></span>
+    </button>
+    <a id="brand" href="#" title="ICATMAR Buoys">
+      <img src="../Assets/Images/logos/logo-icatmar-icon.svg" alt="">
+      <span>ICATMAR</span>
+    </a>
+    <button id="menu-button" class="icon-button" title="Menu" aria-label="Menu" data-i18n-title="menu.open" data-i18n-aria="menu.open">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </header>
+
+  <main id="views">
+
+    <!-- 1st view: one row per buoy, grouped by stretch of coast (built by main.js) -->
+    <section id="view-list" class="view">
+      <div id="list-table" class="data-table"></div>
+      <div class="legend">
+        <span><span class="forecast-sample"></span><span data-i18n="legend.forecastList">Model forecast (no measurement in the last 3 h)</span></span>
+      </div>
+      <button id="map-button" class="map-button"><i class="fa-solid fa-map-location-dot"></i><span data-i18n="map.button">Map</span></button>
+    </section>
+
+    <!-- Map of every buoy - tapping one opens its data view (built by main.js) -->
+    <section id="view-map" class="view" hidden>
+      <div class="view-header">
+        <button id="map-back" class="icon-button" title="Back" aria-label="Back" data-i18n-title="back" data-i18n-aria="back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="view-title">
+          <span data-i18n="map.title">Map</span>
+          <span data-i18n="map.subtitle">Tap a buoy to see its data</span>
+        </div>
+      </div>
+      <div id="buoys-map"><span class="attribution">Imagery © Esri</span></div>
+    </section>
+
+    <!-- 2nd view: one buoy, one row per 1 or 3 hours (built by main.js) -->
+    <section id="view-buoy" class="view" hidden>
+      <div class="view-header">
+        <button id="buoy-back" class="icon-button" title="Back" aria-label="Back" data-i18n-title="back" data-i18n-aria="back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="view-title">
+          <span id="buoy-name"></span>
+          <span id="buoy-id"></span>
+        </div>
+        <button id="interval-toggle" class="toggle-button" title="Interval between rows" data-i18n-title="buoy.interval">1h</button>
+        <button id="buoy-info" class="icon-button" title="Buoy information" aria-label="Buoy information" data-i18n-title="buoy.info" data-i18n-aria="buoy.info"><i class="fa-solid fa-circle-info"></i></button>
+      </div>
+      <div id="buoy-table" class="data-table"></div>
+    </section>
+
+    <!-- Buoy information: map, picture, metadata, sources (built by main.js) -->
+    <section id="view-info" class="view" hidden>
+      <div class="view-header">
+        <button id="info-back" class="icon-button" title="Back" aria-label="Back" data-i18n-title="back" data-i18n-aria="back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="view-title">
+          <span id="info-name"></span>
+          <span id="info-id"></span>
+        </div>
+        <div id="info-status" class="status"></div>
+      </div>
+      <div id="info-content"></div>
+    </section>
+
+  </main>
+
+  <!-- Menu: units, time zone, about and funding -->
+  <section id="menu" hidden>
+    <div class="view-header">
+      <button id="menu-close" class="icon-button" title="Close" aria-label="Close" data-i18n-title="close" data-i18n-aria="close"><i class="fa-solid fa-xmark"></i></button>
+      <div class="view-title"><span data-i18n="menu.title">Settings</span></div>
+    </div>
+
+    <div id="menu-content">
+      <h2 data-i18n="menu.language">Language</h2>
+      <div class="picker">
+        <span class="picker-label"><i class="fa-solid fa-language"></i><span id="language-name"></span></span>
+        <!-- Buttons built by main.js (renderMenu), one per language in lang.js -->
+        <div class="segmented" id="language-picker"></div>
+      </div>
+
+      <h2 data-i18n="menu.units">Units</h2>
+      <div id="unit-pickers"></div>
+
+      <h2 data-i18n="menu.time">Time</h2>
+      <div class="picker">
+        <span class="picker-label" data-i18n="menu.timezone">Time zone</span>
+        <div class="segmented" id="timezone-picker">
+          <button data-value="local" data-i18n="menu.local">Local</button>
+          <button data-value="utc" data-i18n="menu.utc">UTC</button>
+        </div>
+      </div>
+
+      <h2 data-i18n="menu.about">About</h2>
+      <!-- Texts in lang.js. The address and the link are put in by main.js
+           (applyLanguage, setupEmails) - so a scraper reading the page source
+           finds neither a mailto: nor the address itself -->
+      <p data-i18n-html="about.developer"></p>
+      <p data-i18n-html="about.code"></p>
+      <p data-i18n="about.disclaimer"></p>
+
+      <h2 data-i18n="menu.funding">Funding</h2>
+      <p data-i18n="funding.text"></p>
+
+      <div id="menu-logos">
+        <img src="../Assets/Images/logos/logo-icatmar-negatiu.svg" alt="ICATMAR">
+        <img src="../Assets/Images/logos/logo-ICM.svg" alt="ICM-CSIC">
+        <img src="../Assets/Images/logos/logo-EU.svg" alt="Co-funded by the European Union" data-i18n-aria="logo.eu">
+      </div>
+    </div>
+  </section>
+
+  <!-- Same loading screen as boiasomorrostro/wind -->
+  <!-- "This value comes from a model" message (see showToast in main.js) -->
+  <div id="toast" role="status" hidden></div>
+
+  <!-- Units of one column, offered when its title is tapped (see openUnitPopup) -->
+  <div id="unit-popup" role="dialog" aria-label="Choose a unit" data-i18n-aria="unitPopup.aria" hidden></div>
+
+  <div id="loading">
+    <div id="loading-logo">
+      <img src="../Assets/Images/logos/logo-icatmar-negatiu.svg" alt="ICATMAR">
+    </div>
+    <div class="spinner"></div>
+    <div id="loading-message" data-i18n="loading">Loading…</div>
+    <!-- Each data source, as it is checked (see renderLoading in main.js) -->
+    <div id="loading-sources"></div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.error('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+
+</body>
+
+</html>

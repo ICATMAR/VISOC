@@ -28,7 +28,7 @@ class RequestsManager {
   buoyStations = [
     { id: 'CCRE', name: 'Cap de Creus',    lon: 3.3495, lat: 42.3212, depth: 100, distanceCoast: 1.24, institution: 'ICATMAR', manufacturer: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
     { id: 'TORD', name: 'Tordera',         lon: 2.7698, lat: 41.5997, depth:  86, distanceCoast: 2.74, institution: 'ICATMAR', manufacturer: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
-    { id: 'ODAS', name: 'Somorrostro',     lon: 2.2162, lat: 41.3757, depth:  40, distanceCoast: 1.90, institution: 'ICATMAR', manufacturer: 'ICM-CSIC', installed: '2026-06-18', lastCalibration: 'unknown' },
+    { id: 'SOMO', name: 'Somorrostro',     lon: 2.2162, lat: 41.3757, depth:  40, distanceCoast: 1.90, institution: 'ICATMAR', manufacturer: 'ICM-CSIC', installed: '2026-06-18', lastCalibration: 'unknown' },
     { id: 'TARG', name: 'Tarragona',       lon: 1.3469, lat: 41.0763, depth:  70, distanceCoast: 3.06, institution: 'ICATMAR', manufacturer: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
     { id: 'TORT', name: 'Cap de Tortosa',  lon: 0.9852, lat: 40.7149, depth:  66, distanceCoast: 6.09, institution: 'ICATMAR', manufacturer: 'MSM',      installed: '2025-12-01', lastCalibration: 'unknown' },
   ];
@@ -56,17 +56,10 @@ class RequestsManager {
   _drifterTrajCache = {};   // id → native-cadence trajectory (for maps)
   _drifterHourlyCache = {}; // `id_totalHours` → hourly resample (for timeline)
 
-  // Hours since last valid data point per HFR station (used for status + time-ago display).
-  // active ≤ 3h, delayed 3–24h, inactive > 24h
-  _mockLastUpdateHours = {
-    CNET: 1,   CREU: 0.5, BEGU: 2,   TOSS: 8,
-    AREN: 1.5, PBCN: 72,  GNST: 1,   SCAL: 2,
-  };
-
   // Force a trailing gap (hours of null) at the end of generated buoy data to simulate inactivity.
   // active ≤ 2h, delayed 2–24h, inactive > 24h
   _buoyDataGaps = {
-    ODAS: 48,
+    SOMO: 48,
     TARG: 12,
   };
 
@@ -120,7 +113,9 @@ class RequestsManager {
     return this._drifterHourlyCache[key];
   }
 
-  // Returns hours since last valid data point for a station.
+  // Returns hours since last valid data point for a station. Mockup data
+  // products only - HFR stations read theirs from the live sources instead
+  // (DPHFRNetwork.getICATMARStations()).
   getLastUpdateHoursAgo(id, type) {
     if (type === 'drifter') {
       const d = this.getDrifterStation(id);
@@ -137,12 +132,12 @@ class RequestsManager {
       }
       return this._buoyDataGaps[id] ?? 1;
     }
-    return this._mockLastUpdateHours[id] ?? 1;
+    return 1;
   }
 
   // Returns 'active', 'delayed', or 'inactive' based on hours since last update.
-  // Buoys:  active ≤ 2h, delayed 2–24h, inactive > 24h
-  // HFR:    active ≤ 3h, delayed 3–24h, inactive > 24h
+  // Buoys:    active ≤ 2h, delayed 2–24h, inactive > 24h
+  // Drifters: active ≤ 3h, delayed 3–24h, inactive > 24h
   getStationStatus(id, type) {
     const hours = this.getLastUpdateHoursAgo(id, type);
     const delayThreshold = type === 'buoy' ? 2 : 3;

@@ -4,10 +4,11 @@ const LEGENDS = {
   WIND: [
     [0.00, [255, 255, 255]], // 0
     [0.15, [0, 255, 255]],   // 6 kn
-    [0.25, [0, 180, 0]],     // 10 kn
-    [0.50, [255, 255, 0]],   // 20 kn
-    [0.75, [255, 0, 0]],     // 30 kn
-    [1.00, [255, 0, 255]],   // 40 kn
+    [0.25, [110, 200, 110]],     // 10 kn
+    [0.37, [255, 230, 130]],   // 20 kn
+    [0.50, [255, 180, 130]],   // 20 kn
+    [0.75, [255, 140, 140]],     // 30 kn
+    [1.00, [255, 140, 255]],   // 40 kn
   ],
   CLOUDS: [ // White to gray
     [0.00, [255, 255, 255]],
@@ -54,7 +55,7 @@ const COLOR_LEGENDS = {
   // Wind speed, gusts, relative wind, and current speed all read as a "how
   // strong" scale
   WSPD: LEGENDS.WIND,
-  GUST: LEGENDS.WIND,
+  GSPD: LEGENDS.WIND, // gust: CF spells it GSPD, not GUST
   WRSP: LEGENDS.WIND,
   HCSP: LEGENDS.WIND,
 
@@ -78,10 +79,53 @@ const COLOR_LEGENDS = {
   ADNS: LEGENDS.BLANK, // air density: no dedicated palette
 
   VHM0: LEGENDS.WAVES,
+  VZMX: LEGENDS.WAVES, // maximum wave height, same scale as the significant one
+  VTPK: LEGENDS.HUMIDITY, // peak period, as VTM02 above
 
   // Fallback for any code above without an entry (see GUIManager.colorLegend)
   BLANK: LEGENDS.BLANK,
 };
 
 
+// What each scale is normalized OVER, in STANDARD units (see
+// data/variables.js) - the [min, max] that maps onto a legend's 0..1 stops.
+//
+// Here rather than in variables.js because a range isn't a property of the
+// variable, it's a property of how we choose to colour it: it is picked to
+// spread the Catalan coast's usual values across the palette, not to bound
+// what the variable can be. Values outside it clamp to the end colours.
+//
+// A code with no entry has no colour: GUIManager.colorFor returns undefined
+// and the caller keeps whatever background it draws by default.
+const VARIABLE_RANGES = {
+  // Wind and currents
+  WSPD: [0, 20],    // m/s
+  GSPD: [0, 20],    // m/s
+  WRSP: [0, 20],    // m/s
+  HCSP: [0, 1],     // m/s
+
+  // Waves. The maximum wave in a record runs well above the significant
+  // height, so it gets a range of its own rather than sharing VHM0's.
+  VHM0: [0, 4],     // m
+  VZMX: [0, 4],     // m
+  VTM02: [0, 12],   // s
+  VTPK: [0, 12],    // s
+
+  // Temperatures - sea and air are spread differently, which is exactly why
+  // a range can't belong to the unit group they share
+  TEMP: [10, 28],     // ºC
+  SAMITEMP: [10, 28], // ºC
+  DRYT: [0, 35],      // ºC
+  DEWT: [0, 35],      // ºC
+  WETT: [0, 35],      // ºC
+
+  // Other bounded variables
+  PSAL: [36, 38.5],   // practical salinity
+  RELH: [0, 100],     // %
+  ATMS: [980, 1030],  // hPa
+  PHPH: [7, 9],
+};
+
+
+export { VARIABLE_RANGES };
 export default COLOR_LEGENDS;

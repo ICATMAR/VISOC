@@ -1,5 +1,5 @@
 <template>
-  <DTLayout :variables="buoys" :interval-options="intervalOptions"
+  <DTLayout :variables="rowVariables" :interval-options="intervalOptions"
     :active-var="hoveredBuoy || (selectedCell && selectedCell.buoyId)"
     :selected-var="$gui.isPlatformDetailOpen ? $gui.selectedPlatform?.stationId : null"
     @var-click="buoyNameClicked">
@@ -13,25 +13,28 @@
           :class="{ 'row-selected': isRowSelected(buoy.id) }"
           @mouseenter="hoveredBuoy = buoy.id"
           @mouseleave="hoveredBuoy = null">
-          <!-- Each buoy's fetch resolves on its own, so a row spins until its
-               own data lands rather than the whole table waiting for the
-               slowest server (same as DTAPHFR's per-station rows). -->
-          <td v-if="isLoading(buoy.id)" :colspan="cells.length" class="message-cell">
-            <span class="spinner-border"></span>
-          </td>
-          <template v-else>
-            <td v-for="(cell, index) in cells" :key="index"
-              class="value-cell clickable"
-              :class="{ 'cell-selected': isCellSelected(buoy.id, index) }"
-              :style="{ background: cellColor(buoy, index) }"
-              :title="cellTitle(buoy, cell, index)"
-              @click="buoyClicked(buoy, index, cell)">
+          <!-- The cells stay put while a row loads - DTLayout draws the
+               spinner over the row instead, where it can be seen whatever the
+               timeline is scrolled to. A buoy that doesn't measure this
+               variable at all gets a flat grey row rather than a row of blanks
+               that reads as "broken". -->
+          <td v-for="(cell, index) in cells" :key="index"
+            class="value-cell"
+            :class="{
+              'cell-selected': isCellSelected(buoy.id, index),
+              'cell-unmeasured': !measures(buoy),
+              'clickable': measures(buoy),
+            }"
+            :style="{ background: cellColor(buoy, index) }"
+            :title="cellTitle(buoy, cell, index)"
+            @click="measures(buoy) && buoyClicked(buoy, index, cell)">
+            <template v-if="measures(buoy)">
               <i v-if="arrowAngle(buoy, index) != undefined"
                 class="fa-solid fa-location-arrow cell-arrow"
                 :style="{ transform: `rotate(${arrowAngle(buoy, index) - 45}deg)` }"></i>
               <span class="cell-value">{{ cellText(buoy, index) }}</span>
-            </td>
-          </template>
+            </template>
+          </td>
         </tr>
       </DTTimelineGrid>
     </template>
@@ -81,7 +84,8 @@ export default {
       selectedCell: null, // { buoyId, index }
       buoys: [],          // [{ id, name, latitude }] - one row each, north to south
       values: {},         // { buoyId: { code: { '<ISO>': value } } }, as measured
-      loading: {},        // { buoyId: true } until that buoy's own fetch lands
+      isFetching: false,  // a request is out; see isLoading for what that means per row
+      detailToken: 0,     // guards against a slow detail request landing after a newer click
       intervalOptions: INTERVAL_OPTIONS,
     }
   },
@@ -95,11 +99,35 @@ export default {
       // above them. A buoy with no position sinks to the bottom rather than
       // jumping to the top, which is where NaN comparisons would put it.
       this.buoys = buoys
-        .map(buoy => ({ id: buoy.id, name: buoy.id, latitude: buoy.latitude }))
+        .map(buoy => ({
+          id: buoy.id,
+          name: buoy.id,
+          latitude: buoy.latitude,
+          // Every standard code this buoy's sensors publish, across all of
+          // them - what tells an empty cell apart from one this platform was
+          // never going to fill (see measures).
+          codes: new Set(buoy.sensors?.flatMap(sensor => Object.keys(sensor.variables ?? {})) ?? []),
+          // Whether anything is KNOWN about its sensors. A buoy no source
+          // covered has an empty list, which says nothing about what it
+          // measures - quite different from a list that simply doesn't
+          // include this variable.
+          knowsSensors: (buoy.sensors?.length ?? 0) > 0,
+        }))
         .sort((a, b) => (b.latitude ?? -Infinity) - (a.latitude ?? -Infinity));
     },
+    // Whether this buoy reports the variable on screen at all. Unknown counts
+    // as "might" - only a buoy whose sensors we actually know, and which
+    // doesn't list this code among them, is greyed out as not measuring it.
+    measures(buoy) {
+      return !buoy.knowsSensors || buoy.codes.has(this.$gui.selectedBuoyVariable.code);
+    },
+    // A row is waiting if a request is out and nothing has arrived for it yet.
+    // Deliberately derived rather than a per-row flag set when the request
+    // starts: pollMixin's created() runs BEFORE this component's own (Vue
+    // merges mixin hooks first), so on the very first load - the one time the
+    // spinner really matters - there are no rows yet to mark.
     isLoading(buoyId) {
-      return this.loading[buoyId] === true;
+      return this.isFetching && this.values[buoyId] == undefined;
     },
 
     // Asks for every variable the picker offers, not just the selected one:
@@ -107,12 +135,22 @@ export default {
     // afterwards costs nothing. Each buoy's promise is applied as it lands, so
     // rows fill in progressively rather than all at the end.
     refreshVariableData() {
-      // Only rows with nothing to show yet spin - a refresh of a row that
-      // already has data shouldn't blank it out and flash a spinner every
-      // five minutes.
-      const loading = { ...this.loading };
-      this.buoys.forEach(buoy => { if (this.values[buoy.id] == undefined) loading[buoy.id] = true; });
-      this.loading = loading;
+      // Paint whatever DPBuoys already holds FIRST, synchronously. This
+      // component is destroyed every time the All Platforms tabs change, but
+      // the measurements are not - they live in DPBuoys' block cache on the
+      // data service, which outlives every view. Without this the grid would
+      // spin its way through a full reload of data the app never lost.
+      //
+      // Here rather than in created() because pollMixin's created() runs
+      // BEFORE this component's own (Vue merges mixin hooks first), so a seed
+      // in created() would be racing the very poll it exists to pre-empt.
+      // Re-seeding on each poll is harmless: the cache is where applyResult's
+      // data came from in the first place.
+      this.seedFromCache();
+
+      // Only rows with nothing to show yet end up spinning (see isLoading), so
+      // the five-minute refresh never blanks out a row that already has data.
+      this.isFetching = true;
 
       this.$dataService.buoys.getVariablesData(this.$gui.buoyVariableCodes, this.$gui.timelineStartDate, this.$gui.timelineEndDate)
         // Promise.all, not forEach: each row still stops spinning the moment
@@ -125,21 +163,44 @@ export default {
         .catch(error => console.error('DTAPBuoys: could not plan the variable request:', error))
         // A buoy no source could serve never gets a promise of its own, so it
         // would spin for ever without this.
-        .finally(() => { this.loading = {}; });
+        .finally(() => { this.isFetching = false; });
     },
-    // { '<ISO>': { code: { value, sensor, source } } } -> { code: { '<ISO>': value } },
-    // which is the shape the binning below walks. Reassigned rather than
-    // mutated so the computed rebuilds.
-    applyResult(result) {
+    // Fills every row the cache can already answer for, in one assignment, so
+    // a remount paints in the same tick it mounts. A buoy that was asked about
+    // and had nothing gets an empty entry rather than no entry - that is what
+    // stops it spinning for ever over data that does not exist (see
+    // DPBuoys.readVariablesData).
+    //
+    // Anything already on screen wins over the seed. The two are normally
+    // identical, since this is where applyResult's data came from; keeping the
+    // existing entry just guarantees this can never blank a row it was added
+    // to protect.
+    seedFromCache() {
+      const seeded = {};
+      this.$dataService.buoys
+        .readVariablesData(this.$gui.buoyVariableCodes, this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+        .forEach(result => { seeded[result.buoyId] = this.byCode(result.data); });
+      if (Object.keys(seeded).length === 0) return;
+      this.values = { ...seeded, ...this.values };
+    },
+    // { '<ISO>': { code: point } } -> { code: { '<ISO>': point } }, which is the
+    // shape the binning below walks. The WHOLE point is kept, not just its
+    // value: each one carries the sensor, instrument and server it came from,
+    // and a cell lists whatever contributed to it.
+    byCode(data) {
       const byCode = {};
-      Object.entries(result.data).forEach(([timestamp, codes]) => {
+      Object.entries(data).forEach(([timestamp, codes]) => {
         Object.entries(codes).forEach(([code, point]) => {
           if (byCode[code] == undefined) byCode[code] = {};
-          byCode[code][timestamp] = point.value;
+          byCode[code][timestamp] = point;
         });
       });
-      this.values = { ...this.values, [result.buoyId]: byCode };
-      this.loading = { ...this.loading, [result.buoyId]: false };
+      return byCode;
+    },
+    // Reassigned rather than mutated so the computed rebuilds. Recording the
+    // values is what stops this row spinning - see isLoading.
+    applyResult(result) {
+      this.values = { ...this.values, [result.buoyId]: this.byCode(result.data) };
     },
 
     // One variable's cells for one buoy: the mean of the magnitudes that fell
@@ -148,10 +209,23 @@ export default {
     // the wrong way. Weighted by the magnitude measured at the same moment,
     // so a heading recorded in a flat calm doesn't drag the arrow around.
     binVariable(byCode, variable, cells, startTime, stepMs) {
-      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0 }));
+      // `raw` is what each code was PUBLISHED as by whoever served it (see
+      // DPBuoys' rawName) - VHM0 arriving as Puertos' 'Hm0'. Kept per code, so
+      // a magnitude and its direction can name their own spellings.
+      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0, from: new Map(), raw: {} }));
       const binOf = timestamp => {
         const index = Math.floor((new Date(timestamp).getTime() - startTime) / stepMs);
         return index >= 0 && index < bins.length ? bins[index] : undefined;
+      };
+      // Who contributed to a cell. A cell is an average over hours, so it can
+      // mix sensors and servers - keyed by both so the same instrument served
+      // by two servers is listed once per server, which is the distinction
+      // that matters when a number looks wrong.
+      const credit = (bin, point) => {
+        if (point?.sensor == undefined && point?.source == undefined) return;
+        bin.from.set(`${point.source}|${point.sensor}`, {
+          sensor: point.sensor, source: point.source, instrument: point.instrument,
+        });
       };
 
       // A reading far past the top of the legend's range is an instrument
@@ -159,24 +233,31 @@ export default {
       // anemometer (see SourceGithubSOMO), and one of those in a cell would
       // drag its average somewhere meaningless. Generous rather than tight:
       // three times the range still lets a genuinely extreme storm through.
-      const ceiling = variable.range[1] * OUT_OF_RANGE_FACTOR;
+      // The detail variables (see GUIManager.buoyDetailVariables) carry no
+      // range of their own, so fall back to the code's colour range and, for a
+      // code that has neither, filter nothing rather than throw.
+      const range = variable.range ?? this.$gui.rangeFor(variable.code);
+      const ceiling = range ? range[1] * OUT_OF_RANGE_FACTOR : Infinity;
       const magnitudes = {};
       const rejected = new Set();
-      Object.entries(byCode?.[variable.code] ?? {}).forEach(([timestamp, value]) => {
-        if (!isFinite(value) || value > ceiling) { rejected.add(timestamp); return; }
-        magnitudes[timestamp] = value;
+      Object.entries(byCode?.[variable.code] ?? {}).forEach(([timestamp, point]) => {
+        if (!isFinite(point?.value) || point.value > ceiling) { rejected.add(timestamp); return; }
+        magnitudes[timestamp] = point;
       });
 
-      Object.entries(magnitudes).forEach(([timestamp, value]) => {
+      Object.entries(magnitudes).forEach(([timestamp, point]) => {
         const bin = binOf(timestamp);
         if (!bin) return;
         bin.count++;
-        bin.total += value;
+        bin.total += point.value;
+        if (point.rawName) bin.raw[variable.code] = point.rawName;
+        credit(bin, point);
       });
 
       if (variable.directionCode) {
-        Object.entries(byCode?.[variable.directionCode] ?? {}).forEach(([timestamp, degrees]) => {
+        Object.entries(byCode?.[variable.directionCode] ?? {}).forEach(([timestamp, point]) => {
           const bin = binOf(timestamp);
+          const degrees = point?.value;
           if (!bin || !isFinite(degrees)) return;
           // A heading recorded alongside a rejected magnitude goes with it:
           // the logger writes a perfectly plausible direction next to its
@@ -185,11 +266,13 @@ export default {
           if (rejected.has(timestamp)) return;
           // Unweighted only where there is no magnitude to weight BY - not
           // where there was one and it was thrown away.
-          const weight = isFinite(magnitudes[timestamp]) ? magnitudes[timestamp] : 1;
+          const weight = isFinite(magnitudes[timestamp]?.value) ? magnitudes[timestamp].value : 1;
           const radians = degrees * Math.PI / 180;
           bin.x += Math.cos(radians) * weight;
           bin.y += Math.sin(radians) * weight;
           bin.directions++;
+          if (point.rawName) bin.raw[variable.directionCode] = point.rawName;
+          credit(bin, point);
         });
       }
 
@@ -198,6 +281,7 @@ export default {
         direction: bin.directions && (bin.x || bin.y)
           ? ((Math.atan2(bin.y, bin.x) * 180 / Math.PI) + 360) % 360
           : undefined,
+        from: [...bin.from.values()],
       }));
     },
 
@@ -206,7 +290,10 @@ export default {
     },
     cellText(buoy, index) {
       const bin = this.binFor(buoy, index);
-      return bin?.value == undefined ? '' : bin.value.toFixed(this.$gui.selectedBuoyVariable.decimals);
+      if (bin?.value == undefined) return '';
+      // Standard on the way in, the user's unit only here at the last moment
+      const unit = this.$gui.unitFor(this.$gui.selectedBuoyVariable.code);
+      return unit.toDisplay(bin.value).toFixed(unit.decimals);
     },
     // The compass bearing the arrow shows: where the wind/swell is GOING.
     // WDIR and VMDR are reported as where it comes FROM (fromDirection), so
@@ -222,37 +309,49 @@ export default {
       const variable = this.$gui.selectedBuoyVariable;
       return ((variable.fromDirection ? bin.direction + 180 : bin.direction) % 360 + 360) % 360;
     },
-    // The legend's own stops (see styles/colorLegends.js), interpolated over
-    // the variable's range - the same scale the bar above the timeline draws.
+    // The legend's own colour for this cell's average, from GUIManager.colorFor
+    // - shared with the platform detail panel and the map's circle arrows, so
+    // one reading is the same colour wherever it is drawn.
     cellColor(buoy, index) {
+      // Left to the stylesheet (.cell-unmeasured) so the grey stays in one
+      // place rather than being written here as well
+      if (!this.measures(buoy)) return undefined;
+
       const bin = this.binFor(buoy, index);
       if (bin?.value == undefined) return 'transparent';
 
       const { range, code } = this.$gui.selectedBuoyVariable;
-      const t = Math.min(Math.max((bin.value - range[0]) / (range[1] - range[0]), 0), 1);
-      const stops = this.$gui.colorLegend(code);
-      for (let i = 0; i < stops.length - 1; i++) {
-        const [t0, from] = stops[i];
-        const [t1, to] = stops[i + 1];
-        if (t > t1) continue;
-        const f = t1 === t0 ? 0 : (t - t0) / (t1 - t0);
-        const channel = j => Math.round(from[j] + (to[j] - from[j]) * f);
-        return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
-      }
-      const [, last] = stops[stops.length - 1];
-      return `rgb(${last[0]}, ${last[1]}, ${last[2]})`;
+      return this.$gui.colorFor(code, bin.value, range);
     },
     cellTitle(buoy, cell, index) {
+      const variable = this.$gui.selectedBuoyVariable;
+      // Worth saying apart from "no data": one is a gap in a record this buoy
+      // keeps, the other is a reading it was never going to take.
+      if (!this.measures(buoy)) {
+        return `${this.$t(variable.label)}: ${this.$t('Not measured by this platform')}`;
+      }
+
       const bin = this.binFor(buoy, index);
       if (bin?.value == undefined) return this.$t('No data available');
-      const variable = this.$gui.selectedBuoyVariable;
       // The direction as MEASURED - where the wind/swell comes FROM for WDIR
       // and VMDR - not the bearing the arrow is turned to. The tooltip is
       // there to read the data off, so it has to say what the source recorded;
       // the +180 belongs to the drawing, not to the number.
       const heading = bin.direction == undefined ? '' : ` · ${bin.direction.toFixed(0)}º`;
-      return `${cell.toISOString()}\n${this.$t(variable.label)}: `
-        + `${bin.value.toFixed(variable.decimals)} ${variable.unit}${heading}`;
+      // Where the cell's average actually came from - one line per contributor,
+      // since a cell spans hours and can mix sensors and servers. The
+      // instrument is only named where the source says what it is (ERDDAP
+      // publishes one, the MSM API names its sensors after them; see
+      // SourceGithubSOMO's INSTRUMENTS for the rest).
+      const from = (bin.from ?? []).map(({ sensor, instrument, source }) =>
+        `Sensor: ${sensor}${instrument ? ` (${instrument})` : ''} \nSource: ${source}`);
+
+      const unit = this.$gui.unitFor(variable.code);
+      return [
+        cell.toISOString(),
+        `${this.$t(variable.label)}: ${unit.toDisplay(bin.value).toFixed(unit.decimals)} ${unit.unit}${heading}`,
+        ...from,
+      ].join('\n');
     },
 
     isRowSelected(buoyId) {
@@ -267,20 +366,81 @@ export default {
     },
     // Hands the detail panel every variable's average for that cell, not just
     // the one on screen - the panel shows them all.
+    //
+    // Two steps, and the split is the point: everything the timeline already
+    // holds goes on the object NOW, synchronously, so the panel opens filled
+    // in; the variables the timeline never fetches (salinity, gusts, maximum
+    // waves, currents) are requested afterwards and merged in when they land.
     buoyClicked(buoy, index, cell) {
-      const platform = { stationId: buoy.id, date: cell };
+      // `from` is kept as a map beside the values rather than flattened in with
+      // them: a reading is a number, and which instrument took it is a
+      // different kind of fact about it. The panel's tooltips read it back.
+      const platform = { stationId: buoy.id, date: cell, from: {}, raw: {} };
       this.$gui.buoyVariables.forEach(variable => {
         const bin = this.binned[buoy.id]?.[variable.code]?.[index];
         if (bin?.value != undefined) platform[variable.code] = bin.value;
         if (variable.directionCode && bin?.direction != undefined) platform[variable.directionCode] = bin.direction;
+        if (bin?.from?.length) platform.from[variable.code] = bin.from;
+        Object.assign(platform.raw, bin?.raw);
       });
 
       this.$gui.selectedPlatform = platform;
       this.selectedCell = { buoyId: buoy.id, index };
       this.$gui.isPlatformDetailOpen = true;
+      this.fetchDetailVariables(buoy, cell);
+    },
+
+    // The variables only the detail panel shows, fetched for ONE buoy over the
+    // ONE cell that was clicked - never as part of the timeline's own request,
+    // which runs for every buoy over the whole window every five minutes and
+    // would carry a lot of columns nobody is looking at (see
+    // GUIManager.buoyDetailVariables and DPBuoys.getBuoyDetailData). Repeat
+    // clicks around the same day cost nothing: the block cache keeps them.
+    async fetchDetailVariables(buoy, cell) {
+      const token = ++this.detailToken;
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+      const end = new Date(cell.getTime() + stepMs);
+
+      const result = await this.$dataService.buoys
+        .getBuoyDetailData(buoy.id, this.$gui.buoyDetailCodes, cell, end)
+        .catch(error => {
+          console.error(`DTAPBuoys: could not load the detail variables of '${buoy.id}':`, error);
+          return undefined;
+        });
+      // A newer click has been made while this was in flight - its own request
+      // owns the panel now, and merging this one would write the wrong buoy's
+      // salinity under the right buoy's name.
+      if (!result || token !== this.detailToken) return;
+
+      const platform = this.$gui.selectedPlatform;
+      if (platform?.stationId !== buoy.id || platform?.date?.getTime() !== cell.getTime()) return;
+
+      // Averaged over the clicked cell exactly as the grid averages its own
+      // variables - one cell, same binning, so a gust reads as the gust of the
+      // same interval the wind beside it was measured over.
+      const byCode = this.byCode(result.data);
+      const extras = {};
+      const from = { ...(platform.from ?? {}) };
+      const raw = { ...(platform.raw ?? {}) };
+      this.$gui.buoyDetailVariables.forEach(variable => {
+        const [bin] = this.binVariable(byCode, variable, [cell], cell.getTime(), stepMs);
+        if (bin?.value != undefined) extras[variable.code] = bin.value;
+        if (variable.directionCode && bin?.direction != undefined) extras[variable.directionCode] = bin.direction;
+        if (bin?.from?.length) from[variable.code] = bin.from;
+        Object.assign(raw, bin?.raw);
+      });
+
+      this.$gui.selectedPlatform = { ...platform, ...extras, from, raw };
     },
   },
   computed: {
+    // The rows as DTLayout wants them: the buoy, plus whether it is still
+    // waiting on its data - which is what puts a spinner next to its name in
+    // the names column (see DTLayout), where it stays visible however the
+    // timeline is scrolled.
+    rowVariables() {
+      return this.buoys.map(buoy => ({ ...buoy, loading: this.isLoading(buoy.id) }));
+    },
     // Same steps DTTimelineGrid lays the columns out on - both read the same
     // $gui values, so they can't drift apart.
     cells() {
@@ -376,6 +536,18 @@ tr.row-selected .value-cell {
 
 .value-cell:hover {
   filter: brightness(0.85);
+}
+
+/* This platform doesn't take this reading at all - flat grey, so it reads as
+   "nothing to show here" rather than as a gap in data it does record. Not
+   hoverable or clickable either: there is nothing to select. */
+.cell-unmeasured {
+  background: rgba(0, 0, 0, 0.12);
+  cursor: default;
+}
+
+.cell-unmeasured:hover {
+  filter: none;
 }
 
 /* Same as DTAPHFR's, so a row waiting on its data looks the same everywhere */
