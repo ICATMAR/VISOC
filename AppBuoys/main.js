@@ -193,8 +193,9 @@ const el = id => document.getElementById(id);
 // --------------------------------------------------------------- SETTINGS
 
 function loadSettings() {
-  // Knots by default for the wind - what sailors and fishermen read
-  const defaults = { units: { windSpeed: 'kn' }, useLocalTime: true, intervalHours: 1 };
+  // Knots by default for the wind - what sailors and fishermen read - and
+  // 3-hour rows, which fit the 4 days of the buoy view on a phone screen
+  const defaults = { units: { windSpeed: 'kn' }, useLocalTime: true, intervalHours: 3 };
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') };
   } catch (error) {
