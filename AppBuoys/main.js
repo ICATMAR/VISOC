@@ -104,7 +104,10 @@ const UNIT_PICKERS = [
 ];
 
 const PHOTOS_PATH = '../Assets/Images/platforms/Buoys/';
-const BASEMAP_URL = 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png';
+// Smallest margin (map units, ~9 km on the ground here) around the buoy(s) in
+// the info view's map - the closest it ever zooms in (see renderMap)
+const MAP_MIN_MARGIN = 12000;
+const BASEMAP_URL ='https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png';
 
 
 // --------------------------------------------------------------- PRODUCTS
@@ -917,8 +920,17 @@ async function renderMap(container, buoys) {
     ],
     view: new ol.View({ center: ol.proj.fromLonLat([points[0].longitude, points[0].latitude]), zoom: 10 }),
   });
-  // Wide enough around the buoy(s) to show the coastline
-  map.getView().fit(ol.extent.buffer(source.getExtent(), 12000), { maxZoom: 12 });
+  // Wide enough around the buoy(s) to show the coastline: a margin of at
+  // least the buoy's own distance to the coast (plus some room, so the coast
+  // isn't right at the edge), never zoomed in further than MAP_MIN_MARGIN -
+  // which is what suits the buoys a few km off the beach. Offshore ones (BEGU,
+  // 34 km out; MTARR, 51 km) zoom out until their coast is in the picture.
+  // Web Mercator stretches distances by 1/cos(latitude), so km on the ground
+  // are scaled into map units.
+  const farthestKm = Math.max(0, ...points.map(buoy => buoy.distanceToCoast ?? 0));
+  const groundToMap = 1 / Math.cos(points[0].latitude * Math.PI / 180);
+  const margin = Math.max(MAP_MIN_MARGIN, (farthestKm * 1.2 + 4) * 1000 * groundToMap);
+  map.getView().fit(ol.extent.buffer(source.getExtent(), margin), { maxZoom: 12 });
 }
 
 
