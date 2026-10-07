@@ -864,7 +864,7 @@ function renderBuoyTable() {
   const forecastBins = Object.fromEntries(COLUMNS.map(column =>
     [column.id, binRecords(detail.forecasts[column.id]?.data, first, size, count)]));
 
-  // Tapping the time column's title switches between local time and UTC
+  // Tapping the time column's title offers local time or UTC (see openTimezonePopup)
   let html = headerRowHTML(`<button class="header-cell clickable" data-toggle-timezone title="${escapeHTML(t('header.timeTitle'))}">`
     + `<i class="fa-regular fa-clock"></i><span>${escapeHTML(t('header.time'))}</span><span class="unit">${escapeHTML(gui.timelineTimezoneLabel)}</span></button>`);
   let previousDay;
@@ -1265,6 +1265,9 @@ function goBack(fallback) {
 }
 
 function route() {
+  // A message or a choice belongs to the view it was opened in
+  fadeOut(el('toast'));
+  closeUnitPopup();
   const next = parseRoute();
   state.route = next;
   if (navigationStack[navigationStack.length - 1] === (location.hash || '#/')) navigationStack.pop();
@@ -1442,15 +1445,15 @@ function setupEvents() {
 
   el('buoy-table').addEventListener('click', event => {
     if (unitHeaderFrom(event)) return;
-    if (infoCellFrom(event) || forecastCellFrom(event)) return;
-    if (!event.target.closest('[data-toggle-timezone]')) return;
-    gui.timelineUseLocalTime = !gui.timelineUseLocalTime;
-    if (state.detail) state.detail.followNow = true;
-    settingsChanged();
+    infoCellFrom(event) || forecastCellFrom(event);
   });
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
-  el('toast').addEventListener('click', () => fadeOut(el('toast')));
+  el('toast').addEventListener('click', () => {
+    if (!wasDragged(el('toast'))) fadeOut(el('toast'));
+  });
+  setupSheetDrag(el('toast'), () => fadeOut(el('toast')));
+  setupSheetDrag(el('unit-popup'), closeUnitPopup);
   el('update-status').addEventListener('click', forceRefresh);
   el('map-back').addEventListener('click', () => goBack('#/'));
   el('map-button').addEventListener('click', () => {
@@ -1481,13 +1484,21 @@ function setupEvents() {
     if (event.key !== 'Escape') return;
     setMenuOpen(false);
     closeUnitPopup();
+    fadeOut(el('toast'));
   });
 
   // A unit applies it; a tap anywhere else on the popup just closes it
   el('unit-popup').addEventListener('click', event => {
+    if (wasDragged(el('unit-popup'))) return;
     const button = event.target.closest('[data-unit-group]');
     if (button) {
       gui.selectedUnits = { ...gui.selectedUnits, [button.dataset.unitGroup]: button.dataset.unit };
+      settingsChanged();
+    }
+    const timezone = event.target.closest('[data-timezone]');
+    if (timezone) {
+      gui.timelineUseLocalTime = timezone.dataset.timezone === 'local';
+      if (state.detail) state.detail.followNow = true;
       settingsChanged();
     }
     closeUnitPopup();
@@ -1496,8 +1507,15 @@ function setupEvents() {
   // own click is still on its way up here
   document.addEventListener('click', event => {
     if (el('unit-popup').hidden) return;
-    if (event.target.closest('#unit-popup, [data-unit-code]')) return;
+    if (event.target.closest('#unit-popup, [data-unit-code], [data-toggle-timezone]')) return;
     closeUnitPopup();
+  });
+  // Same for a cell's message - except a tap on another cell, which swaps the
+  // message for that cell's instead
+  document.addEventListener('click', event => {
+    if (el('toast').hidden) return;
+    if (event.target.closest('#toast, .cell[data-info], .cell.forecast')) return;
+    fadeOut(el('toast'));
   });
 
   el('unit-pickers').addEventListener('click', event => {
@@ -1528,11 +1546,42 @@ function setupEvents() {
 // A tap on a column title switches its unit
 // A tap on a column title offers the units of its quantity - nothing changes
 // until one is picked
+//
+// The same title again closes it, like a toggle; another column's title
+// switches it to that column's units.
+//
+// The buoy view's Time title opens the same popup with the time zones.
 function unitHeaderFrom(event) {
-  const header = event.target.closest('[data-unit-code]');
-  if (!header || !header.dataset.unitCode) return false;
-  openUnitPopup(header.dataset.unitCode);
+  const header = event.target.closest('[data-unit-code], [data-toggle-timezone]');
+  if (!header) return false;
+  const code = 'toggleTimezone' in header.dataset ? 'timezone' : header.dataset.unitCode;
+  if (!code) return false; // a column whose quantity has one unit only
+  const popup = el('unit-popup');
+  const isOpen = !popup.hidden && !popup.classList.contains('fading');
+  if (isOpen && popup.dataset.code === code) closeUnitPopup();
+  else if (code === 'timezone') openTimezonePopup();
+  else openUnitPopup(code);
   return true;
+}
+
+// Local time or UTC, offered when the Time title is tapped - same popup, same
+// behaviour as the units'
+function openTimezonePopup() {
+  const popup = el('unit-popup');
+  popup.dataset.code = 'timezone';
+  const option = (value, label) => `<button data-timezone="${value}"`
+    + ` class="${(value === 'local') === gui.timelineUseLocalTime ? 'selected' : ''}">${escapeHTML(label)}</button>`;
+  // Local is labelled with its offset ('UTC+2', as GUIManager writes it), so
+  // the choice says what it means
+  const minutes = -new Date().getTimezoneOffset();
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  const localOffset = `UTC${minutes >= 0 ? '+' : '-'}${hours}${rest ? `:${String(rest).padStart(2, '0')}` : ''}`;
+  popup.innerHTML = `<div class="unit-popup-title"><i class="fa-regular fa-clock"></i>${escapeHTML(t('menu.timezone'))}</div>`
+    + `<div class="segmented">${option('local', `${t('menu.local')} (${localOffset})`)}${option('utc', t('menu.utc'))}</div>`
+    + `<div class="unit-popup-note">${escapeHTML(t('timePopup.note'))}</div>`;
+  el('toast').hidden = true;
+  showFading(popup);
 }
 
 // The units a code's quantity can be shown in, as a row of buttons at the
@@ -1542,6 +1591,7 @@ function openUnitPopup(code) {
   const group = gui.variable(code)?.unitGroup;
   const options = UNIT_GROUPS[group];
   if (!options || options.length < 2) return;
+  el('unit-popup').dataset.code = code; // which column opened it (see unitHeaderFrom)
 
   const picker = UNIT_PICKERS.find(p => p.group === group);
   const selected = gui.unitFor(code).unit;
@@ -1564,7 +1614,7 @@ function closeUnitPopup() {
 function infoCellFrom(event) {
   const cell = event.target.closest('.cell[data-info]');
   if (!cell) return false;
-  showToast(cell.dataset.info, 10000);
+  showToast(cell.dataset.info);
   return true;
 }
 
@@ -1597,6 +1647,7 @@ const FADE_MS = 300;
 
 function showFading(element) {
   clearTimeout(element.fadeTimeout);
+  element.style.transform = ''; // whatever a swipe left behind (see setupSheetDrag)
   element.classList.remove('fading');
   element.hidden = false;
 }
@@ -1608,17 +1659,66 @@ function fadeOut(element) {
   element.fadeTimeout = setTimeout(() => {
     element.hidden = true;
     element.classList.remove('fading');
+    element.style.transform = '';
   }, FADE_MS);
 }
 
-let toastTimeout;
-function showToast(text, duration = 3500) {
+// Swipe a bottom sheet down to close it, like iOS: it follows the finger
+// while dragged, closes from wherever it was let go if pulled down far
+// enough, and springs back up otherwise. A drag is not a tap - the click it
+// ends with is swallowed (see wasDragged), so swiping down from a unit
+// button doesn't also pick that unit.
+const SHEET_DISMISS_PX = 50;
+
+function setupSheetDrag(sheet, close) {
+  let startY;
+  let offset = 0;
+  sheet.addEventListener('pointerdown', event => {
+    startY = event.clientY;
+    offset = 0;
+    sheet.dragged = false;
+  });
+  sheet.addEventListener('pointermove', event => {
+    if (startY == undefined) return;
+    offset = Math.max(0, event.clientY - startY);
+    if (offset > 5) sheet.dragged = true;
+    if (!sheet.dragged) return;
+    sheet.style.transition = 'none';
+    sheet.style.transform = `translateY(${offset}px)`;
+  });
+  const end = () => {
+    if (startY == undefined) return;
+    startY = undefined;
+    sheet.style.transition = '';
+    if (!sheet.dragged) return;
+    if (offset > SHEET_DISMISS_PX) {
+      // Down from where the finger left it, rather than from the top again
+      sheet.style.transform = 'translateY(110%)';
+      close();
+    } else {
+      sheet.style.transform = '';
+    }
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+}
+
+// Whether the click a sheet just received was the end of a swipe rather
+// than a tap - and forgets it, so the next one counts again
+function wasDragged(sheet) {
+  const dragged = sheet.dragged;
+  sheet.dragged = false;
+  return dragged;
+}
+
+// A cell's message stays until the user closes it (a tap on it or elsewhere,
+// a swipe down, Escape) - it can be several lines long, and reading it
+// shouldn't be a race against a timer
+function showToast(text) {
   const toast = el('toast');
   closeUnitPopup();
   toast.textContent = text;
   showFading(toast);
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => fadeOut(toast), duration);
 }
 
 function refresh() {
