@@ -372,6 +372,17 @@ a {
   opacity: 0;
 }
 
+/* A measured cell in the buoy view: a tap says where it comes from (one line
+   per fact - see observationInfo), and a tap on the message closes it */
+.cell.has-info {
+  cursor: pointer;
+}
+
+#toast {
+  white-space: pre-line;
+  cursor: pointer;
+}
+
 .arrow {
   width: 0.95rem;
   height: 0.95rem;

@@ -21,7 +21,7 @@ class DPForecast extends DP {
   // use the id, gridded ones the position) - within [startDate, endDate], in
   // standard codes:
   //
-  //   { data: { '<ISO>': { <code>: { value, model, source } } },
+  //   { data: { '<ISO>': { <code>: { value, model, source, rawName, derivedFrom } } },
   //     series: [{ model, label, institution, forcing, resolution, cell, source,
   //                startDate, endDate, usedFrom, usedTo }],
   //     errors: [...] }
@@ -49,6 +49,9 @@ class DPForecast extends DP {
         model: entry.model, label: entry.label, institution: entry.institution ?? entry.source.institution,
         forcing: entry.forcing, resolution: entry.resolution, cell: entry.cell, run: entry.run,
         dataset: entry.dataset, source: entry.source.src,
+        // Who serves it, as opposed to who runs the model: the source's own
+        // institution, and the API's name for an API (Open-Meteo)
+        provider: entry.source.institution, api: entry.source.api,
         startDate: timestamps.length ? new Date(timestamps[0]) : undefined,
         endDate: timestamps.length ? new Date(timestamps[timestamps.length - 1]) : undefined,
         usedFrom: undefined, usedTo: undefined,
@@ -62,11 +65,21 @@ class DPForecast extends DP {
     ranked.forEach((entry, index) => {
       Object.entries(entry.rows).forEach(([timestamp, values]) => {
         const record = this.derive(this.standardize(entry.source, values));
+        // Which of the source's own names each code came from ('hs' for
+        // VHM0) - a code with none was computed (see derive) from the record
+        const rawNames = {};
+        Object.keys(values).forEach(name => {
+          const code = this.standardCode(entry.source, name);
+          if (rawNames[code] == undefined) rawNames[code] = name;
+        });
         if (data[timestamp] == undefined) data[timestamp] = {};
         let supplied = false;
         Object.entries(record).forEach(([code, value]) => {
           if (value == undefined || !isFinite(value) || data[timestamp][code] != undefined) return;
-          data[timestamp][code] = { value, model: entry.model, source: entry.source.src };
+          data[timestamp][code] = {
+            value, model: entry.model, source: entry.source.src,
+            rawName: rawNames[code], derivedFrom: rawNames[code] ? undefined : Object.keys(values),
+          };
           supplied = true;
         });
         if (!supplied) return;

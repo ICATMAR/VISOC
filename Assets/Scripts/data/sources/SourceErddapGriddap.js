@@ -186,9 +186,23 @@ class SourceErddapGriddap extends SourceErddap {
       forcing: this.forcing,
       resolution: this.resolution,
       dataset: this.dataset,
+      run: this.runInfo(),
       cell,
       rows,
     }];
+  }
+
+  // The run this dataset holds, from its NC_GLOBAL attributes: the
+  // forecast_reference_time (the wave forecasts publish it) and, for a dataset
+  // that only describes its run in words, the `source` attribute ('ROMS run
+  // from 2026-10-01'). Same shape as SourceOpenMeteo.runOf().
+  runInfo() {
+    const metadata = this.metadata ?? {};
+    const reference = metadata['forecast_reference_time'] ? new Date(metadata['forecast_reference_time']) : undefined;
+    return {
+      referenceTime: reference && !isNaN(reference) ? reference : undefined,
+      note: metadata['source'],
+    };
   }
 
   // griddap CSV: line 1 the column names, line 2 their units, then one row per

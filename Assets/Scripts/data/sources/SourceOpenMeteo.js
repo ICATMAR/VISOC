@@ -58,6 +58,22 @@ class SourceOpenMeteo extends Source {
     this.loadingPromise = Promise.resolve();
   }
 
+  // A model's run, from the API's own description of it ({ lastRun,
+  // available, updateIntervalSeconds, temporalResolutionSeconds }, epoch
+  // seconds): when the run started, when it was published, how often there is
+  // a new one and its time step. Same shape as SourceErddapGriddap.runInfo(),
+  // so a forecast value can say how old it is whichever source it came from.
+  static runOf(meta) {
+    if (!meta) return undefined;
+    const date = seconds => (isFinite(seconds) && seconds > 0 ? new Date(seconds * 1000) : undefined);
+    return {
+      referenceTime: date(meta.lastRun),
+      publishedAt: date(meta.available),
+      updateIntervalHours: isFinite(meta.updateIntervalSeconds) ? meta.updateIntervalSeconds / 3600 : undefined,
+      timeStepHours: isFinite(meta.temporalResolutionSeconds) ? meta.temporalResolutionSeconds / 3600 : undefined,
+    };
+  }
+
   // Forecast for one point (a buoy - `id` is what the API is keyed by) within
   // [startDate, endDate], as one series per model, in the catalogue's order of
   // preference:
@@ -86,7 +102,7 @@ class SourceOpenMeteo extends Source {
     Object.assign(this.modelsMetadata, json.models ?? {});
     this.variables = Object.fromEntries(Object.entries(json.units ?? {}).map(([name, units]) => [name, { units }]));
 
-    const series = this.models.map(model => ({ ...model, model: model.id, run: json.models?.[model.id], rows: {} }));
+    const series = this.models.map(model => ({ ...model, model: model.id, run: SourceOpenMeteo.runOf(json.models?.[model.id]), rows: {} }));
     Object.entries(json.data ?? {}).forEach(([stamp, byModel]) => {
       const date = parseTimestamp(stamp);
       if (!date || !byModel) return;

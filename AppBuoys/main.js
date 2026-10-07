@@ -410,7 +410,11 @@ function forecastAt(data, date, column) {
     const value = data[best.timestamp][code]?.value;
     if (value != undefined) values[code] = value;
   });
-  return { values, date: new Date(best.timestamp), model: data[best.timestamp][column.code].model };
+  return {
+    values, date: new Date(best.timestamp), model: data[best.timestamp][column.code].model,
+    // The whole record, for the message a tap on the cell shows (forecastInfo)
+    record: { ...data[best.timestamp], [RECORD_TIME]: best.timestamp },
+  };
 }
 
 // Latest readings of one buoy for the list. Any column without a recent
@@ -449,7 +453,7 @@ async function loadLatest(buoy) {
   await Promise.all(stale.map(async column => {
     const forecast = await getForecast(buoy.id, column);
     const values = forecastAt(forecast.data, now, column);
-    if (values) entry.columns[column.id] = { ...values, forecast: true };
+    if (values) entry.columns[column.id] = { ...values, forecast: true, result: forecast };
   }));
   if (stale.length) renderList();
 }
@@ -524,14 +528,136 @@ function aggregateColumn(records, column) {
   return values;
 }
 
-// Readings grouped into consecutive intervals of `size` ms from `first`
+// Readings grouped into consecutive intervals of `size` ms, each CENTRED on
+// its row's time: the 14h row averages 13:30-14:30, a 3-hour 15h row
+// 13:30-16:30. `first` is the first row's time, so a reading goes to the row
+// whose time it is nearest to.
+// Each record keeps its own timestamp under RECORD_TIME - a symbol, so it
+// can't be mistaken for one of the codes the record is keyed by.
+const RECORD_TIME = Symbol('time');
+
 function binRecords(data, first, size, count) {
   const bins = Array.from({ length: count }, () => []);
   Object.entries(data ?? {}).forEach(([timestamp, byCode]) => {
-    const index = Math.floor((Date.parse(timestamp) - first) / size);
-    if (index >= 0 && index < count) bins[index].push(byCode);
+    const index = Math.floor((Date.parse(timestamp) - first + size / 2) / size);
+    if (index >= 0 && index < count) bins[index].push({ ...byCode, [RECORD_TIME]: timestamp });
   });
   return bins;
+}
+
+// What a tap on a measured cell says about it: where the value comes from
+// (buoy, sensor, server) and how it was made (how many readings were averaged,
+// over which minutes). From the points DPAggregatedBuoys/DPBuoys return, each
+// of which carries its sensor, instrument, source and raw variable name.
+function observationInfo(records, column, start, size) {
+  const withValue = records.filter(record => record[column.code]?.value != undefined);
+  if (!withValue.length) return '';
+  const points = withValue.map(record => record[column.code]);
+  const times = withValue.map(record => new Date(record[RECORD_TIME])).sort((a, b) => a - b);
+  const unique = list => [...new Set(list.filter(Boolean))];
+
+  // The interval is centred on the row's time (see binRecords)
+  const from = new Date(start.getTime() - size / 2);
+  const to = new Date(start.getTime() + size / 2);
+  const lines = [`Measurement at ${formatHourShort(start)} (${formatHour(from)}–${formatHour(to)})`];
+
+  unique(points.map(point => point.buoy)).forEach(buoyId => {
+    const buoy = state.buoysById.get(buoyId);
+    lines.push(`Buoy: ${buoy?.name ?? buoyId} (${buoyId})`);
+  });
+
+  const sensors = unique(points.map(point => point.instrument ? `${point.instrument} (${point.sensor})` : point.sensor));
+  if (sensors.length) lines.push(`Sensor: ${sensors.join(', ')}`);
+
+  const variables = unique(points.map(point => point.rawName && point.rawName !== column.code
+    ? `${column.code}, published as ${point.rawName}` : column.code));
+  lines.push(`Variable: ${variables.join('; ')} - ${gui.variable(column.code)?.longName ?? ''}`.replace(/ - $/, ''));
+
+  const sources = unique(points.map(point => {
+    const source = buoysProduct.sources.find(s => s.src === point.source);
+    return source ? `${source.institution} (${hostOf(source.src)})` : hostOf(point.source);
+  }));
+  if (sources.length) lines.push(`Source: ${sources.join(', ')}`);
+
+  const zone = gui.timelineUseLocalTime ? '' : ' UTC';
+  lines.push(withValue.length === 1
+    ? `1 reading, at ${formatHour(times[0])}${zone}`
+    : `Average of ${withValue.length} readings, ${formatHour(times[0])}–${formatHour(times[times.length - 1])}${zone}`);
+
+  return lines.join('\n');
+}
+
+// What a tap on a forecast cell says about it - the model and who runs it,
+// how old the run is, where it is served from and read at, and how the value
+// was made. `records` are the forecast's hourly records that went into the
+// cell (see binRecords); `start`/`size` the buoy view row they were averaged
+// over, absent for the list's single value. `result` is what
+// DPForecast.getPointForecast answered, whose `series` describe each model.
+function forecastInfo({ records, column, result, buoyId, start, size }) {
+  const withValue = records.filter(record => record[column.code]?.value != undefined);
+  if (!withValue.length) return '';
+  const points = withValue.map(record => record[column.code]);
+  const times = withValue.map(record => new Date(record[RECORD_TIME])).sort((a, b) => a - b);
+  const unique = list => [...new Set(list.filter(Boolean))];
+  const zone = gui.timelineUseLocalTime ? '' : ' UTC';
+
+  const lines = [];
+  if (start) {
+    const from = new Date(start.getTime() - size / 2);
+    const to = new Date(start.getTime() + size / 2);
+    lines.push(`Model forecast at ${formatHourShort(start)} (${formatHour(from)}–${formatHour(to)})`);
+  } else {
+    lines.push(`Model forecast for ${formatHour(times[0])}${zone} - no measurement in the last ${STALE_HOURS} h`);
+  }
+
+  // A virtual buoy's forecast is read where the real buoy behind that column is
+  const pointId = allBuoysProduct.componentBuoyId(buoyId, column.code);
+  if (pointId !== buoyId) lines.push(`At: ${state.buoysById.get(pointId)?.name ?? pointId} (${pointId})`);
+
+  unique(points.map(point => point.model)).forEach(modelId => {
+    const series = result?.series?.find(s => s.model === modelId);
+    if (!series) { lines.push(`Model: ${modelId}`); return; }
+
+    lines.push(`Model: ${series.label}${series.resolution ? `, ${series.resolution}` : ''}`);
+    const by = [series.institution, series.forcing ? `${series.forcing.model} winds by ${series.forcing.institution}` : undefined];
+    lines.push(`By: ${by.filter(Boolean).join(', ')}`);
+
+    // Runs are named in UTC ('the 00Z run') whatever the display time zone
+    const run = series.run;
+    if (run?.referenceTime) {
+      const published = run.publishedAt ? `, published ${formatAgo(run.publishedAt)}` : '';
+      const utc = run.referenceTime.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
+      lines.push(`Run: ${utc} UTC (${formatAgo(run.referenceTime)}${published})`);
+    } else if (run?.note) {
+      lines.push(`Run: ${run.note}`);
+    }
+    const cadence = [
+      run?.updateIntervalHours ? `new run every ${run.updateIntervalHours} h` : undefined,
+      run?.timeStepHours > 1 ? `time step ${run.timeStepHours} h` : undefined,
+    ].filter(Boolean).join(', ');
+    if (cadence) lines.push(cadence[0].toUpperCase() + cadence.slice(1));
+
+    lines.push(series.api
+      ? `Source: ${series.api}, through ${series.provider}'s API (${hostOf(series.source)})`
+      : `Source: ${series.provider} ERDDAP (${hostOf(series.source)}), dataset ${series.dataset}`);
+    if (series.cell) {
+      const { latitude, longitude, distanceKm } = series.cell;
+      lines.push(`Grid point: ${latitude.toFixed(3)}° N, ${longitude.toFixed(3)}° E, ${distanceKm.toFixed(1)} km from the buoy`);
+    }
+  });
+
+  const variables = unique(points.map(point => {
+    if (point.rawName && point.rawName !== column.code) return `${column.code}, published as ${point.rawName}`;
+    if (point.derivedFrom?.length) return `${column.code}, computed from ${point.derivedFrom.join(' and ')}`;
+    return column.code;
+  }));
+  lines.push(`Variable: ${variables.join('; ')} - ${gui.variable(column.code)?.longName ?? ''}`.replace(/ - $/, ''));
+
+  lines.push(withValue.length === 1
+    ? `1 forecast value, at ${formatHour(times[0])}${zone}`
+    : `Average of ${withValue.length} forecast values, ${formatHour(times[0])}–${formatHour(times[times.length - 1])}${zone}`);
+
+  return lines.join('\n');
 }
 
 // Start of the interval a moment falls in, on the displayed clock (local or
@@ -557,7 +683,10 @@ function intervalStart(date, hours) {
 //
 // A forecast cell carries the model it comes from (`model`, its id), for the
 // message a tap on it shows (see showToast).
-function cellHTML(column, values, { forecast = false, model, detailed = false, list = false } = {}) {
+//
+// `info` is what a tap on the cell says about it (observationInfo,
+// forecastInfo), carried on the cell itself.
+function cellHTML(column, values, { forecast = false, model, info, detailed = false, list = false } = {}) {
   const magnitude = values?.[column.code];
   if (magnitude == undefined) return '<div class="cell empty">–</div>';
 
@@ -589,9 +718,11 @@ function cellHTML(column, values, { forecast = false, model, detailed = false, l
     sub = `Gust: ${gust.text} ${escapeHTML(gust.unit)}`;
   }
 
-  const title = forecast ? ` title="Model forecast" data-model="${escapeHTML(model ?? '')}"` : '';
+  let title = forecast ? ` title="Model forecast - tap for details" data-model="${escapeHTML(model ?? '')}"` : '';
+  if (info && !forecast) title = ' title="Measurement - tap for details"';
+  if (info) title += ` data-info="${escapeHTML(info)}"`;
   const style = background ? ` style="background-color: ${background}"` : '';
-  return `<div class="cell${forecast ? ' forecast' : ''}"${style}${title}>`
+  return `<div class="cell${forecast ? ' forecast' : ''}${info ? ' has-info' : ''}"${style}${title}>`
     + `<div class="cell-main">${main}</div>${sub ? `<div class="cell-sub">${sub}</div>` : ''}</div>`;
 }
 
@@ -626,7 +757,9 @@ function buoyRowHTML(buoy) {
   const cells = COLUMNS.map(column => {
     if (!latest || latest.loading) return loadingCellHTML();
     const entry = latest.columns[column.id];
-    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, list: true });
+    const info = entry?.forecast && entry.record
+      ? forecastInfo({ records: [entry.record], column, result: entry.result, buoyId: buoy.id }) : undefined;
+    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, info, list: true });
   }).join('');
 
   return `<div class="row buoy-row" data-buoy="${escapeHTML(buoy.id)}" role="button" tabindex="0">`
@@ -666,7 +799,7 @@ function renderBuoyTable() {
   // (each run reaches a different time - see forecastEndDate). Never short of
   // the row "now" is in.
   const end = Math.min(now.getTime() + HOURS_AFTER * HOUR, forecastEndDate(detail)?.getTime() ?? Infinity);
-  const count = Math.max(Math.floor((end - first) / size) + 1, Math.floor((now - first) / size) + 1);
+  const count = Math.max(Math.floor((end - first) / size) + 1, Math.floor((now - first + size / 2) / size) + 1);
 
   const observed = binRecords(detail.observations?.data, first, size, count);
   const forecastBins = Object.fromEntries(COLUMNS.map(column =>
@@ -689,21 +822,28 @@ function renderBuoyTable() {
       const observation = aggregateColumn(observed[i], column);
       if (observation) {
         measured = true;
-        return cellHTML(column, observation, { detailed: true });
+        const info = observationInfo(observed[i], column, start, size);
+        return cellHTML(column, observation, { detailed: true, info });
       }
       const forecast = aggregateColumn(forecastBins[column.id][i], column);
       // The model of the interval's first hour - an interval only spans two
       // models at the hour one takes over from the other
       const model = forecastBins[column.id][i].find(record => record[column.code])?.[column.code].model;
-      if (forecast) return cellHTML(column, forecast, { detailed: true, forecast: true, model });
+      if (forecast) {
+        const info = forecastInfo({ records: forecastBins[column.id][i], column, start, size,
+          result: detail.forecasts[column.id], buoyId: detail.buoyId });
+        return cellHTML(column, forecast, { detailed: true, forecast: true, model, info });
+      }
       // Still waiting for one of them
       if (detail.observations == undefined || detail.forecasts[column.id] == undefined) return loadingCellHTML();
       return cellHTML(column, undefined);
     }).join('');
 
     let nowLine = '';
-    if (now >= start && now < start.getTime() + size) {
-      const top = ((now - start) / size * 100).toFixed(1);
+    // A row covers half an interval either side of its time (see binRecords)
+    const rowStart = start.getTime() - size / 2;
+    if (now >= rowStart && now < rowStart + size) {
+      const top = ((now - rowStart) / size * 100).toFixed(1);
       nowLine = `<div class="now-line" id="now-line" style="top: ${top}%"><span>${formatHour(now)}</span></div>`;
     }
 
@@ -1181,7 +1321,7 @@ function setupEvents() {
   el('list-table').addEventListener('click', event => {
     if (cycleUnitFrom(event)) return;
     // A forecast value explains itself instead of opening the buoy
-    if (forecastCellFrom(event)) return;
+    if (infoCellFrom(event) || forecastCellFrom(event)) return;
     const row = event.target.closest('[data-buoy]');
     if (!row) return;
     const buoyId = row.dataset.buoy;
@@ -1195,7 +1335,7 @@ function setupEvents() {
 
   el('buoy-table').addEventListener('click', event => {
     if (cycleUnitFrom(event)) return;
-    if (forecastCellFrom(event)) return;
+    if (infoCellFrom(event) || forecastCellFrom(event)) return;
     if (!event.target.closest('[data-toggle-timezone]')) return;
     gui.timelineUseLocalTime = !gui.timelineUseLocalTime;
     if (state.detail) state.detail.followNow = true;
@@ -1203,6 +1343,7 @@ function setupEvents() {
   });
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
+  el('toast').addEventListener('click', () => { el('toast').hidden = true; });
   el('map-back').addEventListener('click', () => goBack('#/'));
   el('map-button').addEventListener('click', () => {
     wa('map_open');
@@ -1261,6 +1402,16 @@ function cycleUnitFrom(event) {
 }
 
 // A tap on a forecast value says it comes from a model, and which one
+// A tap on a cell that carries its own description (data-info - every
+// measured or forecast cell of the buoy view, and the list's forecasts) shows
+// it: where the value comes from and how it was made
+function infoCellFrom(event) {
+  const cell = event.target.closest('.cell[data-info]');
+  if (!cell) return false;
+  showToast(cell.dataset.info, 10000);
+  return true;
+}
+
 function forecastCellFrom(event) {
   const cell = event.target.closest('.cell.forecast');
   if (!cell) return false;
@@ -1284,7 +1435,7 @@ function modelLabel(id) {
 }
 
 let toastTimeout;
-function showToast(text) {
+function showToast(text, duration = 3500) {
   const toast = el('toast');
   toast.textContent = text;
   toast.hidden = false;
@@ -1293,7 +1444,7 @@ function showToast(text) {
   toastTimeout = setTimeout(() => {
     toast.classList.add('fading');
     toastTimeout = setTimeout(() => { toast.hidden = true; }, 300);
-  }, 3500);
+  }, duration);
 }
 
 function refresh() {
