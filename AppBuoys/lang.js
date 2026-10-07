@@ -56,6 +56,7 @@ const en = {
   'unitPopup.aria': 'Choose a unit',
   'unitPopup.unit': 'Unit',
   'unitPopup.note': 'Units can also be changed in the menu',
+  'timePopup.note': 'The time zone can also be changed in the menu',
 
   // Cells
   'cell.maxValue': 'Max: {value}',
@@ -233,6 +234,7 @@ const ca = {
   'unitPopup.aria': 'Tria una unitat',
   'unitPopup.unit': 'Unitat',
   'unitPopup.note': 'També pots canviar les unitats al menú',
+  'timePopup.note': 'També pots canviar la zona horària al menú',
 
   'cell.maxValue': 'Màx: {value}',
   'cell.gustValue': 'Ratxa: {value}',
@@ -398,6 +400,7 @@ const es = {
   'unitPopup.aria': 'Elige una unidad',
   'unitPopup.unit': 'Unidad',
   'unitPopup.note': 'También puedes cambiar las unidades en el menú',
+  'timePopup.note': 'También puedes cambiar la zona horaria en el menú',
 
   'cell.maxValue': 'Máx: {value}',
   'cell.gustValue': 'Racha: {value}',
@@ -563,6 +566,7 @@ const fr = {
   'unitPopup.aria': 'Choisir une unité',
   'unitPopup.unit': 'Unité',
   'unitPopup.note': 'Les unités peuvent aussi être changées dans le menu',
+  'timePopup.note': 'Le fuseau horaire peut aussi être changé dans le menu',
 
   'cell.maxValue': 'Max : {value}',
   'cell.gustValue': 'Rafale : {value}',

@@ -864,7 +864,7 @@ function renderBuoyTable() {
   const forecastBins = Object.fromEntries(COLUMNS.map(column =>
     [column.id, binRecords(detail.forecasts[column.id]?.data, first, size, count)]));
 
-  // Tapping the time column's title switches between local time and UTC
+  // Tapping the time column's title offers local time or UTC (see openTimezonePopup)
   let html = headerRowHTML(`<button class="header-cell clickable" data-toggle-timezone title="${escapeHTML(t('header.timeTitle'))}">`
     + `<i class="fa-regular fa-clock"></i><span>${escapeHTML(t('header.time'))}</span><span class="unit">${escapeHTML(gui.timelineTimezoneLabel)}</span></button>`);
   let previousDay;
@@ -1442,11 +1442,7 @@ function setupEvents() {
 
   el('buoy-table').addEventListener('click', event => {
     if (unitHeaderFrom(event)) return;
-    if (infoCellFrom(event) || forecastCellFrom(event)) return;
-    if (!event.target.closest('[data-toggle-timezone]')) return;
-    gui.timelineUseLocalTime = !gui.timelineUseLocalTime;
-    if (state.detail) state.detail.followNow = true;
-    settingsChanged();
+    infoCellFrom(event) || forecastCellFrom(event);
   });
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
@@ -1490,13 +1486,19 @@ function setupEvents() {
       gui.selectedUnits = { ...gui.selectedUnits, [button.dataset.unitGroup]: button.dataset.unit };
       settingsChanged();
     }
+    const timezone = event.target.closest('[data-timezone]');
+    if (timezone) {
+      gui.timelineUseLocalTime = timezone.dataset.timezone === 'local';
+      if (state.detail) state.detail.followNow = true;
+      settingsChanged();
+    }
     closeUnitPopup();
   });
   // Anywhere else closes it - except the column title that opened it, whose
   // own click is still on its way up here
   document.addEventListener('click', event => {
     if (el('unit-popup').hidden) return;
-    if (event.target.closest('#unit-popup, [data-unit-code]')) return;
+    if (event.target.closest('#unit-popup, [data-unit-code], [data-toggle-timezone]')) return;
     closeUnitPopup();
   });
 
@@ -1528,11 +1530,42 @@ function setupEvents() {
 // A tap on a column title switches its unit
 // A tap on a column title offers the units of its quantity - nothing changes
 // until one is picked
+//
+// The same title again closes it, like a toggle; another column's title
+// switches it to that column's units.
+//
+// The buoy view's Time title opens the same popup with the time zones.
 function unitHeaderFrom(event) {
-  const header = event.target.closest('[data-unit-code]');
-  if (!header || !header.dataset.unitCode) return false;
-  openUnitPopup(header.dataset.unitCode);
+  const header = event.target.closest('[data-unit-code], [data-toggle-timezone]');
+  if (!header) return false;
+  const code = 'toggleTimezone' in header.dataset ? 'timezone' : header.dataset.unitCode;
+  if (!code) return false; // a column whose quantity has one unit only
+  const popup = el('unit-popup');
+  const isOpen = !popup.hidden && !popup.classList.contains('fading');
+  if (isOpen && popup.dataset.code === code) closeUnitPopup();
+  else if (code === 'timezone') openTimezonePopup();
+  else openUnitPopup(code);
   return true;
+}
+
+// Local time or UTC, offered when the Time title is tapped - same popup, same
+// behaviour as the units'
+function openTimezonePopup() {
+  const popup = el('unit-popup');
+  popup.dataset.code = 'timezone';
+  const option = (value, label) => `<button data-timezone="${value}"`
+    + ` class="${(value === 'local') === gui.timelineUseLocalTime ? 'selected' : ''}">${escapeHTML(label)}</button>`;
+  // Local is labelled with its offset ('UTC+2', as GUIManager writes it), so
+  // the choice says what it means
+  const minutes = -new Date().getTimezoneOffset();
+  const hours = Math.floor(Math.abs(minutes) / 60);
+  const rest = Math.abs(minutes) % 60;
+  const localOffset = `UTC${minutes >= 0 ? '+' : '-'}${hours}${rest ? `:${String(rest).padStart(2, '0')}` : ''}`;
+  popup.innerHTML = `<div class="unit-popup-title"><i class="fa-regular fa-clock"></i>${escapeHTML(t('menu.timezone'))}</div>`
+    + `<div class="segmented">${option('local', `${t('menu.local')} (${localOffset})`)}${option('utc', t('menu.utc'))}</div>`
+    + `<div class="unit-popup-note">${escapeHTML(t('timePopup.note'))}</div>`;
+  el('toast').hidden = true;
+  showFading(popup);
 }
 
 // The units a code's quantity can be shown in, as a row of buttons at the
@@ -1542,6 +1575,7 @@ function openUnitPopup(code) {
   const group = gui.variable(code)?.unitGroup;
   const options = UNIT_GROUPS[group];
   if (!options || options.length < 2) return;
+  el('unit-popup').dataset.code = code; // which column opened it (see unitHeaderFrom)
 
   const picker = UNIT_PICKERS.find(p => p.group === group);
   const selected = gui.unitFor(code).unit;
