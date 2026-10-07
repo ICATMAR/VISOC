@@ -8,11 +8,12 @@
 // loads (its own files, and VISOC's scripts, styles and images under ../) is
 // cached on the way past, so the app still opens offline once it has been
 // opened online.
-const CACHE_NAME = 'buoys-shell-v1';
+const CACHE_NAME = 'buoys-shell-v2';
 const SHELL_URLS = [
   './',
   './index.html',
   './main.js',
+  './lang.js',
   './styles.css',
   './manifest.webmanifest',
   './icons/icon-192.png',

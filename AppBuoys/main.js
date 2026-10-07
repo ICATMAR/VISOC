@@ -23,6 +23,7 @@ import FetchManager from '../Assets/Scripts/data/FetchManager.js';
 import Catalogue from '../Assets/Scripts/data/products/Catalogue.js';
 import GUIManager from '../Assets/Scripts/GUIManager.js';
 import { UNIT_GROUPS } from '../Assets/Scripts/data/variables.js';
+import LANGUAGES from './lang.js';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -40,6 +41,8 @@ const REFRESH_INTERVAL = 5 * MINUTE;
 const LOADING_TIMEOUT = 8000;     // ms the loading screen waits for the sources at most
 
 const SETTINGS_KEY = 'icatmarBuoysApp.settings';
+// Used when none of the browser's languages is one the app has (see lang.js)
+const DEFAULT_LANGUAGE = 'ca';
 
 // Stretches of coast, north to south. Each buoy is placed by id; one not
 // listed here (a new buoy) falls back to its latitude (see groupOf).
@@ -56,7 +59,7 @@ const GROUPS = [
 // catalogue's 'Aggregated buoys'). They are still loaded - BCNS needs them.
 const HIDDEN_BUOYS = ['SOMO', 'PBCN'];
 
-// The four data columns. `code` is the magnitude shown and coloured by the
+// The four data columns (titled t('column.<id>')). `code` is the magnitude shown and coloured by the
 // legend (styles/colorLegends.js), `directionCode` drawn as an arrow.
 // `fromDirection` marks a direction reported as where it comes FROM (wind,
 // waves), which the arrow turns around to show where it goes.
@@ -64,7 +67,7 @@ const HIDDEN_BUOYS = ['SOMO', 'PBCN'];
 // there are no measurements.
 const COLUMNS = [
   {
-    id: 'waves', label: 'Waves', icon: 'fa-solid fa-water',
+    id: 'waves', icon: 'fa-solid fa-water',
     code: 'VHM0', directionCode: 'VMDR', fromDirection: true, periodCode: 'VTM02',
     // The biggest wave of the interval. CF has four spellings of "maximum
     // wave height" (see GUIManager.buoyDetailVariables) - whichever turns up.
@@ -74,18 +77,18 @@ const COLUMNS = [
     forecast: 'Wave forecast',
   },
   {
-    id: 'wind', label: 'Wind', icon: 'fa-solid fa-wind',
+    id: 'wind', icon: 'fa-solid fa-wind',
     code: 'WSPD', directionCode: 'WDIR', fromDirection: true, gustCode: 'GSPD',
     forecast: 'Wind forecast',
   },
   {
-    id: 'temperature', label: 'Water', icon: 'fa-solid fa-temperature-half',
+    id: 'temperature', icon: 'fa-solid fa-temperature-half',
     code: 'TEMP',
     forecast: 'Sea surface forecast',
   },
   {
     // HCDT is where the water is GOING, so no half turn
-    id: 'currents', label: 'Current', icon: 'fa-solid fa-arrows-turn-right',
+    id: 'currents', icon: 'fa-solid fa-arrows-turn-right',
     code: 'HCSP', directionCode: 'HCDT',
     forecast: 'Sea surface forecast',
   },
@@ -96,12 +99,20 @@ const columnCodes = column => [column.code, column.directionCode, column.periodC
 const OBSERVATION_CODES = [...new Set(COLUMNS.flatMap(columnCodes))];
 
 // Unit pickers in the menu, one per quantity (see UNIT_GROUPS)
+// (titled t('unit.<group>'))
 const UNIT_PICKERS = [
-  { group: 'waveHeight', label: 'Wave height', icon: 'fa-solid fa-water' },
-  { group: 'windSpeed', label: 'Wind speed', icon: 'fa-solid fa-wind' },
-  { group: 'temperature', label: 'Temperature', icon: 'fa-solid fa-temperature-half' },
-  { group: 'waterSpeed', label: 'Current speed', icon: 'fa-solid fa-arrows-turn-right' },
+  { group: 'waveHeight', icon: 'fa-solid fa-water' },
+  { group: 'windSpeed', icon: 'fa-solid fa-wind' },
+  { group: 'temperature', icon: 'fa-solid fa-temperature-half' },
+  { group: 'waterSpeed', icon: 'fa-solid fa-arrows-turn-right' },
 ];
+
+// What each forecast product is called in the institutions' roles
+const PRODUCT_KEYS = {
+  'Wave forecast': 'product.waves',
+  'Wind forecast': 'product.wind',
+  'Sea surface forecast': 'product.seaSurface',
+};
 
 const PHOTOS_PATH = '../Assets/Images/platforms/Buoys/';
 // Smallest margin (map units, ~9 km on the ground here) around the buoy(s) in
@@ -128,6 +139,31 @@ const forecastProducts = new Map([...new Set(COLUMNS.map(column => column.foreca
 // ------------------------------------------------------------------ STATE
 
 const settings = loadSettings();
+
+// The language the app is shown in: the one picked in the menu, or else the
+// first of the browser's languages the app has, or else DEFAULT_LANGUAGE
+let language = LANGUAGES[settings.language] ? settings.language : detectLanguage();
+
+function detectLanguage() {
+  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
+  for (const tag of preferred) {
+    const code = String(tag ?? '').slice(0, 2).toLowerCase();
+    if (LANGUAGES[code]) return code;
+  }
+  return DEFAULT_LANGUAGE;
+}
+
+// A text in the current language, with its {placeholders} filled in. Falls
+// back to English, and to the key itself (see lang.js).
+function t(key, params = {}) {
+  const text = LANGUAGES[language].texts[key] ?? LANGUAGES.en.texts[key] ?? key;
+  return text.replace(/\{(\w+)\}/g, (match, name) => params[name] ?? match);
+}
+
+// The locale dates are written in, e.g. 'ca-ES'
+const locale = () => LANGUAGES[language].locale;
+
+const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Unit selection, colour legends and the time zone toggle - VISOC's own
 // helpers, used outside Vue as a plain object.
@@ -204,10 +240,13 @@ function ordinal(day) {
   return day + ({ 1: 'st', 2: 'nd', 3: 'rd' }[day % 10] ?? 'th');
 }
 
-// 'Saturday 29th September'
+// 'Saturday 29th September', 'Dissabte, 29 de setembre', ...
 function formatDay(date) {
-  const part = options => date.toLocaleString('en-GB', { ...options, timeZone: timeZone() });
-  return `${part({ weekday: 'long' })} ${ordinal(Number(part({ day: 'numeric' })))} ${part({ month: 'long' })}`;
+  if (language === 'en') {
+    const part = options => date.toLocaleString('en-GB', { ...options, timeZone: timeZone() });
+    return `${part({ weekday: 'long' })} ${ordinal(Number(part({ day: 'numeric' })))} ${part({ month: 'long' })}`;
+  }
+  return capitalize(date.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: timeZone() }));
 }
 
 const dayKey = date => date.toLocaleDateString('en-CA', { timeZone: timeZone() });
@@ -223,17 +262,17 @@ function formatHourShort(date) {
 
 function formatDateTime(date) {
   if (!date) return '';
-  return `${date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: timeZone() })} ${formatHour(date)}`;
+  return `${date.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: timeZone() })} ${formatHour(date)}`;
 }
 
 function formatAgo(date) {
-  if (!date) return 'no recent data';
+  if (!date) return t('ago.none');
   const minutes = Math.round((Date.now() - date.getTime()) / MINUTE);
-  if (minutes < 1) return 'now';
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return t('ago.now');
+  if (minutes < 60) return t('ago.minutes', { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours} h ago`;
-  return `${Math.round(hours / 24)} days ago`;
+  if (hours < 48) return t('ago.hours', { n: hours });
+  return t('ago.days', { n: Math.round(hours / 24) });
 }
 
 function statusOf(lastUpdate) {
@@ -246,9 +285,9 @@ function statusOf(lastUpdate) {
 
 function statusHTML(buoyId) {
   const latest = state.latest.get(buoyId);
-  if (!latest || latest.loading) return '<div class="status"><span class="status-dot"></span>loading…</div>';
+  if (!latest || latest.loading) return `<div class="status"><span class="status-dot"></span>${t('status.loading')}</div>`;
   const status = statusOf(latest.lastUpdate);
-  const label = { active: 'Active', delayed: 'Delayed', inactive: 'Inactive' }[status];
+  const label = t(`status.${status}`);
   return `<div class="status" title="${label}"><span class="status-dot ${status}"></span>${formatAgo(latest.lastUpdate)}</div>`;
 }
 
@@ -559,30 +598,30 @@ function observationInfo(records, column, start, size) {
   // The interval is centred on the row's time (see binRecords)
   const from = new Date(start.getTime() - size / 2);
   const to = new Date(start.getTime() + size / 2);
-  const lines = [`Measurement at ${formatHourShort(start)} (${formatHour(from)}–${formatHour(to)})`];
+  const lines = [t('info.measurementAt', { hour: formatHourShort(start), from: formatHour(from), to: formatHour(to) })];
 
   unique(points.map(point => point.buoy)).forEach(buoyId => {
     const buoy = state.buoysById.get(buoyId);
-    lines.push(`Buoy: ${buoy?.name ?? buoyId} (${buoyId})`);
+    lines.push(t('info.buoy', { name: buoy?.name ?? buoyId, id: buoyId }));
   });
 
   const sensors = unique(points.map(point => point.instrument ? `${point.instrument} (${point.sensor})` : point.sensor));
-  if (sensors.length) lines.push(`Sensor: ${sensors.join(', ')}`);
+  if (sensors.length) lines.push(t('info.sensor', { sensors: sensors.join(', ') }));
 
   const variables = unique(points.map(point => point.rawName && point.rawName !== column.code
-    ? `${column.code}, published as ${point.rawName}` : column.code));
-  lines.push(`Variable: ${variables.join('; ')} - ${gui.variable(column.code)?.longName ?? ''}`.replace(/ - $/, ''));
+    ? t('info.publishedAs', { code: column.code, raw: point.rawName }) : column.code));
+  lines.push(t('info.variable', { variables: `${variables.join('; ')} - ${variableName(column.code)}`.replace(/ - $/, '') }));
 
   const sources = unique(points.map(point => {
     const source = buoysProduct.sources.find(s => s.src === point.source);
     return source ? `${source.institution} (${hostOf(source.src)})` : hostOf(point.source);
   }));
-  if (sources.length) lines.push(`Source: ${sources.join(', ')}`);
+  if (sources.length) lines.push(t('info.source', { sources: sources.join(', ') }));
 
   const zone = gui.timelineUseLocalTime ? '' : ' UTC';
   lines.push(withValue.length === 1
-    ? `1 reading, at ${formatHour(times[0])}${zone}`
-    : `Average of ${withValue.length} readings, ${formatHour(times[0])}–${formatHour(times[times.length - 1])}${zone}`);
+    ? t('info.oneReading', { time: formatHour(times[0]) + zone })
+    : t('info.readings', { n: withValue.length, from: formatHour(times[0]), to: formatHour(times[times.length - 1]) + zone }));
 
   return lines.join('\n');
 }
@@ -605,59 +644,77 @@ function forecastInfo({ records, column, result, buoyId, start, size }) {
   if (start) {
     const from = new Date(start.getTime() - size / 2);
     const to = new Date(start.getTime() + size / 2);
-    lines.push(`Model forecast at ${formatHourShort(start)} (${formatHour(from)}–${formatHour(to)})`);
+    lines.push(t('info.forecastAt', { hour: formatHourShort(start), from: formatHour(from), to: formatHour(to) }));
   } else {
-    lines.push(`Model forecast for ${formatHour(times[0])}${zone} - no measurement in the last ${STALE_HOURS} h`);
+    lines.push(t('info.forecastFor', { time: formatHour(times[0]) + zone, hours: STALE_HOURS }));
   }
 
   // A virtual buoy's forecast is read where the real buoy behind that column is
   const pointId = allBuoysProduct.componentBuoyId(buoyId, column.code);
-  if (pointId !== buoyId) lines.push(`At: ${state.buoysById.get(pointId)?.name ?? pointId} (${pointId})`);
+  if (pointId !== buoyId) lines.push(t('info.at', { name: state.buoysById.get(pointId)?.name ?? pointId, id: pointId }));
 
   unique(points.map(point => point.model)).forEach(modelId => {
     const series = result?.series?.find(s => s.model === modelId);
-    if (!series) { lines.push(`Model: ${modelId}`); return; }
+    if (!series) { lines.push(t('info.model', { model: modelId })); return; }
 
-    lines.push(`Model: ${series.label}${series.resolution ? `, ${series.resolution}` : ''}`);
-    const by = [series.institution, series.forcing ? `${series.forcing.model} winds by ${series.forcing.institution}` : undefined];
-    lines.push(`By: ${by.filter(Boolean).join(', ')}`);
+    lines.push(t('info.model', { model: `${modelName(series.model, series.label)}${series.resolution ? `, ${series.resolution}` : ''}` }));
+    const by = [series.institution, series.forcing
+      ? t('info.windsBy', { model: series.forcing.model, institution: series.forcing.institution }) : undefined];
+    lines.push(t('info.by', { who: by.filter(Boolean).join(', ') }));
 
     // Runs are named in UTC ('the 00Z run') whatever the display time zone
     const run = series.run;
     if (run?.referenceTime) {
-      const published = run.publishedAt ? `, published ${formatAgo(run.publishedAt)}` : '';
-      const utc = run.referenceTime.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
-      lines.push(`Run: ${utc} UTC (${formatAgo(run.referenceTime)}${published})`);
+      const date = run.referenceTime.toLocaleString(locale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
+      lines.push(run.publishedAt
+        ? t('info.runPublished', { date, ago: formatAgo(run.referenceTime), published: formatAgo(run.publishedAt) })
+        : t('info.run', { date, ago: formatAgo(run.referenceTime) }));
     } else if (run?.note) {
-      lines.push(`Run: ${run.note}`);
+      lines.push(t('info.runNote', { note: run.note }));
     }
     const cadence = [
-      run?.updateIntervalHours ? `new run every ${run.updateIntervalHours} h` : undefined,
-      run?.timeStepHours > 1 ? `time step ${run.timeStepHours} h` : undefined,
+      run?.updateIntervalHours ? t('info.newRunEvery', { n: run.updateIntervalHours }) : undefined,
+      run?.timeStepHours > 1 ? t('info.timeStep', { n: run.timeStepHours }) : undefined,
     ].filter(Boolean).join(', ');
-    if (cadence) lines.push(cadence[0].toUpperCase() + cadence.slice(1));
+    if (cadence) lines.push(capitalize(cadence));
 
     lines.push(series.api
-      ? `Source: ${series.api}, through ${series.provider}'s API (${hostOf(series.source)})`
-      : `Source: ${series.provider} ERDDAP (${hostOf(series.source)}), dataset ${series.dataset}`);
+      ? t('info.sourceApi', { api: series.api, provider: series.provider, host: hostOf(series.source) })
+      : t('info.sourceErddap', { provider: series.provider, host: hostOf(series.source), dataset: series.dataset }));
     if (series.cell) {
       const { latitude, longitude, distanceKm } = series.cell;
-      lines.push(`Grid point: ${latitude.toFixed(3)}° N, ${longitude.toFixed(3)}° E, ${distanceKm.toFixed(1)} km from the buoy`);
+      lines.push(t('info.gridPoint', { lat: latitude.toFixed(3), lon: longitude.toFixed(3), km: distanceKm.toFixed(1) }));
     }
   });
 
   const variables = unique(points.map(point => {
-    if (point.rawName && point.rawName !== column.code) return `${column.code}, published as ${point.rawName}`;
-    if (point.derivedFrom?.length) return `${column.code}, computed from ${point.derivedFrom.join(' and ')}`;
+    if (point.rawName && point.rawName !== column.code) return t('info.publishedAs', { code: column.code, raw: point.rawName });
+    if (point.derivedFrom?.length) return t('info.computedFrom', { code: column.code, raw: point.derivedFrom.join(t('join.and')) });
     return column.code;
   }));
-  lines.push(`Variable: ${variables.join('; ')} - ${gui.variable(column.code)?.longName ?? ''}`.replace(/ - $/, ''));
+  lines.push(t('info.variable', { variables: `${variables.join('; ')} - ${variableName(column.code)}`.replace(/ - $/, '') }));
 
   lines.push(withValue.length === 1
-    ? `1 forecast value, at ${formatHour(times[0])}${zone}`
-    : `Average of ${withValue.length} forecast values, ${formatHour(times[0])}–${formatHour(times[times.length - 1])}${zone}`);
+    ? t('info.oneForecast', { time: formatHour(times[0]) + zone })
+    : t('info.forecastValues', { n: withValue.length, from: formatHour(times[0]), to: formatHour(times[times.length - 1]) + zone }));
 
   return lines.join('\n');
+}
+
+// A variable's long name, translated where lang.js has it (variable.<code>),
+// else as data/variables.js spells it
+function variableName(code) {
+  const key = `variable.${code}`;
+  const text = t(key);
+  return text === key ? (gui.variable(code)?.longName ?? '') : text;
+}
+
+// A forecast model's name, translated where lang.js has it (model.<id>), else
+// the catalogue's label
+function modelName(id, fallback) {
+  const key = `model.${id}`;
+  const text = t(key);
+  return text === key ? (fallback ?? id) : text;
 }
 
 // Start of the interval a moment falls in, on the displayed clock (local or
@@ -710,16 +767,16 @@ function cellHTML(column, values, { forecast = false, model, info, detailed = fa
       const h = formatValue(column.maxCodes[0], height);
       const period = values[column.maxPeriodCode];
       const p = period != undefined ? formatValue(column.maxPeriodCode, period) : undefined;
-      sub = `Max: ${h.text}${escapeHTML(h.unit)}${p ? `, ${p.text}${escapeHTML(p.unit)}` : ''}`;
+      sub = escapeHTML(t('cell.maxValue', { value: `${h.text}${h.unit}${p ? `, ${p.text}${p.unit}` : ''}` }));
     }
   }
   if ((detailed || list) && column.gustCode && values[column.gustCode] != undefined) {
     const gust = formatValue(column.gustCode, values[column.gustCode]);
-    sub = `Gust: ${gust.text} ${escapeHTML(gust.unit)}`;
+    sub = escapeHTML(t('cell.gustValue', { value: `${gust.text} ${gust.unit}` }));
   }
 
-  let title = forecast ? ` title="Model forecast - tap for details" data-model="${escapeHTML(model ?? '')}"` : '';
-  if (info && !forecast) title = ' title="Measurement - tap for details"';
+  let title = forecast ? ` title="${escapeHTML(t('cell.forecastTitle'))}" data-model="${escapeHTML(model ?? '')}"` : '';
+  if (info && !forecast) title = ` title="${escapeHTML(t('cell.measurementTitle'))}"`;
   if (info) title += ` data-info="${escapeHTML(info)}"`;
   const style = background ? ` style="background-color: ${background}"` : '';
   return `<div class="cell${forecast ? ' forecast' : ''}${info ? ' has-info' : ''}"${style}${title}>`
@@ -734,15 +791,15 @@ function headerRowHTML(firstCell) {
   return `<div class="row header-row">${firstCell}${COLUMNS.map(column => {
     const switchable = gui.isUnitSwitchable(column.code);
     return `<button class="header-cell${switchable ? ' clickable' : ''}" data-unit-code="${switchable ? column.code : ''}"`
-      + ` title="${switchable ? 'Change unit' : ''}">`
-      + `<i class="${column.icon}"></i><span>${column.label}</span><span class="unit">${escapeHTML(gui.unitFor(column.code).unit)}</span></button>`;
+      + ` title="${switchable ? escapeHTML(t('header.changeUnit')) : ''}">`
+      + `<i class="${column.icon}"></i><span>${escapeHTML(t(`column.${column.id}`))}</span><span class="unit">${escapeHTML(gui.unitFor(column.code).unit)}</span></button>`;
   }).join('')}</div>`;
 }
 
 function renderList() {
   if (state.route.view !== 'list') return;
 
-  let html = headerRowHTML('<div class="header-cell"><i class="fa-solid fa-life-ring"></i><span>Buoy</span><span class="unit">&nbsp;</span></div>');
+  let html = headerRowHTML(`<div class="header-cell"><i class="fa-solid fa-life-ring"></i><span>${escapeHTML(t('header.buoy'))}</span><span class="unit">&nbsp;</span></div>`);
   GROUPS.forEach(group => {
     const buoys = state.buoys.filter(buoy => groupOf(buoy) === group);
     if (!buoys.length) return;
@@ -807,8 +864,8 @@ function renderBuoyTable() {
     [column.id, binRecords(detail.forecasts[column.id]?.data, first, size, count)]));
 
   // Tapping the time column's title switches between local time and UTC
-  let html = headerRowHTML(`<button class="header-cell clickable" data-toggle-timezone title="Switch between local time and UTC">`
-    + `<i class="fa-regular fa-clock"></i><span>Time</span><span class="unit">${escapeHTML(gui.timelineTimezoneLabel)}</span></button>`);
+  let html = headerRowHTML(`<button class="header-cell clickable" data-toggle-timezone title="${escapeHTML(t('header.timeTitle'))}">`
+    + `<i class="fa-regular fa-clock"></i><span>${escapeHTML(t('header.time'))}</span><span class="unit">${escapeHTML(gui.timelineTimezoneLabel)}</span></button>`);
   let previousDay;
   for (let i = 0; i < count; i++) {
     const start = new Date(first + i * size);
@@ -852,8 +909,8 @@ function renderBuoyTable() {
       + `<div class="time-cell">${formatHourShort(start)}</div>${cells}${nowLine}</div>`;
   }
 
-  html += '<div class="legend"><span><span class="forecast-sample"></span>Model forecast</span>'
-    + '<span><i class="fa-solid fa-circle-info"></i> Sources in the info panel</span></div>';
+  html += `<div class="legend"><span><span class="forecast-sample"></span>${escapeHTML(t('legend.forecast'))}</span>`
+    + `<span><i class="fa-solid fa-circle-info"></i> ${escapeHTML(t('legend.sources'))}</span></div>`;
 
   el('buoy-table').innerHTML = html;
 
@@ -885,15 +942,23 @@ function institutionsFor(buoy) {
   };
 
   const buoys = buoy.aggregated ? buoy.components.map(c => c.buoy).filter(Boolean) : [buoy];
-  buoys.forEach(b => add(b.institution, `${b.name} buoy`));
+  buoys.forEach(b => add(b.institution, t('role.buoy', { name: b.name })));
 
   Object.values(state.detail?.observations?.used ?? {}).forEach(used => {
     const source = buoysProduct.sources.find(s => s.src === used.source);
-    if (source) add(source.institution, `measurements (${hostOf(source.src)})`);
+    if (source) add(source.institution, t('role.measurements', { host: hostOf(source.src) }));
   });
 
-  const products = new Set(COLUMNS.map(column => forecastProducts.get(column.forecast)));
-  products.forEach(product => product.institutions().forEach(({ name, role }) => add(name, role)));
+  // Same as DPForecast.institutions(), in the app's language
+  forecastProducts.forEach((product, name) => {
+    const productLabel = t(PRODUCT_KEYS[name] ?? name);
+    product.sources.forEach(source => {
+      (source.models ?? []).forEach(model => add(model.institution, t('role.model', { model: modelName(model.id, model.label), product: productLabel })));
+      if (source.api) add(source.api, t('role.api', { product: productLabel }));
+      else add(source.institution, t('role.model', { model: modelName(source.model, source.label ?? source.dataset), product: productLabel }));
+      if (source.forcing) add(source.forcing.institution, t('role.forcing', { model: source.forcing.model, product: productLabel }));
+    });
+  });
 
   return byName;
 }
@@ -923,8 +988,12 @@ function renderInfo() {
     + `<figcaption>${escapeHTML(part.name)} (${escapeHTML(part.id)})</figcaption></figure>`).join('')}</div>`;
 
   if (buoy.aggregated) {
-    html += `<div class="info-card"><h3>A combined buoy</h3><p>${escapeHTML(buoy.description)}</p><ul>`
-      + buoy.components.map(c => `<li><b>${escapeHTML(c.label)}</b>: ${escapeHTML(c.buoy?.name ?? c.buoyId)} (${escapeHTML(c.buoyId)})</li>`).join('')
+    // The catalogue's texts are English - lang.js has them per virtual buoy
+    const translated = (key, fallback) => (t(key) === key ? fallback : t(key));
+    html += `<div class="info-card"><h3>${escapeHTML(t('info.combined'))}</h3>`
+      + `<p>${escapeHTML(translated(`aggregation.${buoy.id}.description`, buoy.description))}</p><ul>`
+      + buoy.components.map(c => `<li><b>${escapeHTML(translated(`aggregation.${buoy.id}.${c.buoyId}`, c.label))}</b>: `
+        + `${escapeHTML(c.buoy?.name ?? c.buoyId)} (${escapeHTML(c.buoyId)})</li>`).join('')
       + '</ul></div>';
   }
 
@@ -933,7 +1002,7 @@ function renderInfo() {
   html += forecastsCardHTML();
 
   const institutions = institutionsFor(buoy);
-  html += `<div class="info-card"><h3>Institutions</h3><ul>${[...institutions].map(([name, roles]) =>
+  html += `<div class="info-card"><h3>${escapeHTML(t('info.institutions'))}</h3><ul>${[...institutions].map(([name, roles]) =>
     `<li><b>${escapeHTML(name)}</b>: ${escapeHTML([...roles].join(', '))}</li>`).join('')}</ul></div>`;
 
   el('info-content').innerHTML = html;
@@ -948,34 +1017,36 @@ function metadataCardHTML(buoy, isPart) {
   const instruments = [...new Set((buoy.sensors ?? []).map(sensor => sensor.instrument ?? sensor.id).filter(Boolean))];
   const latest = state.latest.get(buoy.id);
 
-  return `<div class="info-card"><h3>${isPart ? `${escapeHTML(buoy.name)} (${escapeHTML(buoy.id)})` : 'Buoy'}</h3><div class="info-rows">`
-    + infoRow('Institution', escapeHTML(buoy.institution))
-    + infoRow('Position', position)
-    + infoRow('Depth', buoy.depth != undefined ? `${buoy.depth} m` : undefined)
-    + infoRow('Distance to coast', distance ? `${distance.text} ${escapeHTML(distance.unit)}` : undefined)
-    + infoRow('Installed', buoy.installed ? new Date(buoy.installed).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : undefined)
-    + infoRow('Last measurement', latest?.lastUpdate ? `${formatDateTime(latest.lastUpdate)} (${formatAgo(latest.lastUpdate)})` : undefined)
-    + infoRow('Sensors', instruments.length ? escapeHTML(instruments.join(', ')) : undefined)
-    + infoRow('License', escapeHTML(buoy.license))
-    + infoRow('Acknowledgement', escapeHTML(buoy.acknowledgement))
+  return `<div class="info-card"><h3>${isPart ? `${escapeHTML(buoy.name)} (${escapeHTML(buoy.id)})` : escapeHTML(t('info.buoyCard'))}</h3><div class="info-rows">`
+    + infoRow(t('info.institution'), escapeHTML(buoy.institution))
+    + infoRow(t('info.position'), position)
+    + infoRow(t('info.depth'), buoy.depth != undefined ? `${buoy.depth} m` : undefined)
+    + infoRow(t('info.distance'), distance ? `${distance.text} ${escapeHTML(distance.unit)}` : undefined)
+    + infoRow(t('info.installed'), buoy.installed ? new Date(buoy.installed).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }) : undefined)
+    + infoRow(t('info.lastMeasurement'), latest?.lastUpdate ? `${formatDateTime(latest.lastUpdate)} (${formatAgo(latest.lastUpdate)})` : undefined)
+    + infoRow(t('info.sensors'), instruments.length ? escapeHTML(instruments.join(', ')) : undefined)
+    + infoRow(t('info.license'), escapeHTML(buoy.license))
+    + infoRow(t('info.acknowledgement'), escapeHTML(buoy.acknowledgement))
     + '</div></div>';
 }
 
 // Which buoy, sensor and server each column's measurements came from
 function sourcesCardHTML(buoy) {
   const used = state.detail?.observations?.used;
-  if (!used) return '<div class="info-card"><h3>Measurements</h3><p class="info-note">Loading…</p></div>';
+  const title = escapeHTML(t('info.measurements'));
+  if (!used) return `<div class="info-card"><h3>${title}</h3><p class="info-note">${escapeHTML(t('info.loading'))}</p></div>`;
 
   const items = COLUMNS.map(column => {
+    const label = escapeHTML(t(`column.${column.id}`));
     const entry = used[column.code];
-    if (!entry) return `<li><b>${column.label}</b>: no measurements in the last ${HOURS_BEFORE} h</li>`;
+    if (!entry) return `<li><b>${label}</b>: ${escapeHTML(t('info.noMeasurements', { hours: HOURS_BEFORE }))}</li>`;
     const from = state.buoysById.get(entry.buoy ?? buoy.id);
     const source = buoysProduct.sources.find(s => s.src === entry.source);
-    return `<li><b>${column.label}</b>: ${escapeHTML(from?.name ?? entry.buoy ?? buoy.id)}`
-      + `${entry.sensor ? `, sensor ${escapeHTML(entry.sensor)}` : ''}`
+    return `<li><b>${label}</b>: ${escapeHTML(from?.name ?? entry.buoy ?? buoy.id)}`
+      + `${entry.sensor ? `, ${escapeHTML(t('info.sensorShort', { sensor: entry.sensor }))}` : ''}`
       + ` · ${escapeHTML(source?.institution ?? '')} (${escapeHTML(hostOf(entry.source))})</li>`;
   }).join('');
-  return `<div class="info-card"><h3>Measurements</h3><ul>${items}</ul></div>`;
+  return `<div class="info-card"><h3>${title}</h3><ul>${items}</ul></div>`;
 }
 
 // Which model is shown when, per forecast product, in order of preference
@@ -984,26 +1055,22 @@ function forecastsCardHTML() {
   const items = products.map(name => {
     const columns = COLUMNS.filter(column => column.forecast === name);
     const result = state.detail.forecasts[columns[0].id];
-    const label = columns.map(column => column.label).join(' and ');
-    if (!result) return `<li><b>${label}</b>: loading…</li>`;
+    const label = escapeHTML(columns.map(column => t(`column.${column.id}`)).join(t('join.and')));
+    if (!result) return `<li><b>${label}</b>: ${escapeHTML(t('info.loadingShort'))}</li>`;
     // In the order they are shown, not in order of preference - a fallback
     // can cover the hours before the preferred model starts
     const series = result.series.filter(s => s.usedFrom).sort((a, b) => a.usedFrom - b.usedFrom);
-    if (!series.length) return `<li><b>${label}</b>: no forecast available for this buoy</li>`;
+    if (!series.length) return `<li><b>${label}</b>: ${escapeHTML(t('info.noForecast'))}</li>`;
     return `<li><b>${label}</b>: ${series.map(s => {
-      const what = `${escapeHTML(s.label)}${s.resolution ? ` (${escapeHTML(s.resolution)})` : ''}`;
-      const when = ` from ${formatDateTime(s.usedFrom)} to ${formatDateTime(s.usedTo)}`;
-      const cell = s.cell?.distanceKm > 1 ? `, nearest sea point ${s.cell.distanceKm.toFixed(1)} km away` : '';
+      const what = `${escapeHTML(modelName(s.model, s.label))}${s.resolution ? ` (${escapeHTML(s.resolution)})` : ''}`;
+      const when = ` ${escapeHTML(t('info.fromTo', { from: formatDateTime(s.usedFrom), to: formatDateTime(s.usedTo) }))}`;
+      const cell = s.cell?.distanceKm > 1 ? `, ${escapeHTML(t('info.nearestSea', { km: s.cell.distanceKm.toFixed(1) }))}` : '';
       return `${what}${when}${cell}`;
     }).join('; ')}</li>`;
   }).join('');
 
-  return '<div class="info-card"><h3>Forecasts</h3>'
-    + '<p>Where there are no measurements, the forecast is shown instead. AROME is preferred over ECMWF: '
-    + 'its resolution is higher, but it only predicts about one or two days ahead, so ECMWF takes over afterwards. '
-    + 'The same applies to the WAVEWATCH III wave forecasts, run by ICATMAR with AROME and with ECMWF winds. '
-    + 'Where the Open-Meteo API has no wind forecast, the AROME and ECMWF winds those wave forecasts were run with are shown instead (without gusts). '
-    + 'Forecasts also cover the past hours (hindcast), which is what is shown when a buoy has no data.</p>'
+  return `<div class="info-card"><h3>${escapeHTML(t('info.forecasts'))}</h3>`
+    + `<p>${escapeHTML(t('info.forecastsText'))}</p>`
     + `<ul>${items}</ul></div>`;
 }
 
@@ -1136,7 +1203,7 @@ async function renderBuoysMap() {
       const feature = map.forEachFeatureAtPixel(event.pixel, f => f, { hitTolerance: 10, layerFilter: l => l === layer });
       if (!feature) return;
       const buoyId = feature.get('buoyId');
-      wa('buoy_click', { buoy: buoyId, name: state.buoysById.get(buoyId)?.name, from: 'map' });
+      wa('buoy_click', { buoy: buoyId, name: state.buoysById.get(buoyId)?.name, from: 'map', lang: language });
       navigate(`#/buoy/${encodeURIComponent(buoyId)}`);
     });
     map.on('pointermove', event => {
@@ -1276,7 +1343,7 @@ function renderMenu() {
   el('unit-pickers').innerHTML = UNIT_PICKERS.map(picker => {
     const options = UNIT_GROUPS[picker.group] ?? [];
     const selected = settings.units[picker.group] ?? options[0]?.unit;
-    return `<div class="picker"><span class="picker-label"><i class="${picker.icon}"></i>${picker.label}</span>`
+    return `<div class="picker"><span class="picker-label"><i class="${picker.icon}"></i>${escapeHTML(t(`unit.${picker.group}`))}</span>`
       + `<div class="segmented">${options.map(option => `<button data-unit-group="${picker.group}" data-unit="${escapeHTML(option.unit)}"`
       + ` class="${option.unit === selected ? 'selected' : ''}">${escapeHTML(option.unit)}</button>`).join('')}</div></div>`;
   }).join('');
@@ -1284,6 +1351,44 @@ function renderMenu() {
   el('timezone-picker').querySelectorAll('button').forEach(button => {
     button.classList.toggle('selected', (button.dataset.value === 'local') === gui.timelineUseLocalTime);
   });
+
+  // The row names the current language in itself ('Català'), under the
+  // section's own title ('Idioma')
+  el('language-name').textContent = LANGUAGES[language].name;
+  el('language-picker').innerHTML = Object.entries(LANGUAGES).map(([code, { name }]) =>
+    `<button data-language="${code}" title="${escapeHTML(name)}" class="${code === language ? 'selected' : ''}">${code.toUpperCase()}</button>`).join('');
+}
+
+// Every static text of index.html in the current language (see lang.js for
+// the data-i18n attributes), then everything drawn by this file again
+function applyLanguage() {
+  document.documentElement.lang = language;
+  document.title = t('app.title');
+  const params = { hours: STALE_HOURS };
+  document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = t(node.dataset.i18n, params); });
+  document.querySelectorAll('[data-i18n-title]').forEach(node => { node.title = t(node.dataset.i18nTitle, params); });
+  document.querySelectorAll('[data-i18n-aria]').forEach(node => { node.setAttribute('aria-label', t(node.dataset.i18nAria, params)); });
+  // Texts that hold links: their {placeholders} are filled with markup
+  // rather than text (the address is assembled by setupEmails)
+  const links = {
+    email: '<a class="email" data-user="gerard.llorach" data-host="csic.es"></a>',
+    link: '<a href="https://github.com/ICATMAR/VISOC/tree/main/AppBuoys" target="_blank" rel="noopener">github.com/ICATMAR/VISOC</a>',
+  };
+  document.querySelectorAll('[data-i18n-html]').forEach(node => {
+    node.innerHTML = escapeHTML(t(node.dataset.i18nHtml, params)).replace(/\{(\w+)\}/g, (match, name) => links[name] ?? match);
+  });
+  setupEmails();
+}
+
+function setLanguage(code) {
+  if (!LANGUAGES[code] || code === language) return;
+  language = code;
+  settings.language = code;
+  wa('language_change', { lang: code });
+  applyLanguage();
+  settingsChanged();
+  renderUpdateStatus();
+  if (state.route.view === 'buoy') renderBuoyHeader(state.buoysById.get(state.detail?.buoyId));
 }
 
 function setMenuOpen(open) {
@@ -1327,7 +1432,7 @@ function setupEvents() {
     if (!row) return;
     const buoyId = row.dataset.buoy;
     // Which buoys get opened, and how often, is what the analytics are for
-    wa('buoy_click', { buoy: buoyId, name: state.buoysById.get(buoyId)?.name });
+    wa('buoy_click', { buoy: buoyId, name: state.buoysById.get(buoyId)?.name, lang: language });
     navigate(`#/buoy/${encodeURIComponent(buoyId)}`);
   });
   el('list-table').addEventListener('keydown', event => {
@@ -1345,6 +1450,7 @@ function setupEvents() {
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
   el('toast').addEventListener('click', () => fadeOut(el('toast')));
+  el('update-status').addEventListener('click', forceRefresh);
   el('map-back').addEventListener('click', () => goBack('#/'));
   el('map-button').addEventListener('click', () => {
     wa('map_open');
@@ -1399,6 +1505,10 @@ function setupEvents() {
     gui.selectedUnits = { ...gui.selectedUnits, [button.dataset.unitGroup]: button.dataset.unit };
     settingsChanged();
   });
+  el('language-picker').addEventListener('click', event => {
+    const button = event.target.closest('[data-language]');
+    if (button) setLanguage(button.dataset.language);
+  });
   el('timezone-picker').addEventListener('click', event => {
     const button = event.target.closest('button');
     if (!button) return;
@@ -1434,10 +1544,10 @@ function openUnitPopup(code) {
 
   const picker = UNIT_PICKERS.find(p => p.group === group);
   const selected = gui.unitFor(code).unit;
-  el('unit-popup').innerHTML = `<div class="unit-popup-title">${picker ? `<i class="${picker.icon}"></i>${picker.label}` : 'Unit'}</div>`
+  el('unit-popup').innerHTML = `<div class="unit-popup-title">${picker ? `<i class="${picker.icon}"></i>${escapeHTML(t(`unit.${picker.group}`))}` : escapeHTML(t('unitPopup.unit'))}</div>`
     + `<div class="segmented">${options.map(option => `<button data-unit-group="${group}" data-unit="${escapeHTML(option.unit)}"`
     + ` class="${option.unit === selected ? 'selected' : ''}">${escapeHTML(option.unit)}</button>`).join('')}</div>`
-    + '<div class="unit-popup-note">Units can also be changed in the menu</div>';
+    + `<div class="unit-popup-note">${escapeHTML(t('unitPopup.note'))}</div>`;
   el('toast').hidden = true; // replaced at once - the popup takes its place
   showFading(el('unit-popup'));
 }
@@ -1461,7 +1571,7 @@ function forecastCellFrom(event) {
   const cell = event.target.closest('.cell.forecast');
   if (!cell) return false;
   const label = modelLabel(cell.dataset.model);
-  showToast(`This value is not a measurement: it comes from a model forecast${label ? ` (${label})` : ''}.`);
+  showToast(label ? t('toast.forecastModel', { model: label }) : t('toast.forecast'));
   return true;
 }
 
@@ -1472,8 +1582,8 @@ function modelLabel(id) {
   for (const product of forecastProducts.values()) {
     for (const source of product.sources) {
       const model = source.models?.find(m => m.id === id);
-      if (model) return `${model.label}${model.resolution ? `, ${model.resolution}` : ''}`;
-      if (source.model === id) return `${source.label}${source.resolution ? `, ${source.resolution}` : ''}`;
+      if (model) return `${modelName(model.id, model.label)}${model.resolution ? `, ${model.resolution}` : ''}`;
+      if (source.model === id) return `${modelName(id, source.label)}${source.resolution ? `, ${source.resolution}` : ''}`;
     }
   }
   return id;
@@ -1527,34 +1637,118 @@ function scheduleRefresh() {
   renderUpdateStatus();
 }
 
-// 'Updated X min ago' / 'Next update in X min', top left of the top bar
+// 'Next update' / 'in X min', top left of the top bar - or what is being done
+// instead while the data loads
 function renderUpdateStatus() {
-  const minutesFrom = date => Math.round(Math.abs(date - Date.now()) / MINUTE);
-  let updated = 'Loading…';
-  if (state.listUpdatedAt) {
-    const ago = minutesFrom(state.listUpdatedAt);
-    updated = ago < 1 ? 'Updated just now' : `Updated ${ago} min ago`;
-  }
-  let next = '';
-  if (state.refreshing && state.listUpdatedAt) next = 'Updating…';
-  else if (state.nextUpdateAt) {
+  let label = t('update.nextLabel');
+  let time = '';
+  if (state.refreshing || !state.listUpdatedAt) {
+    label = state.listUpdatedAt ? t('update.updating') : t('update.loading');
+  } else if (state.nextUpdateAt) {
     const left = Math.ceil((state.nextUpdateAt - Date.now()) / MINUTE);
-    next = left <= 1 ? 'Next update in <1 min' : `Next update in ${left} min`;
+    time = left <= 1 ? t('update.inSoon') : t('update.in', { n: left });
   }
-  el('updated-ago').textContent = updated;
-  el('next-update').textContent = next;
+  el('update-label').textContent = label;
+  el('update-time').textContent = time;
+}
+
+// A tap on the top bar's countdown: everything again from the servers, now.
+// FetchManager would otherwise answer from what it fetched in the last few
+// minutes (each source's own TTL), and the forecasts are held for the hour -
+// both are dropped, so 'now' really means asking again.
+function forceRefresh() {
+  if (state.refreshing) return;
+  wa('manual_refresh');
+  FetchManager.requests.clear();
+  forecastCache.clear();
+  refresh();
 }
 
 
 // ------------------------------------------------------------------ START
+
+// What the loading screen lists: every source the app reads, as it is checked
+// - the buoys' servers (DPBuoys loads them all up front) and the forecasts'
+// (one line per dataset or API, however many products share it). Each entry:
+// { group, label, promise, status: 'pending' | 'ok' | 'failed', detail() }
+let loadingChecks = [];
+
+function sourceLabel(source) {
+  if (source.repo) return `GitHub ${source.repo}`;
+  if (source.api === 'MSM') return 'MSM API';
+  if (source.api) return source.api;
+  return `ERDDAP ${hostOf(source.src)}${source.dataset ? ` · ${source.dataset}` : ''}`;
+}
+
+function startLoadingChecks() {
+  const buoyDetail = source => () => {
+    if (source.repo) {
+      // The repository is only HEAD-checked at load: how fresh its files are
+      const dates = (source.buoys ?? []).flatMap(buoy => buoy.sensors.map(sensor => sensor.lastModified)).filter(Boolean);
+      return dates.length ? t('loading.updatedAgo', { ago: formatAgo(new Date(Math.max(...dates))) }) : '';
+    }
+    return source.buoys?.length ? t('loading.buoysFound', { n: source.buoys.length }) : '';
+  };
+  loadingChecks = buoysProduct.sources.map(source => ({
+    group: 'buoys', label: sourceLabel(source), promise: source.loadingPromise, detail: buoyDetail(source),
+  }));
+
+  const seen = new Set();
+  forecastProducts.forEach(product => product.sources.forEach(source => {
+    const key = source.dataset ?? source.src;
+    if (seen.has(key)) return;
+    seen.add(key);
+    // Open-Meteo has nothing to load up front, so it is asked for one buoy's
+    // forecast - the same request (and FetchManager cache entry) as BCNS'
+    // wind forecast will use
+    const promise = source.api
+      ? FetchManager.fetch(`${source.src}?buoy=SOMO`, 30, 30).then(res => res.json())
+      : source.loadingPromise;
+    // Named by model rather than by dataset id - shorter, and what it is
+    const label = source.api ? source.api : modelName(source.model, source.label);
+    const detail = () => source.api
+      ? (source.models ?? []).map(model => modelName(model.id, model.label)).join(', ')
+      : (source.endDate ? t('loading.until', { date: formatDateTime(source.endDate) }) : '');
+    loadingChecks.push({ group: 'forecasts', label, promise, detail });
+  }));
+
+  loadingChecks.forEach(check => {
+    check.status = 'pending';
+    check.promise
+      .then(() => { check.status = 'ok'; })
+      .catch(() => { check.status = 'failed'; })
+      .finally(renderLoading);
+  });
+  renderLoading();
+}
+
+function renderLoading() {
+  const buoysPending = loadingChecks.some(check => check.group === 'buoys' && check.status === 'pending');
+  el('loading-message').textContent = buoysPending ? t('loading.checking') : t('loading.ready');
+
+  const marks = {
+    pending: '<span class="spinner-small"></span>',
+    ok: '<i class="fa-solid fa-check"></i>',
+    failed: '<i class="fa-solid fa-xmark"></i>',
+  };
+  const groupHTML = group => `<h3>${escapeHTML(t(`loading.${group}`))}</h3><ul>${loadingChecks
+    .filter(check => check.group === group)
+    .map(check => {
+      const detail = check.status === 'ok' ? check.detail() : check.status === 'failed' ? t('loading.unavailable') : '';
+      return `<li class="${check.status}"><span class="mark">${marks[check.status]}</span>`
+        + `<span>${escapeHTML(check.label)}${detail ? ` <span class="detail">· ${escapeHTML(detail)}</span>` : ''}</span></li>`;
+    }).join('')}</ul>`;
+  el('loading-sources').innerHTML = groupHTML('buoys') + groupHTML('forecasts');
+}
 
 function hideLoading() {
   el('loading').classList.add('done');
 }
 
 async function start() {
-  setupEmails();
+  applyLanguage();
   setupEvents();
+  startLoadingChecks();
 
   // First paint from the static catalogue, before any server has answered
   setBuoys(allBuoysProduct.getBuoys());
@@ -1570,7 +1764,8 @@ async function start() {
   }).catch(error => console.error('Could not load the buoys:', error));
 
   await Promise.race([loading, new Promise(resolve => setTimeout(resolve, LOADING_TIMEOUT))]);
-  hideLoading();
+  // A moment to see the last source tick before the screen goes
+  setTimeout(hideLoading, 600);
 
   // Keeps the minutes in the top bar current between refreshes
   setInterval(renderUpdateStatus, 15 * 1000);
