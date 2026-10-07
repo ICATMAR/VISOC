@@ -374,58 +374,71 @@ a {
   overflow: hidden;
 }
 
-/* "This comes from a model" message, at the bottom of the screen */
-#toast {
+/* Bottom sheets, iOS style: the cell messages (#toast) and the unit / time
+   zone choices (#unit-popup). A card the width of the screen that slides up
+   from the bottom edge, with rounded top corners, a grab bar and a slightly
+   see-through, blurred background; it slides back down when closed (the
+   .fading class, see fadeOut in main.js) or when swiped down (setupSheetDrag). */
+.bottom-sheet {
   position: fixed;
-  left: 50%;
-  bottom: calc(1.2rem + var(--safe-bottom));
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 35;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100vw - 2rem);
-  padding: 0.55rem 0.9rem;
-  border-radius: 0.6rem;
-  background: var(--darkBlue);
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 1.5rem 1.2rem calc(1.3rem + var(--safe-bottom));
+  border-radius: 1rem 1rem 0 0;
+  background: rgba(var(--darkBlueRGB), 0.86);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
   color: white;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  transition: opacity 0.3s ease;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  /* The sheet follows the finger when swiped, instead of the page scrolling */
+  touch-action: none;
+  /* Up when shown - an animation, because it restarts every time the sheet
+     goes from hidden to shown - and down when closed */
+  animation: sheet-up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.3s ease-in;
 }
 
-#toast.fading {
-  opacity: 0;
+/* The grab bar */
+.bottom-sheet::before {
+  content: '';
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  width: 2.4rem;
+  height: 0.25rem;
+  margin-left: -1.2rem;
+  border-radius: 0.125rem;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.bottom-sheet.fading {
+  transform: translateY(110%);
   pointer-events: none;
 }
 
-/* Units of one column, offered when its title is tapped - same place and look
-   as the message above */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+#toast {
+  white-space: pre-line;
+}
+
 #unit-popup {
-  position: fixed;
-  left: 50%;
-  bottom: calc(1.2rem + var(--safe-bottom));
   z-index: 36;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: calc(100vw - 2rem);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1rem;
-  border-radius: 0.6rem;
-  background: var(--darkBlue);
-  color: white;
-  font-size: 0.8rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  /* Fades out when closed, like the messages (see fadeOut) */
-  transition: opacity 0.3s ease;
-}
-
-#unit-popup.fading {
-  opacity: 0;
-  pointer-events: none;
+  gap: 0.6rem;
 }
 
 .unit-popup-title {
@@ -447,11 +460,6 @@ a {
 /* A measured cell in the buoy view: a tap says where it comes from (one line
    per fact - see observationInfo), and a tap on the message closes it */
 .cell.has-info {
-  cursor: pointer;
-}
-
-#toast {
-  white-space: pre-line;
   cursor: pointer;
 }
 

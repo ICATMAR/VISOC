@@ -1265,6 +1265,9 @@ function goBack(fallback) {
 }
 
 function route() {
+  // A message or a choice belongs to the view it was opened in
+  fadeOut(el('toast'));
+  closeUnitPopup();
   const next = parseRoute();
   state.route = next;
   if (navigationStack[navigationStack.length - 1] === (location.hash || '#/')) navigationStack.pop();
@@ -1446,7 +1449,11 @@ function setupEvents() {
   });
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
-  el('toast').addEventListener('click', () => fadeOut(el('toast')));
+  el('toast').addEventListener('click', () => {
+    if (!wasDragged(el('toast'))) fadeOut(el('toast'));
+  });
+  setupSheetDrag(el('toast'), () => fadeOut(el('toast')));
+  setupSheetDrag(el('unit-popup'), closeUnitPopup);
   el('update-status').addEventListener('click', forceRefresh);
   el('map-back').addEventListener('click', () => goBack('#/'));
   el('map-button').addEventListener('click', () => {
@@ -1477,10 +1484,12 @@ function setupEvents() {
     if (event.key !== 'Escape') return;
     setMenuOpen(false);
     closeUnitPopup();
+    fadeOut(el('toast'));
   });
 
   // A unit applies it; a tap anywhere else on the popup just closes it
   el('unit-popup').addEventListener('click', event => {
+    if (wasDragged(el('unit-popup'))) return;
     const button = event.target.closest('[data-unit-group]');
     if (button) {
       gui.selectedUnits = { ...gui.selectedUnits, [button.dataset.unitGroup]: button.dataset.unit };
@@ -1500,6 +1509,13 @@ function setupEvents() {
     if (el('unit-popup').hidden) return;
     if (event.target.closest('#unit-popup, [data-unit-code], [data-toggle-timezone]')) return;
     closeUnitPopup();
+  });
+  // Same for a cell's message - except a tap on another cell, which swaps the
+  // message for that cell's instead
+  document.addEventListener('click', event => {
+    if (el('toast').hidden) return;
+    if (event.target.closest('#toast, .cell[data-info], .cell.forecast')) return;
+    fadeOut(el('toast'));
   });
 
   el('unit-pickers').addEventListener('click', event => {
@@ -1598,7 +1614,7 @@ function closeUnitPopup() {
 function infoCellFrom(event) {
   const cell = event.target.closest('.cell[data-info]');
   if (!cell) return false;
-  showToast(cell.dataset.info, 10000);
+  showToast(cell.dataset.info);
   return true;
 }
 
@@ -1631,6 +1647,7 @@ const FADE_MS = 300;
 
 function showFading(element) {
   clearTimeout(element.fadeTimeout);
+  element.style.transform = ''; // whatever a swipe left behind (see setupSheetDrag)
   element.classList.remove('fading');
   element.hidden = false;
 }
@@ -1642,17 +1659,66 @@ function fadeOut(element) {
   element.fadeTimeout = setTimeout(() => {
     element.hidden = true;
     element.classList.remove('fading');
+    element.style.transform = '';
   }, FADE_MS);
 }
 
-let toastTimeout;
-function showToast(text, duration = 3500) {
+// Swipe a bottom sheet down to close it, like iOS: it follows the finger
+// while dragged, closes from wherever it was let go if pulled down far
+// enough, and springs back up otherwise. A drag is not a tap - the click it
+// ends with is swallowed (see wasDragged), so swiping down from a unit
+// button doesn't also pick that unit.
+const SHEET_DISMISS_PX = 50;
+
+function setupSheetDrag(sheet, close) {
+  let startY;
+  let offset = 0;
+  sheet.addEventListener('pointerdown', event => {
+    startY = event.clientY;
+    offset = 0;
+    sheet.dragged = false;
+  });
+  sheet.addEventListener('pointermove', event => {
+    if (startY == undefined) return;
+    offset = Math.max(0, event.clientY - startY);
+    if (offset > 5) sheet.dragged = true;
+    if (!sheet.dragged) return;
+    sheet.style.transition = 'none';
+    sheet.style.transform = `translateY(${offset}px)`;
+  });
+  const end = () => {
+    if (startY == undefined) return;
+    startY = undefined;
+    sheet.style.transition = '';
+    if (!sheet.dragged) return;
+    if (offset > SHEET_DISMISS_PX) {
+      // Down from where the finger left it, rather than from the top again
+      sheet.style.transform = 'translateY(110%)';
+      close();
+    } else {
+      sheet.style.transform = '';
+    }
+  };
+  sheet.addEventListener('pointerup', end);
+  sheet.addEventListener('pointercancel', end);
+}
+
+// Whether the click a sheet just received was the end of a swipe rather
+// than a tap - and forgets it, so the next one counts again
+function wasDragged(sheet) {
+  const dragged = sheet.dragged;
+  sheet.dragged = false;
+  return dragged;
+}
+
+// A cell's message stays until the user closes it (a tap on it or elsewhere,
+// a swipe down, Escape) - it can be several lines long, and reading it
+// shouldn't be a race against a timer
+function showToast(text) {
   const toast = el('toast');
   closeUnitPopup();
   toast.textContent = text;
   showFading(toast);
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => fadeOut(toast), duration);
 }
 
 function refresh() {
