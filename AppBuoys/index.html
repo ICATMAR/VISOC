@@ -76,6 +76,19 @@
       <div class="legend">
         <span><span class="forecast-sample"></span>Model forecast (no measurement in the last 3 h)</span>
       </div>
+      <button id="map-button" class="map-button"><i class="fa-solid fa-map-location-dot"></i>Map</button>
+    </section>
+
+    <!-- Map of every buoy - tapping one opens its data view (built by main.js) -->
+    <section id="view-map" class="view" hidden>
+      <div class="view-header">
+        <button id="map-back" class="icon-button" title="Back" aria-label="Back"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="view-title">
+          <span>Map</span>
+          <span>Tap a buoy to see its data</span>
+        </div>
+      </div>
+      <div id="buoys-map"><span class="attribution">Imagery © Esri</span></div>
     </section>
 
     <!-- 2nd view: one buoy, one row per 1 or 3 hours (built by main.js) -->

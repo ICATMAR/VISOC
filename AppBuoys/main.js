@@ -461,6 +461,7 @@ async function refreshList() {
   state.refreshing = false;
   state.listUpdatedAt = new Date();
   renderList();
+  restyleBuoysMap();
   renderUpdateStatus();
 }
 
@@ -934,13 +935,102 @@ async function renderMap(container, buoys) {
 }
 
 
+// The map of every listed buoy, created the first time it is opened and kept
+// afterwards (re-sized and re-styled on every visit). Tapping a buoy opens its
+// data view, like a row of the list does.
+let buoysMap;
+
+const STATUS_COLORS = { active: '#4caf50', delayed: '#ffc107', inactive: '#757575' };
+
+function buoyMarkerStyle(ol, feature) {
+  const latest = state.latest.get(feature.get('buoyId'));
+  const color = latest && !latest.loading ? STATUS_COLORS[statusOf(latest.lastUpdate)] : 'white';
+  return new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 8,
+      fill: new ol.style.Fill({ color }),
+      stroke: new ol.style.Stroke({ color: 'white', width: 2 }),
+    }),
+  });
+}
+
+// Labels live on a layer of their own, decluttered: buoys a few km apart (the
+// Cap de Creus ones, TARR and PTARR) would otherwise print over each other.
+// A label that doesn't fit is hidden until the map is zoomed in, while every
+// marker stays.
+function buoyLabelStyle(ol, feature) {
+  return new ol.style.Style({
+    text: new ol.style.Text({
+      text: feature.get('buoyId'),
+      offsetY: -18,
+      font: '600 12px Poppins, sans-serif',
+      fill: new ol.style.Fill({ color: 'white' }),
+      stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.75)', width: 3 }),
+    }),
+  });
+}
+
+async function renderBuoysMap() {
+  const ol = await loadOpenLayers().catch(error => { console.error(error); });
+  if (!ol || state.route.view !== 'map') return;
+
+  const features = state.buoys
+    .filter(buoy => buoy.latitude != undefined && buoy.longitude != undefined)
+    .map(buoy => new ol.Feature({
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([buoy.longitude, buoy.latitude])),
+      buoyId: buoy.id,
+    }));
+
+  if (!buoysMap) {
+    const source = new ol.source.Vector();
+    const layer = new ol.layer.Vector({ source, style: feature => buoyMarkerStyle(ol, feature) });
+    const labels = new ol.layer.Vector({ source, style: feature => buoyLabelStyle(ol, feature), declutter: true });
+    const map = new ol.Map({
+      target: el('buoys-map'),
+      layers: [new ol.layer.Tile({ source: new ol.source.XYZ({ url: BASEMAP_URL, maxZoom: 17 }) }), layer, labels],
+      view: new ol.View({ center: ol.proj.fromLonLat([2.2, 41.5]), zoom: 8 }),
+    });
+
+    map.on('click', event => {
+      const feature = map.forEachFeatureAtPixel(event.pixel, f => f, { hitTolerance: 10, layerFilter: l => l === layer });
+      if (!feature) return;
+      const buoyId = feature.get('buoyId');
+      wa('buoy_click', { buoy: buoyId, name: state.buoysById.get(buoyId)?.name, from: 'map' });
+      navigate(`#/buoy/${encodeURIComponent(buoyId)}`);
+    });
+    map.on('pointermove', event => {
+      const hit = map.hasFeatureAtPixel(event.pixel, { hitTolerance: 10, layerFilter: l => l === layer });
+      map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+    });
+
+    buoysMap = { map, source, layer, fitted: false };
+  }
+
+  buoysMap.source.clear();
+  buoysMap.source.addFeatures(features);
+  // The view was hidden until now, so the map has to measure itself again
+  buoysMap.map.updateSize();
+  if (!buoysMap.fitted && features.length) {
+    buoysMap.map.getView().fit(buoysMap.source.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 11 });
+    buoysMap.fitted = true;
+  }
+}
+
+// Status colours follow the list as new readings land
+function restyleBuoysMap() {
+  buoysMap?.layer.changed();
+}
+
+
 // ---------------------------------------------------------------- ROUTING
 
 // #/                 list
+// #/map              map of every buoy
 // #/buoy/<id>        buoy view
 // #/buoy/<id>/info   info view
 function parseRoute() {
   const parts = location.hash.replace(/^#\/?/, '').split('/');
+  if (parts[0] === 'map') return { view: 'map' };
   if (parts[0] === 'buoy' && parts[1]) {
     return { view: parts[2] === 'info' ? 'info' : 'buoy', buoyId: decodeURIComponent(parts[1]) };
   }
@@ -957,8 +1047,11 @@ function navigate(hash) {
   location.hash = hash;
 }
 
+// Back to wherever the app came from (list -> map -> buoy steps back to the
+// map, then to the list), or to `fallback` when the view was opened directly
+// from a link and there is nothing in the app to go back to.
 function goBack(fallback) {
-  if (navigationStack[navigationStack.length - 1] === fallback) history.back();
+  if (navigationStack.length) history.back();
   else location.replace(fallback);
 }
 
@@ -970,11 +1063,19 @@ function route() {
   el('view-list').hidden = next.view !== 'list';
   el('view-buoy').hidden = next.view !== 'buoy';
   el('view-info').hidden = next.view !== 'info';
+  el('view-map').hidden = next.view !== 'map';
 
   if (next.view === 'list') {
     state.detail = undefined;
     renderList();
     window.scrollTo({ top: 0 });
+    return;
+  }
+
+  if (next.view === 'map') {
+    state.detail = undefined;
+    window.scrollTo({ top: 0 });
+    renderBuoysMap();
     return;
   }
 
@@ -1102,6 +1203,11 @@ function setupEvents() {
   });
 
   el('buoy-back').addEventListener('click', () => goBack('#/'));
+  el('map-back').addEventListener('click', () => goBack('#/'));
+  el('map-button').addEventListener('click', () => {
+    wa('map_open');
+    navigate('#/map');
+  });
   el('info-back').addEventListener('click', () => goBack(`#/buoy/${encodeURIComponent(state.detail?.buoyId ?? '')}`));
   el('buoy-info').addEventListener('click', () => {
     if (!state.detail) return;
