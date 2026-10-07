@@ -8,13 +8,19 @@ import SourceErddapBuoys from '../sources/SourceErddapBuoys.js';
 import SourceMSMAPI from '../sources/SourceMSMAPI.js';
 import SourceGithubSOMO from '../sources/SourceGithubSOMO.js';
 import SourcePuertosBuoys from '../sources/SourcePuertosBuoys.js';
+import SourceOpenMeteo from '../sources/SourceOpenMeteo.js';
+import SourceErddapWaveForecast from '../sources/SourceErddapWaveForecast.js';
+import SourceErddapSeaSurfaceForecast from '../sources/SourceErddapSeaSurfaceForecast.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
 import DPHFRStations from './DPHFRStations.js';
 import DPHFRTotals from './DPHFRTotals.js';
 import DPBuoys from './DPBuoys.js';
-import DPSSForecast from './DPSSForecast.js';
+import DPAggregatedBuoys from './DPAggregatedBuoys.js';
+import DPWindForecast from './DPWindForecast.js';
+import DPWaveForecast from './DPWaveForecast.js';
+import DPSeaSurfaceForecast from './DPSeaSurfaceForecast.js';
 
 
 const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
@@ -382,23 +388,179 @@ const dataProducts = [
 
 
 
+  // Aggregated buoys: virtual buoys made of the measurements of real ones.
+  // Its source is DPBuoys (passed in when constructed), not a server.
+  {
+    name: 'Aggregated buoys',
+    Class: DPAggregatedBuoys,
+    description: 'Virtual buoys that combine the measurements of nearby buoys',
+    type: 'real-time',
+    sources: [],
+    aggregations: [
+      {
+        id: 'BCNS',
+        name: 'Barcelona',
+        description: 'The wave data comes from the Port of Barcelona buoy (PBCN, Puertos del Estado), and the wind, water temperature and currents from the Somorrostro buoy (SOMO, ICATMAR and ICM-CSIC). The data is mixed this way because of the different availability of the two buoys: PBCN measures waves but no wind, and SOMO measures wind, water temperature and currents but no waves.',
+        // Where the virtual buoy is drawn and sorted - the wind and water
+        // temperature are SOMO's
+        positionFrom: 'SOMO',
+        components: [
+          {
+            buoyId: 'PBCN',
+            label: 'Waves',
+            codes: ['VHM0', 'VMDR', 'VTM02', 'VZMX', 'VCMX', 'VHMH', 'VEMH', 'VTPK', 'VPED'],
+          },
+          {
+            buoyId: 'SOMO',
+            label: 'Wind, water temperature and currents',
+            default: true,
+          },
+        ],
+      },
+    ],
+  },
+
+
+  // Wind forecast at the buoys
+  {
+    name: 'Wind forecast',
+    Class: DPWindForecast,
+    description: 'Hourly wind forecast at the buoys from several atmospheric models',
+    type: 'forecast',
+    sources: [
+      {
+        Class: SourceOpenMeteo,
+        src: 'https://api.icatmar.cat/openMeteoAPI',
+        institution: 'ICATMAR',
+        // In order of preference: AROME-HD reaches ~2 days ahead, ECMWF takes
+        // over after that. The API also serves GFS013 and ICON-EU.
+        models: [
+          { id: 'AROME-HD', label: 'AROME-HD', institution: 'Météo-France', resolution: '1.3 km' },
+          { id: 'ECMWF-IFS025', label: 'ECMWF IFS', institution: 'ECMWF', resolution: '0.25°' },
+        ],
+      },
+      // Fallback where the API has no forecast (a buoy it doesn't know yet, or
+      // the hours before its 00Z start): the winds the wave forecasts were run
+      // with, which the WAVEWATCH III datasets publish alongside the waves.
+      // Only the components (no gusts) - DPWindForecast turns them into speed
+      // and direction.
+      {
+        Class: SourceErddapWaveForecast,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        dataset: 'WAVE_FC_CAT_WW3ARO_2p6km',
+        institution: 'ICATMAR',
+        model: 'AROME-ERDDAP',
+        label: 'AROME (WAVEWATCH III forcing)',
+        resolution: '2.6 km',
+        forcing: { model: 'AROME', institution: 'Météo-France' },
+        bbox: NWMEDBBOX,
+        variables: ['uwnd', 'vwnd'],
+        mapping: {
+          uwnd: {code: 'WSPE'},
+          vwnd: {code: 'WSPN'},
+        }
+      },
+      {
+        Class: SourceErddapWaveForecast,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        dataset: 'WAVE_FC_CAT_WW3ECM_2p6km',
+        institution: 'ICATMAR',
+        model: 'ECMWF-ERDDAP',
+        label: 'ECMWF (WAVEWATCH III forcing)',
+        resolution: '2.6 km',
+        forcing: { model: 'ECMWF', institution: 'ECMWF' },
+        bbox: NWMEDBBOX,
+        variables: ['uwnd', 'vwnd'],
+        mapping: {
+          uwnd: {code: 'WSPE'},
+          vwnd: {code: 'WSPN'},
+        }
+      },
+    ]
+  },
+
+
+  // Wave forecast at the buoys. Sources in order of preference.
+  {
+    name: 'Wave forecast',
+    Class: DPWaveForecast,
+    description: 'Hourly WAVEWATCH III wave forecast of the Catalan Sea and the Mediterranean',
+    type: 'forecast',
+    sources: [
+      {
+        Class: SourceErddapWaveForecast,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        dataset: 'WAVE_FC_CAT_WW3ARO_2p6km',
+        institution: 'ICATMAR',
+        model: 'WW3-AROME',
+        label: 'WAVEWATCH III forced by AROME',
+        resolution: '2.6 km',
+        forcing: { model: 'AROME', institution: 'Météo-France' },
+        bbox: NWMEDBBOX,
+        mapping: {
+          hs: {code: 'VHM0'},
+          dir: {code: 'VMDR'},
+          t02: {code: 'VTM02'},
+        }
+      },
+      {
+        Class: SourceErddapWaveForecast,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        dataset: 'WAVE_FC_CAT_WW3ECM_2p6km',
+        institution: 'ICATMAR',
+        model: 'WW3-ECMWF',
+        label: 'WAVEWATCH III forced by ECMWF',
+        resolution: '2.6 km',
+        forcing: { model: 'ECMWF', institution: 'ECMWF' },
+        bbox: NWMEDBBOX,
+        mapping: {
+          hs: {code: 'VHM0'},
+          dir: {code: 'VMDR'},
+          t02: {code: 'VTM02'},
+        }
+      },
+      {
+        Class: SourceErddapWaveForecast,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        dataset: 'WAVE_FC_MED_WW3ECM_0p125',
+        institution: 'ICATMAR',
+        model: 'WW3-ECMWF-MED',
+        label: 'WAVEWATCH III forced by ECMWF (Mediterranean)',
+        resolution: '0.125°',
+        forcing: { model: 'ECMWF', institution: 'ECMWF' },
+        bbox: MEDBBOX,
+        mapping: {
+          hs: {code: 'VHM0'},
+          dir: {code: 'VMDR'},
+          t02: {code: 'VTM02'},
+        }
+      },
+    ]
+  },
+
+
   // Sea surface forecast
   {
     name: 'Sea surface forecast',
-    Class: DPSSForecast,
+    Class: DPSeaSurfaceForecast,
     description: 'High-resolution short-term forecast of sea surface temperature and currents of the Catalan Sea',
     type: 'forecast',
     sources: [
       {
-        Class: SourceErddap,
+        Class: SourceErddapSeaSurfaceForecast,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
-        institution: 'ICATMAR',
         dataset: 'sea_surface_forecast',
+        institution: 'ICATMAR',
+        model: 'ROMS',
+        label: 'ROMS sea surface forecast',
+        resolution: '1 km',
+        bbox: NWMEDBBOX,
         mapping: {
           UO: {code: 'EWCT'},
           VO: {code: 'NSCT'},
           THETAO: {unitTransform: KelvinToCelsius},
-          SST: {unitTransform: KelvinToCelsius}
+          SST: {code: 'TEMP', unitTransform: KelvinToCelsius},
+          SSS: {code: 'PSAL'},
         }
       }
     ]
