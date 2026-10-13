@@ -339,6 +339,52 @@ a {
   color: rgba(var(--darkBlueRGB), 0.3);
 }
 
+/* The temperature cell, split in two side by side: the air on the left, the
+   water on the right. Each half is a cell of its own (colour, forecast mark,
+   message on a tap), with its label over its value, centred. */
+.cell.split {
+  flex-direction: row;
+  padding: 0;
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+.cell.half {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.25rem;
+}
+
+.cell.half .cell-main {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.2;
+}
+
+.cell.half .cell-main {
+  align-items: center;
+}
+
+.cell.half.right {
+  border-left: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.cell.half .value {
+  font-size: 0.74rem;
+}
+
+/* 'Air:', 'Water:' - like the gusts' and the maximum wave's second line */
+.part-label {
+  font-size: 0.6rem;
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.cell.half.empty .part-label {
+  opacity: 1;
+}
+
 /* A value that comes from a model rather than a measurement: a triangle in
    its top-right corner, wherever it is shown. The cell's colour is left
    alone, so the colour scale reads the same for both. Tapping one says which

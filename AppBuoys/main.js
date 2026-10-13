@@ -59,15 +59,17 @@ const GROUPS = [
 // catalogue's 'Aggregated buoys'). They are still loaded - BCNS needs them.
 const HIDDEN_BUOYS = ['SOMO', 'PBCN'];
 
-// The four data columns (titled t('column.<id>')). `code` is the magnitude shown and coloured by the
-// legend (styles/colorLegends.js), `directionCode` drawn as an arrow.
-// `fromDirection` marks a direction reported as where it comes FROM (wind,
-// waves), which the arrow turns around to show where it goes.
-// `forecast` is the catalogue's name of the product that fills it in where
-// there are no measurements.
+// The data series the app reads, measures and forecasts. `code` is the
+// magnitude shown and coloured by the legend (styles/colorLegends.js),
+// `directionCode` drawn as an arrow. `fromDirection` marks a direction
+// reported as where it comes FROM (wind, waves), which the arrow turns around
+// to show where it goes. `forecast` is the catalogue's name of the product that
+// fills it in where there are no measurements - the air temperature has none.
+//
+// How they are laid out on screen is DISPLAY_COLUMNS' business, below.
 const COLUMNS = [
   {
-    id: 'waves', icon: 'fa-solid fa-water',
+    id: 'waves',
     code: 'VHM0', directionCode: 'VMDR', fromDirection: true, periodCode: 'VTM02',
     // The biggest wave of the interval. CF has four spellings of "maximum
     // wave height" (see GUIManager.buoyDetailVariables) - whichever turns up.
@@ -77,22 +79,48 @@ const COLUMNS = [
     forecast: 'Wave forecast',
   },
   {
-    id: 'wind', icon: 'fa-solid fa-wind',
+    id: 'wind',
     code: 'WSPD', directionCode: 'WDIR', fromDirection: true, gustCode: 'GSPD',
     forecast: 'Wind forecast',
   },
   {
-    id: 'temperature', icon: 'fa-solid fa-temperature-half',
+    // No forecast product has the air temperature: measurements only
+    id: 'air',
+    code: 'DRYT',
+  },
+  {
+    id: 'water',
     code: 'TEMP',
     forecast: 'Sea surface forecast',
   },
   {
     // HCDT is where the water is GOING, so no half turn
-    id: 'currents', icon: 'fa-solid fa-arrows-turn-right',
+    id: 'currents',
     code: 'HCSP', directionCode: 'HCDT',
     forecast: 'Sea surface forecast',
   },
 ];
+
+const columnById = id => COLUMNS.find(column => column.id === id);
+
+// The tables' columns (titled t('column.<id>')): one data series each, except
+// the temperature, whose cell is split in two - the air on the left, the
+// water on the right, each half with its own colour, its own forecast mark and its own
+// message on a tap. `unitCode` is what the title's unit picker switches.
+const DISPLAY_COLUMNS = [
+  { id: 'waves', icon: 'fa-solid fa-water', unitCode: 'VHM0', parts: ['waves'] },
+  { id: 'wind', icon: 'fa-solid fa-wind', unitCode: 'WSPD', parts: ['wind'] },
+  { id: 'temperature', icon: 'fa-solid fa-temperature-half', unitCode: 'TEMP', parts: ['air', 'water'] },
+  { id: 'currents', icon: 'fa-solid fa-arrows-turn-right', unitCode: 'HCSP', parts: ['currents'] },
+];
+
+// One table cell for a display column, built by `partHTML(column, half)` for
+// each of its data series - `half` is 'left' or 'right' in a split cell
+function displayCellHTML(display, partHTML) {
+  if (display.parts.length === 1) return partHTML(columnById(display.parts[0]));
+  return `<div class="cell split">${display.parts
+    .map((id, i) => partHTML(columnById(id), i === 0 ? 'left' : 'right')).join('')}</div>`;
+}
 
 const columnCodes = column => [column.code, column.directionCode, column.periodCode,
   ...(column.maxCodes ?? []), column.maxPeriodCode, column.gustCode].filter(Boolean);
@@ -132,7 +160,7 @@ function createProduct(name, ...args) {
 
 const buoysProduct = createProduct('Buoys');
 const allBuoysProduct = createProduct('Aggregated buoys', buoysProduct);
-const forecastProducts = new Map([...new Set(COLUMNS.map(column => column.forecast))]
+const forecastProducts = new Map([...new Set(COLUMNS.map(column => column.forecast).filter(Boolean))]
   .map(name => [name, createProduct(name)]));
 
 
@@ -744,17 +772,22 @@ function intervalStart(date, hours) {
 //
 // `info` is what a tap on the cell says about it (observationInfo,
 // forecastInfo), carried on the cell itself.
-function cellHTML(column, values, { forecast = false, model, info, detailed = false, list = false } = {}) {
+//
+// `half` ('left' or 'right') makes it one half of a split cell: its label
+// ('Air', 'Water') over the bare value - the unit is in the column title.
+function cellHTML(column, values, { forecast = false, model, info, detailed = false, list = false, half } = {}) {
   const magnitude = values?.[column.code];
-  if (magnitude == undefined) return '<div class="cell empty">–</div>';
+  const halfClass = half ? ` half ${half}` : '';
+  const partLabel = half ? `<span class="part-label">${escapeHTML(t(`part.${column.id}`))}</span>` : '';
+  if (magnitude == undefined) return `<div class="cell empty${halfClass}"><div class="cell-main">${partLabel}–</div></div>`;
 
   const background = gui.colorFor(column.code, magnitude);
   const value = formatValue(column.code, magnitude);
 
-  let main = '';
+  let main = partLabel;
   const direction = column.directionCode ? values[column.directionCode] : undefined;
   if (direction != undefined) main += arrowHTML(direction, column.fromDirection);
-  main += `<span class="value">${value.text}</span><span class="unit">${escapeHTML(value.unit)}</span>`;
+  main += `<span class="value">${value.text}</span>${half ? '' : `<span class="unit">${escapeHTML(value.unit)}</span>`}`;
   let sub = '';
   if (column.periodCode && values[column.periodCode] != undefined) {
     const period = formatValue(column.periodCode, values[column.periodCode]);
@@ -780,20 +813,20 @@ function cellHTML(column, values, { forecast = false, model, info, detailed = fa
   if (info && !forecast) title = ` title="${escapeHTML(t('cell.measurementTitle'))}"`;
   if (info) title += ` data-info="${escapeHTML(info)}"`;
   const style = background ? ` style="background-color: ${background}"` : '';
-  return `<div class="cell${forecast ? ' forecast' : ''}${info ? ' has-info' : ''}"${style}${title}>`
+  return `<div class="cell${halfClass}${forecast ? ' forecast' : ''}${info ? ' has-info' : ''}"${style}${title}>`
     + `<div class="cell-main">${main}</div>${sub ? `<div class="cell-sub">${sub}</div>` : ''}</div>`;
 }
 
-const loadingCellHTML = () => '<div class="cell"><div class="spinner-small"></div></div>';
+const loadingCellHTML = half => `<div class="cell${half ? ` half ${half}` : ''}"><div class="spinner-small"></div></div>`;
 
 // Column titles. Tapping one offers its units (km/h, kn, ...) to choose
 // from, same as the menu - see openUnitPopup.
 function headerRowHTML(firstCell) {
-  return `<div class="row header-row">${firstCell}${COLUMNS.map(column => {
-    const switchable = gui.isUnitSwitchable(column.code);
-    return `<button class="header-cell${switchable ? ' clickable' : ''}" data-unit-code="${switchable ? column.code : ''}"`
+  return `<div class="row header-row">${firstCell}${DISPLAY_COLUMNS.map(column => {
+    const switchable = gui.isUnitSwitchable(column.unitCode);
+    return `<button class="header-cell${switchable ? ' clickable' : ''}" data-unit-code="${switchable ? column.unitCode : ''}"`
       + ` title="${switchable ? escapeHTML(t('header.changeUnit')) : ''}">`
-      + `<i class="${column.icon}"></i><span>${escapeHTML(t(`column.${column.id}`))}</span><span class="unit">${escapeHTML(gui.unitFor(column.code).unit)}</span></button>`;
+      + `<i class="${column.icon}"></i><span>${escapeHTML(t(`column.${column.id}`))}</span><span class="unit">${escapeHTML(gui.unitFor(column.unitCode).unit)}</span></button>`;
   }).join('')}</div>`;
 }
 
@@ -813,13 +846,13 @@ function renderList() {
 
 function buoyRowHTML(buoy) {
   const latest = state.latest.get(buoy.id);
-  const cells = COLUMNS.map(column => {
-    if (!latest || latest.loading) return loadingCellHTML();
+  const cells = DISPLAY_COLUMNS.map(display => displayCellHTML(display, (column, half) => {
+    if (!latest || latest.loading) return loadingCellHTML(half);
     const entry = latest.columns[column.id];
     const info = entry?.forecast && entry.record
       ? forecastInfo({ records: [entry.record], column, result: entry.result, buoyId: buoy.id }) : undefined;
-    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, info, list: true });
-  }).join('');
+    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, info, list: true, half });
+  })).join('');
 
   return `<div class="row buoy-row" data-buoy="${escapeHTML(buoy.id)}" role="button" tabindex="0">`
     // Long codes (NORD_CAP_DE_CREUS) may break after an underscore
@@ -877,12 +910,12 @@ function renderBuoyTable() {
     }
 
     let measured = false;
-    const cells = COLUMNS.map(column => {
+    const cells = DISPLAY_COLUMNS.map(display => displayCellHTML(display, (column, half) => {
       const observation = aggregateColumn(observed[i], column);
       if (observation) {
         measured = true;
         const info = observationInfo(observed[i], column, start, size);
-        return cellHTML(column, observation, { detailed: true, info });
+        return cellHTML(column, observation, { detailed: true, info, half });
       }
       const forecast = aggregateColumn(forecastBins[column.id][i], column);
       // The model of the interval's first hour - an interval only spans two
@@ -891,12 +924,12 @@ function renderBuoyTable() {
       if (forecast) {
         const info = forecastInfo({ records: forecastBins[column.id][i], column, start, size,
           result: detail.forecasts[column.id], buoyId: detail.buoyId });
-        return cellHTML(column, forecast, { detailed: true, forecast: true, model, info });
+        return cellHTML(column, forecast, { detailed: true, forecast: true, model, info, half });
       }
       // Still waiting for one of them
-      if (detail.observations == undefined || detail.forecasts[column.id] == undefined) return loadingCellHTML();
-      return cellHTML(column, undefined);
-    }).join('');
+      if (detail.observations == undefined || detail.forecasts[column.id] == undefined) return loadingCellHTML(half);
+      return cellHTML(column, undefined, { half });
+    })).join('');
 
     let nowLine = '';
     // A row covers half an interval either side of its time (see binRecords)
@@ -1052,7 +1085,7 @@ function sourcesCardHTML(buoy) {
 
 // Which model is shown when, per forecast product, in order of preference
 function forecastsCardHTML() {
-  const products = [...new Set(COLUMNS.map(column => column.forecast))];
+  const products = [...new Set(COLUMNS.map(column => column.forecast).filter(Boolean))];
   const items = products.map(name => {
     const columns = COLUMNS.filter(column => column.forecast === name);
     const result = state.detail.forecasts[columns[0].id];
