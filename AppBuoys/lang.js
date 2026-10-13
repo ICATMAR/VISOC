@@ -146,6 +146,10 @@ const en = {
   'info.noForecast': 'no forecast available for this buoy',
   'info.fromTo': 'from {from} to {to}',
   'info.nearestSea': 'nearest sea point {km} km away',
+  'info.gridPoints': 'Forecast grid points',
+  'info.gridPointsNote': "Where the forecasts are read: the nearest sea cell of each model's grid, numbered on the map.",
+  'info.gridPointsApi': "Open-Meteo forecasts are given for the buoy's own position.",
+  'info.gridDistance': '{km} km from {buoy}',
   'info.institutions': 'Institutions',
   'join.and': ' and ',
 
@@ -323,6 +327,10 @@ const ca = {
   'info.noForecast': 'no hi ha cap predicció disponible per a aquesta boia',
   'info.fromTo': 'de {from} a {to}',
   'info.nearestSea': 'punt de mar més proper a {km} km',
+  'info.gridPoints': 'Punts de malla de les prediccions',
+  'info.gridPointsNote': 'On es llegeixen les prediccions: la cel·la de mar més propera de la malla de cada model, numerada al mapa.',
+  'info.gridPointsApi': "Les prediccions d'Open-Meteo es donen per a la posició de la boia.",
+  'info.gridDistance': 'a {km} km de {buoy}',
   'info.institutions': 'Institucions',
   'join.and': ' i ',
 
@@ -494,6 +502,10 @@ const es = {
   'info.noForecast': 'no hay ninguna predicción disponible para esta boya',
   'info.fromTo': 'de {from} a {to}',
   'info.nearestSea': 'punto de mar más cercano a {km} km',
+  'info.gridPoints': 'Puntos de malla de las predicciones',
+  'info.gridPointsNote': 'Dónde se leen las predicciones: la celda de mar más cercana de la malla de cada modelo, numerada en el mapa.',
+  'info.gridPointsApi': 'Las predicciones de Open-Meteo se dan para la posición de la boya.',
+  'info.gridDistance': 'a {km} km de {buoy}',
   'info.institutions': 'Instituciones',
   'join.and': ' y ',
 
@@ -665,6 +677,10 @@ const fr = {
   'info.noForecast': "aucune prévision n'est disponible pour cette bouée",
   'info.fromTo': 'du {from} au {to}',
   'info.nearestSea': 'point de mer le plus proche à {km} km',
+  'info.gridPoints': 'Points de grille des prévisions',
+  'info.gridPointsNote': 'Où les prévisions sont lues : la maille de mer la plus proche de la grille de chaque modèle, numérotée sur la carte.',
+  'info.gridPointsApi': "Les prévisions d'Open-Meteo sont données pour la position de la bouée.",
+  'info.gridDistance': 'à {km} km de {buoy}',
   'info.institutions': 'Institutions',
   'join.and': ' et ',
 

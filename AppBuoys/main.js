@@ -787,7 +787,11 @@ function cellHTML(column, values, { forecast = false, model, info, detailed = fa
   let main = partLabel;
   const direction = column.directionCode ? values[column.directionCode] : undefined;
   if (direction != undefined) main += arrowHTML(direction, column.fromDirection);
-  main += `<span class="value">${value.text}</span>${half ? '' : `<span class="unit">${escapeHTML(value.unit)}</span>`}`;
+  // In the temperature halves the decimals are smaller and not bold ('20' then
+  // '.5'), so the whole degrees read first in the narrow space
+  const [whole, decimals] = value.text.split('.');
+  const number = half && decimals != undefined ? `${whole}<span class="decimals">.${decimals}</span>` : value.text;
+  main += `<span class="value">${number}</span>${half ? '' : `<span class="unit">${escapeHTML(value.unit)}</span>`}`;
   let sub = '';
   if (column.periodCode && values[column.periodCode] != undefined) {
     const period = formatValue(column.periodCode, values[column.periodCode]);
@@ -1015,7 +1019,9 @@ function renderInfo() {
   el('info-status').innerHTML = statusHTML(buoy.id);
 
   const parts = buoy.aggregated ? buoy.components.map(c => c.buoy).filter(Boolean) : [buoy];
+  const gridPoints = forecastGridPoints();
   let html = '<div class="info-map" id="info-map"><span class="attribution">Imagery © Esri</span></div>';
+  html += gridPointsLegendHTML(gridPoints);
 
   html += `<div class="info-photos">${parts.map(part => `<figure><img src="${PHOTOS_PATH}${encodeURIComponent(part.id)}.jpg"`
     + ` alt="${escapeHTML(part.name)}" onerror="this.parentElement.hidden = true">`
@@ -1041,6 +1047,7 @@ function renderInfo() {
 
   el('info-content').innerHTML = html;
   renderMap(el('info-map'), parts);
+  if (gridPoints.length) renderMap(el('grid-map'), parts, gridPoints);
 }
 
 // What VISOC's data timeline info section shows about a platform
@@ -1126,27 +1133,110 @@ function loadOpenLayers() {
 
 // A still map of where the buoy (or each buoy of a combined one) is. No
 // interactions and no controls: a picture to place it, not a map to explore.
-async function renderMap(container, buoys) {
+// Colours of the forecast grid points on the info map, in the order they are
+// numbered - none of them the buoys' coral
+const GRID_POINT_COLORS = ['rgb(82, 181, 217)', 'rgb(255, 213, 79)', 'rgb(179, 157, 219)', 'rgb(129, 199, 132)'];
+
+// The grid cells the open buoy's forecasts are read at (see
+// SourceErddapGriddap.nearestValidCell) - one per distinct cell, however many
+// models share it (the two 2.6 km WAVEWATCH III runs, and the winds read from
+// them, all use the same one). Only the models actually shown count. Each:
+// { latitude, longitude, distanceKm, from: <buoy id it stands in for>, models: [label], color, number }
+function forecastGridPoints() {
+  const points = new Map();
+  COLUMNS.forEach(column => {
+    const result = state.detail?.forecasts[column.id];
+    (result?.series ?? []).filter(series => series.usedFrom && series.cell).forEach(series => {
+      const { latitude, longitude, distanceKm } = series.cell;
+      const key = `${latitude},${longitude}`;
+      if (!points.has(key)) {
+        // A virtual buoy's forecasts are read where the real buoy behind
+        // that column is
+        const from = allBuoysProduct.componentBuoyId(state.detail.buoyId, column.code);
+        points.set(key, { latitude, longitude, distanceKm, from, models: [] });
+      }
+      const label = `${modelName(series.model, series.label)}${series.resolution ? ` (${series.resolution})` : ''}`;
+      if (!points.get(key).models.includes(label)) points.get(key).models.push(label);
+    });
+  });
+  return [...points.values()].map((point, index) => ({
+    ...point, number: index + 1, color: GRID_POINT_COLORS[index % GRID_POINT_COLORS.length],
+  }));
+}
+
+// What the numbered diamonds on the info map are
+function gridPointsLegendHTML(gridPoints) {
+  const usesApi = [...forecastProducts.values()].some(product => product.sources.some(source => source.api));
+  const items = gridPoints.map(point => {
+    const from = state.buoysById.get(point.from);
+    const distance = t('info.gridDistance', { km: point.distanceKm.toFixed(1), buoy: from?.name ?? point.from });
+    return `<li><span class="grid-marker" style="background: ${point.color}"><span>${point.number}</span></span>`
+      + `<span>${escapeHTML(point.models.join(', '))} <span class="info-note">· ${escapeHTML(distance)}</span></span></li>`;
+  }).join('');
+  // A map of its own, zoomed in on the buoy(s) and the points: they are a few
+  // hundred metres apart, which the main map - zoomed out to show the coast -
+  // would draw on top of each other
+  const map = items ? '<div class="info-map grid-map" id="grid-map"><span class="attribution">Imagery © Esri</span></div>' : '';
+  return `<div class="info-card grid-points"><h3>${escapeHTML(t('info.gridPoints'))}</h3>`
+    + `<p class="info-note">${escapeHTML(t('info.gridPointsNote'))}${usesApi ? ` ${escapeHTML(t('info.gridPointsApi'))}` : ''}</p>`
+    + map + (items ? `<ul>${items}</ul>` : `<p class="info-note">${escapeHTML(t('info.loading'))}</p>`) + '</div>';
+}
+
+// With `gridPoints` (see forecastGridPoints) it is the grid points' map
+// instead: they are drawn as numbered diamonds, each joined to the buoy it
+// stands in for by a dashed line, and the view is zoomed in on them rather
+// than out to the coast.
+async function renderMap(container, buoys, gridPoints = []) {
   const points = buoys.filter(buoy => buoy.latitude != undefined && buoy.longitude != undefined);
   if (!container || !points.length) return;
 
   const ol = await loadOpenLayers().catch(error => { console.error(error); });
   if (!ol || !container.isConnected) return;
 
+  const at = place => ol.proj.fromLonLat([place.longitude, place.latitude]);
   const features = points.map(buoy => new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([buoy.longitude, buoy.latitude])),
+    geometry: new ol.geom.Point(at(buoy)),
     name: buoy.id,
   }));
   const source = new ol.source.Vector({ features });
+
+  const gridFeatures = gridPoints.flatMap(point => {
+    const buoy = state.buoysById.get(point.from) ?? points[0];
+    return [
+      new ol.Feature({ geometry: new ol.geom.LineString([at(buoy), at(point)]), kind: 'link' }),
+      new ol.Feature({ geometry: new ol.geom.Point(at(point)), kind: 'grid', number: point.number, color: point.color }),
+    ];
+  });
+  const gridStyle = feature => feature.get('kind') === 'link'
+    ? new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'rgba(255, 255, 255, 0.85)', width: 1.5, lineDash: [4, 4] }) })
+    : new ol.style.Style({
+      image: new ol.style.RegularShape({
+        points: 4,
+        radius: 8,
+        angle: 0,
+        fill: new ol.style.Fill({ color: feature.get('color') }),
+        stroke: new ol.style.Stroke({ color: 'white', width: 1.5 }),
+      }),
+      text: new ol.style.Text({
+        text: String(feature.get('number')),
+        font: '700 10px Poppins, sans-serif',
+        fill: new ol.style.Fill({ color: 'rgb(15, 48, 98)' }),
+      }),
+    });
+
+  // On the grid points' map the buoys are smaller, and drawn under the
+  // points - they are the reference there, not the subject
   const style = feature => new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 7,
+      radius: gridPoints.length ? 5 : 7,
       fill: new ol.style.Fill({ color: 'rgb(255, 115, 105)' }),
       stroke: new ol.style.Stroke({ color: 'white', width: 2 }),
     }),
     text: new ol.style.Text({
       text: feature.get('name'),
-      offsetY: -16,
+      // Below the dot on the grid points' map, where the points often sit
+      // just above it
+      offsetY: gridPoints.length ? 14 : -16,
       font: '600 12px Poppins, sans-serif',
       fill: new ol.style.Fill({ color: 'white' }),
       stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.7)', width: 3 }),
@@ -1160,6 +1250,7 @@ async function renderMap(container, buoys) {
     layers: [
       new ol.layer.Tile({ source: new ol.source.XYZ({ url: BASEMAP_URL, maxZoom: 17 }) }),
       new ol.layer.Vector({ source, style }),
+      new ol.layer.Vector({ source: new ol.source.Vector({ features: gridFeatures }), style: gridStyle }),
     ],
     view: new ol.View({ center: ol.proj.fromLonLat([points[0].longitude, points[0].latitude]), zoom: 10 }),
   });
@@ -1170,6 +1261,11 @@ async function renderMap(container, buoys) {
   // 34 km out; MTARR, 51 km) zoom out until their coast is in the picture.
   // Web Mercator stretches distances by 1/cos(latitude), so km on the ground
   // are scaled into map units.
+  if (gridPoints.length) {
+    const extent = ol.extent.extend(source.getExtent().slice(), map.getLayers().item(2).getSource().getExtent());
+    map.getView().fit(extent, { padding: [40, 40, 40, 40], maxZoom: 15 });
+    return;
+  }
   const farthestKm = Math.max(0, ...points.map(buoy => buoy.distanceToCoast ?? 0));
   const groundToMap = 1 / Math.cos(points[0].latitude * Math.PI / 180);
   const margin = Math.max(MAP_MIN_MARGIN, (farthestKm * 1.2 + 4) * 1000 * groundToMap);

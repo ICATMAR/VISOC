@@ -373,6 +373,11 @@ a {
   font-size: 0.74rem;
 }
 
+.cell.half .value .decimals {
+  font-size: 0.8em;
+  font-weight: 400;
+}
+
 /* 'Air:', 'Water:' - like the gusts' and the maximum wave's second line */
 .part-label {
   font-size: 0.6rem;
@@ -796,6 +801,45 @@ a {
   font-size: 0.55rem;
   color: white;
   text-shadow: 0 0 3px black;
+}
+
+/* The forecast grid points under the info map: a numbered diamond each, the
+   same as on the map */
+.grid-map {
+  height: 12rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.grid-points ul {
+  list-style: none;
+  padding: 0;
+}
+
+.grid-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0.4rem 0;
+}
+
+.grid-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.2rem 0.15rem 0;
+  border: 1.5px solid white;
+  box-shadow: 0 0 0 1px rgba(var(--darkBlueRGB), 0.25);
+  transform: rotate(45deg);
+}
+
+.grid-marker span {
+  transform: rotate(-45deg);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--darkBlue);
 }
 
 .info-photos {
