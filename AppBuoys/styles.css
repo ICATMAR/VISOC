@@ -403,6 +403,11 @@ a {
   cursor: help;
 }
 
+/* In the list a forecast cell opens the buoy, like the rest of its row */
+#list-table .cell.forecast {
+  cursor: pointer;
+}
+
 .cell.forecast::after,
 .forecast-sample::after {
   content: '';

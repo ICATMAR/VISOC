@@ -478,11 +478,7 @@ function forecastAt(data, date, column) {
     const value = data[best.timestamp][code]?.value;
     if (value != undefined) values[code] = value;
   });
-  return {
-    values, date: new Date(best.timestamp), model: data[best.timestamp][column.code].model,
-    // The whole record, for the message a tap on the cell shows (forecastInfo)
-    record: { ...data[best.timestamp], [RECORD_TIME]: best.timestamp },
-  };
+  return { values, date: new Date(best.timestamp), model: data[best.timestamp][column.code].model };
 }
 
 // Latest readings of one buoy for the list. Any column without a recent
@@ -521,7 +517,7 @@ async function loadLatest(buoy) {
   await Promise.all(stale.map(async column => {
     const forecast = await getForecast(buoy.id, column);
     const values = forecastAt(forecast.data, now, column);
-    if (values) entry.columns[column.id] = { ...values, forecast: true, result: forecast };
+    if (values) entry.columns[column.id] = { ...values, forecast: true };
   }));
   if (stale.length) renderList();
 }
@@ -813,7 +809,7 @@ function cellHTML(column, values, { forecast = false, model, info, detailed = fa
     sub = escapeHTML(t('cell.gustValue', { value: `${gust.text} ${gust.unit}` }));
   }
 
-  let title = forecast ? ` title="${escapeHTML(t('cell.forecastTitle'))}" data-model="${escapeHTML(model ?? '')}"` : '';
+  let title = forecast ? ` title="${escapeHTML(t(list ? 'legend.forecast' : 'cell.forecastTitle'))}" data-model="${escapeHTML(model ?? '')}"` : '';
   if (info && !forecast) title = ` title="${escapeHTML(t('cell.measurementTitle'))}"`;
   if (info) title += ` data-info="${escapeHTML(info)}"`;
   const style = background ? ` style="background-color: ${background}"` : '';
@@ -853,9 +849,7 @@ function buoyRowHTML(buoy) {
   const cells = DISPLAY_COLUMNS.map(display => displayCellHTML(display, (column, half) => {
     if (!latest || latest.loading) return loadingCellHTML(half);
     const entry = latest.columns[column.id];
-    const info = entry?.forecast && entry.record
-      ? forecastInfo({ records: [entry.record], column, result: entry.result, buoyId: buoy.id }) : undefined;
-    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, info, list: true, half });
+    return cellHTML(column, entry?.values, { forecast: entry?.forecast, model: entry?.model, list: true, half });
   })).join('');
 
   return `<div class="row buoy-row" data-buoy="${escapeHTML(buoy.id)}" role="button" tabindex="0">`
@@ -1559,8 +1553,8 @@ function setupEvents() {
 
   el('list-table').addEventListener('click', event => {
     if (unitHeaderFrom(event)) return;
-    // A forecast value explains itself instead of opening the buoy
-    if (infoCellFrom(event) || forecastCellFrom(event)) return;
+    // Any cell of a row opens the buoy - forecasts included: their details
+    // are a tap away in the buoy view
     const row = event.target.closest('[data-buoy]');
     if (!row) return;
     const buoyId = row.dataset.buoy;
