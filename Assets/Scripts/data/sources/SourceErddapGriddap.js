@@ -170,7 +170,20 @@ class SourceErddapGriddap extends SourceErddap {
     const query = (await Promise.all(names.map(name => this.selectorFor(name, selectors)))).join(',');
     const url = `${this.baseUrl}/griddap/${this.dataset}.csv?${query}`;
 
-    const text = await this.fetchManager.fetch(this.proxied(url), DATA_TTL, DATA_TIMEOUT).then(res => res.text());
+    // The window was cut to what ERDDAP's own metadata says the dataset holds
+    // (startDate/endDate, from allDatasets - see SourceErddap.load), and that
+    // metadata stays the reference: it is not second-guessed from the data. So
+    // a 'no data' answer for a window inside it means the metadata is wrong -
+    // e.g. a new run loaded without the dataset's metadata being refreshed -
+    // and that is said once, plainly, instead of failing as a generic error.
+    const text = await this.fetchManager.fetch(this.proxied(url), DATA_TTL, DATA_TIMEOUT)
+      .then(res => res.text())
+      .catch(error => {
+        if (error.name !== 'HTTPError' || error.status !== 404) throw error;
+        this.reportInconsistentMetadata(from, to);
+        return undefined;
+      });
+    if (text == undefined) return [];
 
     const rows = {};
     SourceErddapGriddap.parseCSV(text).forEach(row => {
@@ -190,6 +203,20 @@ class SourceErddapGriddap extends SourceErddap {
       cell,
       rows,
     }];
+  }
+
+  // ERDDAP's metadata for this dataset and the data it serves disagree: a
+  // window inside the metadata's time range came back with no data. Logged
+  // once per dataset per session - every buoy runs into it the same way.
+  reportInconsistentMetadata(from, to) {
+    if (this.inconsistentMetadataReported) return;
+    this.inconsistentMetadataReported = true;
+    const range = date => date?.toISOString() ?? '?';
+    console.error(`${this.constructor.name}: the ERDDAP metadata of '${this.dataset}' is not correct. `
+      + `allDatasets/time_coverage say it holds data from ${range(this.startDate)} to ${range(this.endDate)}, `
+      + `but ERDDAP answers that there is no data from ${range(from)} to ${range(to)}, a window inside that range. `
+      + `The dataset's metadata is out of date with the data it serves (was a new run loaded without refreshing it?). `
+      + `No forecast is read from this dataset until its metadata is corrected on ${this.baseUrl}.`);
   }
 
   // The run this dataset holds, from its NC_GLOBAL attributes: the

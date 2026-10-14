@@ -400,7 +400,7 @@ const dataProducts = [
       {
         id: 'BCNS',
         name: 'Barcelona',
-        description: 'The wave data comes from the Port of Barcelona buoy (PBCN, Puertos del Estado), and the wind, water temperature and currents from the Somorrostro buoy (SOMO, ICATMAR and ICM-CSIC). The data is mixed this way because of the different availability of the two buoys: PBCN measures waves but no wind, and SOMO measures wind, water temperature and currents but no waves.',
+        description: 'The wave data comes from the Port of Barcelona buoy (PBCN, Puertos del Estado), and the wind, air and water temperature and currents from the Somorrostro buoy (SOMO, ICATMAR and ICM-CSIC). The data is mixed this way because of the different availability of the two buoys: PBCN measures waves but no wind, and SOMO measures wind, temperatures and currents but no waves.',
         // Where the virtual buoy is drawn and sorted - the wind and water
         // temperature are SOMO's
         positionFrom: 'SOMO',
@@ -412,7 +412,7 @@ const dataProducts = [
           },
           {
             buoyId: 'SOMO',
-            label: 'Wind, water temperature and currents',
+            label: 'Wind, air and water temperature and currents',
             default: true,
           },
         ],

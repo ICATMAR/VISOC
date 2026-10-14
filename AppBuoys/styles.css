@@ -339,6 +339,57 @@ a {
   color: rgba(var(--darkBlueRGB), 0.3);
 }
 
+/* The temperature cell, split in two side by side: the air on the left, the
+   water on the right. Each half is a cell of its own (colour, forecast mark,
+   message on a tap), with its label over its value, centred. */
+.cell.split {
+  flex-direction: row;
+  padding: 0;
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+.cell.half {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.25rem;
+}
+
+.cell.half .cell-main {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.2;
+}
+
+.cell.half .cell-main {
+  align-items: center;
+}
+
+.cell.half.right {
+  border-left: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.cell.half .value {
+  font-size: 0.74rem;
+}
+
+.cell.half .value .decimals {
+  font-size: 0.8em;
+  font-weight: 400;
+}
+
+/* 'Air:', 'Water:' - like the gusts' and the maximum wave's second line */
+.part-label {
+  font-size: 0.6rem;
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.cell.half.empty .part-label {
+  opacity: 1;
+}
+
 /* A value that comes from a model rather than a measurement: a triangle in
    its top-right corner, wherever it is shown. The cell's colour is left
    alone, so the colour scale reads the same for both. Tapping one says which
@@ -350,6 +401,11 @@ a {
 
 .cell.forecast {
   cursor: help;
+}
+
+/* In the list a forecast cell opens the buoy, like the rest of its row */
+#list-table .cell.forecast {
+  cursor: pointer;
 }
 
 .cell.forecast::after,
@@ -750,6 +806,45 @@ a {
   font-size: 0.55rem;
   color: white;
   text-shadow: 0 0 3px black;
+}
+
+/* The forecast grid points under the info map: a numbered diamond each, the
+   same as on the map */
+.grid-map {
+  height: 12rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.grid-points ul {
+  list-style: none;
+  padding: 0;
+}
+
+.grid-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0.4rem 0;
+}
+
+.grid-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.2rem 0.15rem 0;
+  border: 1.5px solid white;
+  box-shadow: 0 0 0 1px rgba(var(--darkBlueRGB), 0.25);
+  transform: rotate(45deg);
+}
+
+.grid-marker span {
+  transform: rotate(-45deg);
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--darkBlue);
 }
 
 .info-photos {

@@ -43,7 +43,11 @@ const en = {
   // Columns and units
   'column.waves': 'Waves',
   'column.wind': 'Wind',
-  'column.temperature': 'Water',
+  'column.temperature': 'Temp.',
+  'column.air': 'Air temperature',
+  'column.water': 'Water temperature',
+  'part.air': 'Air',
+  'part.water': 'Water',
   'column.currents': 'Current',
   'header.buoy': 'Buoy',
   'header.time': 'Time',
@@ -142,6 +146,10 @@ const en = {
   'info.noForecast': 'no forecast available for this buoy',
   'info.fromTo': 'from {from} to {to}',
   'info.nearestSea': 'nearest sea point {km} km away',
+  'info.gridPoints': 'Forecast grid points',
+  'info.gridPointsNote': "Where the forecasts are read: the nearest sea cell of each model's grid, numbered on the map.",
+  'info.gridPointsApi': "Open-Meteo forecasts are given for the buoy's own position.",
+  'info.gridDistance': '{km} km from {buoy}',
   'info.institutions': 'Institutions',
   'join.and': ' and ',
 
@@ -159,6 +167,7 @@ const en = {
   'variable.VHM0': 'Spectral significant wave height (Hm0)',
   'variable.WSPD': 'Horizontal wind speed',
   'variable.TEMP': 'Sea temperature',
+  'variable.DRYT': 'Air temperature',
   'variable.HCSP': 'Horizontal current speed',
 
   // Forecast models, by the catalogue's model id (AROME-HD and ECMWF-IFS025
@@ -171,9 +180,9 @@ const en = {
   'model.ROMS': 'ROMS sea surface forecast',
 
   // Virtual buoys (see the catalogue's 'Aggregated buoys')
-  'aggregation.BCNS.description': 'The wave data comes from the Port of Barcelona buoy (PBCN, Puertos del Estado), and the wind, water temperature and currents from the Somorrostro buoy (SOMO, ICATMAR and ICM-CSIC). The data is mixed this way because of the different availability of the two buoys: PBCN measures waves but no wind, and SOMO measures wind, water temperature and currents but no waves.',
+  'aggregation.BCNS.description': 'The wave data comes from the Port of Barcelona buoy (PBCN, Puertos del Estado), and the wind, air and water temperature and currents from the Somorrostro buoy (SOMO, ICATMAR and ICM-CSIC). The data is mixed this way because of the different availability of the two buoys: PBCN measures waves but no wind, and SOMO measures wind, temperatures and currents but no waves.',
   'aggregation.BCNS.PBCN': 'Waves',
-  'aggregation.BCNS.SOMO': 'Wind, water temperature and currents',
+  'aggregation.BCNS.SOMO': 'Wind, air and water temperature and currents',
 
   // Menu
   'menu.title': 'Settings',
@@ -221,7 +230,11 @@ const ca = {
 
   'column.waves': 'Onades',
   'column.wind': 'Vent',
-  'column.temperature': 'Aigua',
+  'column.temperature': 'Temp.',
+  'column.air': "Temperatura de l'aire",
+  'column.water': "Temperatura de l'aigua",
+  'part.air': 'Aire',
+  'part.water': 'Aigua',
   'column.currents': 'Corrent',
   'header.buoy': 'Boia',
   'header.time': 'Hora',
@@ -314,6 +327,10 @@ const ca = {
   'info.noForecast': 'no hi ha cap predicció disponible per a aquesta boia',
   'info.fromTo': 'de {from} a {to}',
   'info.nearestSea': 'punt de mar més proper a {km} km',
+  'info.gridPoints': 'Punts de malla de les prediccions',
+  'info.gridPointsNote': 'On es llegeixen les prediccions: la cel·la de mar més propera de la malla de cada model, numerada al mapa.',
+  'info.gridPointsApi': "Les prediccions d'Open-Meteo es donen per a la posició de la boia.",
+  'info.gridDistance': 'a {km} km de {buoy}',
   'info.institutions': 'Institucions',
   'join.and': ' i ',
 
@@ -329,6 +346,7 @@ const ca = {
   'variable.VHM0': "Alçada significant d'onada espectral (Hm0)",
   'variable.WSPD': 'Velocitat horitzontal del vent',
   'variable.TEMP': 'Temperatura del mar',
+  'variable.DRYT': "Temperatura de l'aire",
   'variable.HCSP': 'Velocitat horitzontal del corrent',
 
   'model.WW3-AROME': 'WAVEWATCH III forçat amb AROME',
@@ -338,9 +356,9 @@ const ca = {
   'model.ECMWF-ERDDAP': 'ECMWF (forçament de WAVEWATCH III)',
   'model.ROMS': 'Predicció de superfície marina ROMS',
 
-  'aggregation.BCNS.description': "Les dades d'onades provenen de la boia del Port de Barcelona (PBCN, Puertos del Estado), i les de vent, temperatura de l'aigua i corrents, de la boia Somorrostro (SOMO, ICATMAR i ICM-CSIC). Les dades es combinen d'aquesta manera per la diferent disponibilitat de les dues boies: PBCN mesura onades però no vent, i SOMO mesura vent, temperatura de l'aigua i corrents però no onades.",
+  'aggregation.BCNS.description': "Les dades d'onades provenen de la boia del Port de Barcelona (PBCN, Puertos del Estado), i les de vent, temperatura de l'aire i de l'aigua i corrents, de la boia Somorrostro (SOMO, ICATMAR i ICM-CSIC). Les dades es combinen d'aquesta manera per la diferent disponibilitat de les dues boies: PBCN mesura onades però no vent, i SOMO mesura vent, temperatures i corrents però no onades.",
   'aggregation.BCNS.PBCN': 'Onades',
-  'aggregation.BCNS.SOMO': "Vent, temperatura de l'aigua i corrents",
+  'aggregation.BCNS.SOMO': "Vent, temperatura de l'aire i de l'aigua i corrents",
 
   'menu.title': 'Configuració',
   'menu.language': 'Idioma',
@@ -387,7 +405,11 @@ const es = {
 
   'column.waves': 'Oleaje',
   'column.wind': 'Viento',
-  'column.temperature': 'Agua',
+  'column.temperature': 'Temp.',
+  'column.air': 'Temperatura del aire',
+  'column.water': 'Temperatura del agua',
+  'part.air': 'Aire',
+  'part.water': 'Agua',
   'column.currents': 'Corriente',
   'header.buoy': 'Boya',
   'header.time': 'Hora',
@@ -480,6 +502,10 @@ const es = {
   'info.noForecast': 'no hay ninguna predicción disponible para esta boya',
   'info.fromTo': 'de {from} a {to}',
   'info.nearestSea': 'punto de mar más cercano a {km} km',
+  'info.gridPoints': 'Puntos de malla de las predicciones',
+  'info.gridPointsNote': 'Dónde se leen las predicciones: la celda de mar más cercana de la malla de cada modelo, numerada en el mapa.',
+  'info.gridPointsApi': 'Las predicciones de Open-Meteo se dan para la posición de la boya.',
+  'info.gridDistance': 'a {km} km de {buoy}',
   'info.institutions': 'Instituciones',
   'join.and': ' y ',
 
@@ -495,6 +521,7 @@ const es = {
   'variable.VHM0': 'Altura significativa de ola espectral (Hm0)',
   'variable.WSPD': 'Velocidad horizontal del viento',
   'variable.TEMP': 'Temperatura del mar',
+  'variable.DRYT': 'Temperatura del aire',
   'variable.HCSP': 'Velocidad horizontal de la corriente',
 
   'model.WW3-AROME': 'WAVEWATCH III forzado con AROME',
@@ -504,9 +531,9 @@ const es = {
   'model.ECMWF-ERDDAP': 'ECMWF (forzamiento de WAVEWATCH III)',
   'model.ROMS': 'Predicción de superficie marina ROMS',
 
-  'aggregation.BCNS.description': 'Los datos de oleaje proceden de la boya del Puerto de Barcelona (PBCN, Puertos del Estado), y los de viento, temperatura del agua y corrientes, de la boya Somorrostro (SOMO, ICATMAR e ICM-CSIC). Los datos se combinan de esta manera por la distinta disponibilidad de las dos boyas: PBCN mide oleaje pero no viento, y SOMO mide viento, temperatura del agua y corrientes pero no oleaje.',
+  'aggregation.BCNS.description': 'Los datos de oleaje proceden de la boya del Puerto de Barcelona (PBCN, Puertos del Estado), y los de viento, temperatura del aire y del agua y corrientes, de la boya Somorrostro (SOMO, ICATMAR e ICM-CSIC). Los datos se combinan de esta manera por la distinta disponibilidad de las dos boyas: PBCN mide oleaje pero no viento, y SOMO mide viento, temperaturas y corrientes pero no oleaje.',
   'aggregation.BCNS.PBCN': 'Oleaje',
-  'aggregation.BCNS.SOMO': 'Viento, temperatura del agua y corrientes',
+  'aggregation.BCNS.SOMO': 'Viento, temperatura del aire y del agua y corrientes',
 
   'menu.title': 'Configuración',
   'menu.language': 'Idioma',
@@ -553,7 +580,11 @@ const fr = {
 
   'column.waves': 'Vagues',
   'column.wind': 'Vent',
-  'column.temperature': 'Eau',
+  'column.temperature': 'Temp.',
+  'column.air': "Température de l'air",
+  'column.water': "Température de l'eau",
+  'part.air': 'Air',
+  'part.water': 'Eau',
   'column.currents': 'Courant',
   'header.buoy': 'Bouée',
   'header.time': 'Heure',
@@ -646,6 +677,10 @@ const fr = {
   'info.noForecast': "aucune prévision n'est disponible pour cette bouée",
   'info.fromTo': 'du {from} au {to}',
   'info.nearestSea': 'point de mer le plus proche à {km} km',
+  'info.gridPoints': 'Points de grille des prévisions',
+  'info.gridPointsNote': 'Où les prévisions sont lues : la maille de mer la plus proche de la grille de chaque modèle, numérotée sur la carte.',
+  'info.gridPointsApi': "Les prévisions d'Open-Meteo sont données pour la position de la bouée.",
+  'info.gridDistance': 'à {km} km de {buoy}',
   'info.institutions': 'Institutions',
   'join.and': ' et ',
 
@@ -661,6 +696,7 @@ const fr = {
   'variable.VHM0': 'Hauteur significative spectrale des vagues (Hm0)',
   'variable.WSPD': 'Vitesse horizontale du vent',
   'variable.TEMP': 'Température de la mer',
+  'variable.DRYT': "Température de l'air",
   'variable.HCSP': 'Vitesse horizontale du courant',
 
   'model.WW3-AROME': 'WAVEWATCH III forcé par AROME',
@@ -670,9 +706,9 @@ const fr = {
   'model.ECMWF-ERDDAP': 'ECMWF (forçage de WAVEWATCH III)',
   'model.ROMS': 'Prévision de surface de la mer ROMS',
 
-  'aggregation.BCNS.description': "Les données de vagues proviennent de la bouée du Port de Barcelone (PBCN, Puertos del Estado), et celles de vent, de température de l'eau et de courants, de la bouée Somorrostro (SOMO, ICATMAR et ICM-CSIC). Les données sont combinées ainsi en raison de la disponibilité différente des deux bouées : PBCN mesure les vagues mais pas le vent, et SOMO mesure le vent, la température de l'eau et les courants mais pas les vagues.",
+  'aggregation.BCNS.description': "Les données de vagues proviennent de la bouée du Port de Barcelone (PBCN, Puertos del Estado), et celles de vent, de température de l'air et de l'eau et de courants, de la bouée Somorrostro (SOMO, ICATMAR et ICM-CSIC). Les données sont combinées ainsi en raison de la disponibilité différente des deux bouées : PBCN mesure les vagues mais pas le vent, et SOMO mesure le vent, les températures et les courants mais pas les vagues.",
   'aggregation.BCNS.PBCN': 'Vagues',
-  'aggregation.BCNS.SOMO': "Vent, température de l'eau et courants",
+  'aggregation.BCNS.SOMO': "Vent, température de l'air et de l'eau et courants",
 
   'menu.title': 'Paramètres',
   'menu.language': 'Langue',
