@@ -507,17 +507,24 @@ async function loadLatest(buoy) {
     const timestamps = Object.keys(observations.data).sort();
     if (timestamps.length) entry.lastUpdate = new Date(timestamps[timestamps.length - 1]);
   }
-  state.latest.set(buoy.id, entry);
-  renderList();
-
+  // A reading older than STALE_HOURS is not "now" any more: it gives way to
+  // the forecast for the current hour, or - where there is none (the air
+  // temperature has no forecast at all) - to nothing. Showing it anyway, with
+  // no mark and no age, would pass an 18-hour-old value off as current.
   const stale = COLUMNS.filter(column => {
     const latest = entry.columns[column.id];
     return !latest || now - latest.date > STALE_HOURS * HOUR;
   });
-  await Promise.all(stale.map(async column => {
+  stale.filter(column => !column.forecast).forEach(column => { delete entry.columns[column.id]; });
+
+  state.latest.set(buoy.id, entry);
+  renderList();
+
+  await Promise.all(stale.filter(column => column.forecast).map(async column => {
     const forecast = await getForecast(buoy.id, column);
     const values = forecastAt(forecast.data, now, column);
     if (values) entry.columns[column.id] = { ...values, forecast: true };
+    else delete entry.columns[column.id];
   }));
   if (stale.length) renderList();
 }
