@@ -1,4 +1,6 @@
 import Source from './Source.js';
+import VectorField from '../VectorField.js';
+import { parseTuv } from '../parsers/tuv.js';
 
 const GITHUB_API_URL = 'https://api.github.com/repos';
 const REPO = 'ICATMAR/data';
@@ -70,6 +72,21 @@ const SCAL_METADATA = {
   },
 };
 
+// TOTALS MAPS: the network's hourly totals (.tuv) in the same repository,
+// read straight off raw.githubusercontent.com by file name - which needs no
+// API request (and so isn't held to the API's 60 requests an hour), and is
+// where the newest hours land first, before either ERDDAP has them. About
+// 700 KB a file, so only worth it for those newest hours (see
+// DPHFRTotals.getField, which tries the ERDDAPs first).
+const RAW_URL = 'https://raw.githubusercontent.com';
+const TOTALS_PATH = 'observational/hf_radar/currents/L3/tuv';
+const TOTALS_TTL = 60;     // minutes - a published hour doesn't change
+const EXISTS_TTL_MS = 5 * 60 * 1000;
+// How many hours back from now getLatestTime() looks for a file
+const LATEST_LOOKBACK_HOURS = 6;
+// How many of the newest hours getAvailability() checks at most
+const AVAILABILITY_MAX_HOURS = 12;
+
 // How long load()'s repo-wide tree is cached for - short, since its only
 // purpose is finding out how fresh each station's data currently is.
 const TREE_TTL_MINUTES = 10;
@@ -88,9 +105,16 @@ function pad(n) {
 // SourceFileHFRRadials already does that for locally served files.
 class SourceGithubHFR extends Source {
 
-  constructor({ fetchManager, src }) {
+  // `provider`: on the HFR totals product, which of the HFR dashboard's
+  // choices this source can stand in for with its totals maps (see
+  // getField). `label`: how it is named when it does.
+  constructor({ fetchManager, src, provider, label }) {
     super({ fetchManager });
     this.src = src;
+    this.provider = provider;
+    this.label = label ?? 'GitHub';
+    this.totalsMaps = new Map();   // '<ISO hour>' -> Promise<VectorField | null>
+    this.totalsExists = new Map(); // '<ISO hour>' -> Promise<boolean>
     this.repo = REPO; // exposed so DataProducts.vue can label/link this source, same as SourceErddap's `dataset`
 
     // One entry per station-month directory request, keyed '<station>/<year>/<month>'.
@@ -293,6 +317,74 @@ class SourceGithubHFR extends Source {
     return Object.fromEntries(entries);
   }
 
+
+  // TOTALS MAPS (see TOTALS_PATH)
+
+  totalsUrl(hour) {
+    const y = hour.getUTCFullYear(), m = pad(hour.getUTCMonth() + 1), d = pad(hour.getUTCDate()), h = pad(hour.getUTCHours());
+    return `${RAW_URL}/${REPO}/${BRANCH}/${TOTALS_PATH}/${y}/${m}/TOTL_CATS_${y}_${m}_${d}_${h}00.tuv`;
+  }
+
+  // The totals map for the hour `time` (files are on the hour), or null if
+  // the repository has none. Points the processing flagged (VFLG != 0) are
+  // left out; VELU/VELV are in cm/s.
+  getField(time) {
+    const hour = new Date(Math.round(time.getTime() / 3600000) * 3600000);
+    const key = hour.toISOString();
+    if (!this.totalsMaps.has(key)) {
+      this.totalsMaps.set(key, (async () => {
+        let text;
+        try {
+          text = await this.fetchManager.fetch(this.totalsUrl(hour), TOTALS_TTL, 60).then(res => res.text());
+        } catch (error) {
+          if (error.name === 'HTTPError' && error.status === 404) return null;
+          throw error;
+        }
+        const { rows } = parseTuv(text);
+        const points = rows
+          .filter(row => (row.VFLG ?? 0) === 0 && Number.isFinite(row.VELU) && Number.isFinite(row.VELV))
+          .map(row => ({ lon: row.LOND, lat: row.LATD, u: row.VELU / 100, v: row.VELV / 100 }));
+        return VectorField.fromPoints(points, hour, 'ICATMAR');
+      })().catch(error => { this.totalsMaps.delete(key); throw error; }));
+    }
+    return this.totalsMaps.get(key);
+  }
+
+  // Whether the repository has the hour's totals file - a HEAD request, so
+  // asking costs nothing like the file itself
+  totalsExist(hour) {
+    const key = hour.toISOString();
+    const cached = this.totalsExists.get(key);
+    if (cached && Date.now() - cached.at < EXISTS_TTL_MS) return cached.promise;
+    const promise = fetch(this.totalsUrl(hour), { method: 'HEAD' }).then(res => res.ok).catch(() => false);
+    this.totalsExists.set(key, { promise, at: Date.now() });
+    return promise;
+  }
+
+  // The newest hour with a totals file, looking back LATEST_LOOKBACK_HOURS
+  async getLatestTime() {
+    const now = new Date();
+    now.setUTCMinutes(0, 0, 0);
+    const hours = Array.from({ length: LATEST_LOOKBACK_HOURS + 1 }, (_, i) => new Date(now.getTime() - i * 3600000));
+    const exists = await Promise.all(hours.map(hour => this.totalsExist(hour)));
+    return hours.find((hour, i) => exists[i]);
+  }
+
+  // Which hours have a totals file, from `after` (exclusive) to now - only
+  // the newest few (AVAILABILITY_MAX_HOURS), the ones the ERDDAPs don't have
+  // yet. A file's points aren't counted (it would mean downloading it), so
+  // every hour found is a full one: [{ network, hours: { '<ISO hour>': 1 } }]
+  async getAvailability(bbox, startDate, after) {
+    const now = new Date();
+    now.setUTCMinutes(0, 0, 0);
+    const from = Math.max(startDate.getTime(), (after?.getTime() ?? 0) + 3600000, now.getTime() - (AVAILABILITY_MAX_HOURS - 1) * 3600000);
+    const hours = [];
+    for (let t = from; t <= now.getTime(); t += 3600000) hours.push(new Date(t));
+    const exists = await Promise.all(hours.map(hour => this.totalsExist(hour)));
+    const found = {};
+    hours.forEach((hour, i) => { if (exists[i]) found[hour.toISOString()] = 1; });
+    return [{ network: 'ICATMAR', hours: found }];
+  }
 }
 
 export default SourceGithubHFR;

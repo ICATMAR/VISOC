@@ -68,6 +68,18 @@ class GUIManager {
   hfrSource = 'ICATMAR';
   // Buoys can be overlaid on the HFR dashboard (bottom-right toggle).
   hfrShowBuoys = false;
+  // What the currents layer draws (bottom-right toggles): moving particles,
+  // and/or the totals' grid points - where the measurements are
+  hfrShowParticles = true;
+  hfrShowGridPoints = false;
+  // What the currents layer is showing, for the bottom-right panel to report:
+  // { state: 'loading' | 'ok' | 'none', time, label }
+  hfrFieldStatus = { state: 'loading' };
+  // Which hours have maps, one row per network in view, for the bottom
+  // timeline to draw: [{ network, hours: { '<ISO hour>': count } }]
+  hfrAvailability = [];
+  // Drifters can be overlaid on the HFR dashboard (bottom-right toggle)
+  hfrShowDrifters = false;
 
   // Opening a platform, from its map marker or the menu's platform list.
   // Inside the platform's own dashboard (hfr, buoys) it stays there and opens

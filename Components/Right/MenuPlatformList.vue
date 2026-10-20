@@ -2,28 +2,41 @@
   <!-- Every platform of the current dashboard, north to south. A click opens
        it the same way its map marker does (GUIManager.selectPlatform). -->
   <div class="platform-list" v-if="dashboardId">
-    <!-- HF radar: name, id, last report, then valid points in its latest hour -->
+    <!-- HF radar: name, id, last report, then valid points in its latest hour.
+         On the EU HFR Node, grouped by network: a header per network that
+         folds its stations out (see hfrItems). -->
     <template v-if="dashboardId === 'hfr'">
-      <div class="dashboard-section-text">{{ $t('HF radar stations') }}</div>
-      <div class="platform-row clickable" v-for="platform in rows" :key="platform.id"
-        :class="{ 'platform-row-selected': $gui.isPlatformSelected(dashboardId, platform.id) }"
-        @click="select(platform)">
-        <div class="platform-row-head">
-          <div class="pd-status-dot" :class="platform.status"></div>
-          <span class="platform-name">{{ platform.name }}</span>
-          <span class="platform-id">{{ platform.id }}</span>
-          <span class="platform-updated">{{ platform.updated }}</span>
+      <div class="dashboard-section-text">{{ $t($gui.hfrSource === 'EU' ? 'HF radar networks' : 'HF radar stations') }}</div>
+      <template v-for="item in hfrItems" :key="item.key">
+        <!-- Network: code · number of stations · status · last report -->
+        <div v-if="item.kind === 'network'" class="network-header clickable" @click="toggleNetwork(item.network)">
+          <span class="platform-name">{{ item.name }}</span>
+          <span class="platform-id">{{ item.count }} {{ $t(item.count === 1 ? 'station' : 'stations') }}</span>
+          <div class="pd-status-dot" :class="item.status"></div>
+          <span class="platform-updated">{{ item.updated }}</span>
+          <i class="fa fa-angle-down network-caret" :class="{ 'network-caret-open': item.isOpen }"></i>
         </div>
-        <div class="platform-row-data">
-          <span class="platform-pending" v-if="isLoading && validPoints[platform.id] === undefined">
-            <span class="platform-loading spinner-border"></span>{{ $t('Loading') }}
-          </span>
-          <span class="platform-reading" v-else-if="validPoints[platform.id] != null">
-            {{ validPoints[platform.id] }} {{ $t('valid points') }}
-          </span>
-          <span class="platform-no-data" v-else>{{ $t('No data available') }}</span>
+        <!-- Station -->
+        <div v-else class="platform-row clickable" :class="{ 'platform-row-selected': $gui.isPlatformSelected(dashboardId, item.id), 'platform-row-nested': item.isNested }"
+          @click="select(item)">
+          <div class="platform-row-head">
+            <div class="pd-status-dot" :class="item.status"></div>
+            <span class="platform-name">{{ item.name }}</span>
+            <span class="platform-id" v-if="item.name !== item.id">{{ item.id }}</span>
+            <span class="platform-updated">{{ item.updated }}</span>
+          </div>
+          <!-- Valid points are only counted for ICATMAR's own stations -->
+          <div class="platform-row-data" v-if="item.isICATMAR">
+            <span class="platform-pending" v-if="isLoading && validPoints[item.id] === undefined">
+              <span class="platform-loading spinner-border"></span>{{ $t('Loading') }}
+            </span>
+            <span class="platform-reading" v-else-if="validPoints[item.id] != null">
+              {{ validPoints[item.id] }} {{ $t('valid points') }}
+            </span>
+            <span class="platform-no-data" v-else>{{ $t('No data available') }}</span>
+          </div>
         </div>
-      </div>
+      </template>
     </template>
 
     <!-- Buoys: a table, one line per buoy. The header names each column and
@@ -97,6 +110,8 @@ export default {
       validPoints: {},  // HFR station id -> count in its latest hour (null: none)
       readings: {},     // buoy id -> { code: value } latest per code
       isLoading: false,
+      openNetworks: {}, // EU HFR Node: network -> folded out
+      viewBbox: null,   // [minLon, minLat, maxLon, maxLat] of the main map
     }
   },
   methods: {
@@ -214,12 +229,42 @@ export default {
       const hours = (Date.now() - new Date(endDate).getTime()) / 3600000;
       if (hours < 1) return Math.max(1, Math.floor(hours * 60)) + ' ' + this.$t('min ago');
       if (hours < 24) return Math.floor(hours) + this.$t('h ago');
-      return Math.floor(hours / 24) + ' ' + this.$t('days ago');
+      const days = Math.floor(hours / 24);
+      return days + ' ' + this.$t(days === 1 ? 'day ago' : 'days ago');
+    },
+    // What the main map shows, kept up to date while the list is open
+    trackView() {
+      const map = this.$gui.olMap;
+      if (!map) return;
+      const update = () => {
+        const extent = map.getView().calculateExtent(map.getSize());
+        this.viewBbox = ol.proj.transformExtent(extent, 'EPSG:3857', 'EPSG:4326');
+      };
+      if (!this.onMoveEnd) {
+        this.onMoveEnd = update;
+        map.on('moveend', this.onMoveEnd);
+      }
+      update();
+    },
+    // A station is in view if it is, or if what its radar covers is
+    isInView(station) {
+      const bbox = this.viewBbox;
+      if (!bbox) return true;
+      const [minLon, minLat, maxLon, maxLat] = bbox;
+      if (station.longitude >= minLon && station.longitude <= maxLon && station.latitude >= minLat && station.latitude <= maxLat) return true;
+      const c = station.coverage;
+      return !!c && c.minLon <= maxLon && c.maxLon >= minLon && c.minLat <= maxLat && c.maxLat >= minLat;
+    },
+    toggleNetwork(network) {
+      this.openNetworks = { ...this.openNetworks, [network]: !this.openNetworks[network] };
     },
     select(platform) {
       this.$gui.selectPlatform(this.dashboardId, platform.id);
       this.$nextTick(() => this.$gui.centerMainMapOn(platform.longitude, platform.latitude));
     },
+  },
+  beforeUnmount() {
+    if (this.onMoveEnd) this.$gui.olMap?.un('moveend', this.onMoveEnd);
   },
   computed: {
     buoyColumns() { return BUOY_COLUMNS; },
@@ -232,11 +277,44 @@ export default {
       const platforms = this.dashboardId === 'hfr'
         ? this.stations
           .filter(s => this.$gui.hfrSource === 'EU' || s.metadata?.network === 'HFR-ICATMAR')
-          .map(s => ({ id: s.id, name: s.name, latitude: s.latitude, longitude: s.longitude, endDate: s.metadata?.time_coverage_end }))
+          // Stations of other networks only have a code
+          .map(s => ({ id: s.id, name: s.name ?? s.id, latitude: s.latitude, longitude: s.longitude, endDate: s.metadata?.time_coverage_end,
+            coverage: s.coverage, network: s.metadata?.network ?? '', isICATMAR: s.metadata?.network === 'HFR-ICATMAR' }))
         : this.buoys.map(b => ({ id: b.id, name: b.name, latitude: b.latitude, longitude: b.longitude, endDate: b.endDate }));
       return platforms
         .map(p => ({ ...p, status: this.status(p.endDate), updated: this.timeAgo(p.endDate) }))
         .sort((a, b) => b.latitude - a.latitude);
+    },
+    // The HF radar list as one flat run of items. With ICATMAR, its stations.
+    // On the EU HFR Node, a header per network - code, how many stations,
+    // the status and last report of its freshest one - followed by its
+    // stations when folded out. Networks north to south by their stations'
+    // middle, stations north to south within.
+    hfrItems() {
+      const stations = this.rows.map(row => ({ ...row, kind: 'station', key: `${row.network}-${row.id}` }));
+      if (this.$gui.hfrSource !== 'EU') return stations;
+      // Only the networks the map shows: one of its stations, or its coverage, in view
+      const visible = new Set(stations.filter(station => this.isInView(station)).map(station => station.network));
+      const groups = new Map();
+      stations.filter(station => visible.has(station.network)).forEach(station => {
+        if (!groups.has(station.network)) groups.set(station.network, []);
+        groups.get(station.network).push(station);
+      });
+      const items = [];
+      [...groups.entries()]
+        .map(([network, members]) => ({ network, members, latitude: members.reduce((sum, m) => sum + m.latitude, 0) / members.length }))
+        .sort((a, b) => b.latitude - a.latitude)
+        .forEach(({ network, members }) => {
+          const latest = members.map(m => m.endDate).filter(Boolean).sort().pop();
+          const isOpen = !!this.openNetworks[network];
+          items.push({
+            kind: 'network', key: `network-${network}`, network, isOpen,
+            name: network.replace(/^HFR-/, '') || this.$t('Unknown network'),
+            count: members.length, status: this.status(latest), updated: this.timeAgo(latest),
+          });
+          if (isOpen) items.push(...members.map(m => ({ ...m, isNested: true })));
+        });
+      return items;
     },
     shouldLoad() {
       return this.$gui.isMenuOpen && this.dashboardId != null ? this.dashboardId : null;
@@ -246,7 +324,7 @@ export default {
     shouldLoad: {
       immediate: true,
       handler(dashboardId) {
-        if (dashboardId) this.load();
+        if (dashboardId) { this.trackView(); this.load(); }
       },
     },
   },
@@ -287,6 +365,41 @@ export default {
 }
 .platform-row-selected {
   background: rgba(var(--redRGB), 0.5);
+}
+
+/* EU HFR Node: a network's header, its stations folded out below it */
+.network-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.network-header:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Status and last report together on the right, as on a station row */
+.network-header .pd-status-dot {
+  margin-left: auto;
+}
+.network-header .platform-updated {
+  margin-left: 0;
+}
+
+.network-caret {
+  transition: rotate 0.2s;
+}
+.network-caret-open {
+  rotate: 180deg;
+}
+
+.platform-row-nested {
+  margin-left: 14px;
 }
 
 .platform-row-head {

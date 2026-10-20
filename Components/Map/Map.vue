@@ -8,6 +8,9 @@
   <MapOverlayHFRStations></MapOverlayHFRStations>
   <MapOverlayBuoys></MapOverlayBuoys>
   <!-- <MapOverlayDrifters></MapOverlayDrifters> -->
+  <!-- HF radar currents, on the HFR dashboard only -->
+  <MapLayerHFRCurrents v-if="$gui.selectedDashboard === 'hfr'"></MapLayerHFRCurrents>
+  <MapOverlayHFRDrifters v-if="$gui.selectedDashboard === 'hfr' && $gui.hfrShowDrifters"></MapOverlayHFRDrifters>
   <!-- Short screens: the selected buoy's circle arrows -->
   <MapOverlayPlatformArrows></MapOverlayPlatformArrows>
 </template>
@@ -20,6 +23,8 @@ import MapOverlayMockup from './MapOverlayMockup.vue';
 import MapOverlayBuoys from './MapOverlayBuoys.vue';
 import MapOverlayDrifters from './MapOverlayDrifters.vue';
 import MapOverlayPlatformArrows from './MapOverlayPlatformArrows.vue';
+import MapLayerHFRCurrents from './MapLayerHFRCurrents.vue';
+import MapOverlayHFRDrifters from './MapOverlayHFRDrifters.vue';
 
 export default {
   name: "Map",
@@ -44,7 +49,11 @@ export default {
         zoom: 8
       })
     });
-    this.$gui.olMap = this.map;
+    // markRaw: GUIManager is reactive, and without it every read of olMap
+    // would hand back the map wrapped in a Vue proxy. OpenLayers compares
+    // layers and overlays by identity, so through a proxy removeLayer() finds
+    // nothing to remove (and every call pays for the proxy).
+    this.$gui.olMap = Vue.markRaw(this.map);
   },
   methods: {
     onDragOver(e) {
@@ -64,6 +73,8 @@ export default {
     MapOverlayBuoys,
     MapOverlayDrifters,
     MapOverlayPlatformArrows,
+    MapLayerHFRCurrents,
+    MapOverlayHFRDrifters,
   }
 }
 

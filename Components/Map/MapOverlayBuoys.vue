@@ -5,14 +5,24 @@
 
     <!-- Platform icon -->
     <!-- v-show, not v-if: OpenLayers holds on to each element (see createOverlays) -->
-    <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id" v-show="isVisible">
-      <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy), offline: buoyStatus(buoy) === 'offline', loading: buoyStatus(buoy) === 'loading' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
-      <!-- Status indicator -->
-      <div class="platform-status-indicator" :class="buoyStatus(buoy)" v-if="buoyStatus(buoy) != 'offline'"></div>
-      <!-- ICATMAR marker - only for ICATMAR's own buoys -->
-      <div class="platform-marker-indicator" v-if="isICATMARBuoy(buoy)">
-        <img :src="icatmarLogoURL" alt="">
-      </div>
+    <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id"
+      v-show="isVisible && (!showsCurrents || currents[buoy.id])">
+      <!-- On the HFR dashboard: the current the buoy measured at the selected
+           hour, to set against the radar's, instead of its icon -->
+      <template v-if="showsCurrents">
+        <CurrentChip v-if="currents[buoy.id]" class="clickable" @click="platformClicked($event, buoy)"
+          :speed="currents[buoy.id].speed" :direction="currents[buoy.id].direction"
+          :label="buoy.name" :time="currents[buoy.id].time"></CurrentChip>
+      </template>
+      <template v-else>
+        <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy), offline: buoyStatus(buoy) === 'offline', loading: buoyStatus(buoy) === 'loading' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
+        <!-- Status indicator -->
+        <div class="platform-status-indicator" :class="buoyStatus(buoy)" v-if="buoyStatus(buoy) != 'offline'"></div>
+        <!-- ICATMAR marker - only for ICATMAR's own buoys -->
+        <div class="platform-marker-indicator" v-if="isICATMARBuoy(buoy)">
+          <img :src="icatmarLogoURL" alt="">
+        </div>
+      </template>
     </div>
 
   </div>
@@ -23,6 +33,11 @@
 
 
 <script>
+import CurrentChip from './CurrentChip.vue';
+
+// The hour a time belongs to: 9:30 up to (not including) 10:30 is 10:00
+const HALF_HOUR_MS = 30 * 60 * 1000;
+const roundToHour = time => new Date(Math.floor((time.getTime() + HALF_HOUR_MS) / 3600000) * 3600000);
 
 export default {
   name: "MapOverlayBuoys",
@@ -43,6 +58,8 @@ export default {
       // Until the live fetch answers, a buoy with no dates is still loading,
       // not offline
       isLiveLoaded: false,
+      // HFR dashboard: buoy id -> { speed, direction, time } at the selected hour
+      currents: {},
     }
   },
   methods: {
@@ -110,12 +127,51 @@ export default {
         if (wrapper) wrapper.style.zIndex = this.isIconSelected(buoy) ? '10' : '';
       }
     },
+    // The current each buoy measured in the selected hour (9:30 to 10:30 for
+    // 10:00), the reading closest to the hour. Through the same block cache
+    // as the buoys timeline, so a buoy already loaded there costs nothing.
+    async loadCurrents(hour) {
+      const request = (this.currentsRequest ?? 0) + 1;
+      this.currentsRequest = request;
+      this.currents = {};
+      if (!hour) return;
+      const start = new Date(hour.getTime() - 2 * HALF_HOUR_MS);
+      const end = new Date(hour.getTime() + 2 * HALF_HOUR_MS);
+      let promises = [];
+      try {
+        ({ promises } = await this.$dataService.buoys.getVariablesData(['HCSP', 'HCDT'], start, end));
+      } catch (error) {
+        console.error('Could not load the buoys\' currents:', error);
+      }
+      promises.forEach(promise => promise.then(({ buoyId, data }) => {
+        if (request !== this.currentsRequest) return;
+        let best;
+        Object.entries(data).forEach(([timestamp, values]) => {
+          const time = new Date(timestamp);
+          const speed = values.HCSP?.value;
+          if (speed == null || !isFinite(speed)) return;
+          if (time < hour.getTime() - HALF_HOUR_MS || time >= hour.getTime() + HALF_HOUR_MS) return;
+          if (!best || Math.abs(time - hour) < Math.abs(best.time - hour))
+            best = { speed, direction: values.HCDT?.value, time };
+        });
+        if (best) this.currents = { ...this.currents, [buoyId]: best };
+      }).catch(() => {}));
+    },
     platformClicked(e, buoy) {
       e.stopPropagation();
       this.$gui.selectPlatform('buoys', buoy.id);
     }
   },
   computed: {
+    // On the HFR dashboard a buoy shows its current rather than its icon
+    showsCurrents() {
+      return this.$gui.selectedDashboard === 'hfr';
+    },
+    // What the currents depend on: the hour, while they are being shown
+    currentsHour() {
+      if (!this.showsCurrents || !this.$gui.hfrShowBuoys) return null;
+      return roundToHour(new Date(this.$gui.selectedTime)).toISOString();
+    },
     // Buoys belong on All platforms and their own dashboard, and on the HFR
     // dashboard only when asked for there
     isVisible() {
@@ -124,10 +180,12 @@ export default {
     },
   },
   watch: {
+    currentsHour(hour) { this.loadCurrents(hour ? new Date(hour) : null); },
     '$gui.selectedPlatform'()    { this.$nextTick(() => this.updateZIndices()); },
     '$gui.selectedDashboard'()   { this.$nextTick(() => this.updateZIndices()); },
     '$gui.timelineDashboardId'() { this.$nextTick(() => this.updateZIndices()); },
   },
+  components: { CurrentChip },
 }
 
 </script>

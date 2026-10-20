@@ -11,6 +11,7 @@ import SourcePuertosBuoys from '../sources/SourcePuertosBuoys.js';
 import SourceOpenMeteo from '../sources/SourceOpenMeteo.js';
 import SourceErddapWaveForecast from '../sources/SourceErddapWaveForecast.js';
 import SourceErddapSeaSurfaceForecast from '../sources/SourceErddapSeaSurfaceForecast.js';
+import SourceErddapHFRadars from '../sources/SourceErddapHFRadars.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
@@ -151,11 +152,53 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
         ],
       },
-      // Github
+      // Maps (for the HFR dashboard's animation), by provider - see
+      // DPHFRTotals.getField. ICATMAR: its own ERDDAP first, then the EU HFR
+      // Node's copy of its network, then GitHub (further down) for the newest
+      // hours.
+      {
+        Class: SourceErddapHFRadars,
+        src: 'https://erddap.icatmar.cat/erddap/index.html',
+        provider: 'ICATMAR',
+        label: 'ICATMAR ERDDAP',
+        // One dataset per processing version (v1 2023-03/2026, v2 to 09/2026,
+        // v3 since - the live one); a new version is picked up on its own
+        datasetPattern: '^HF_Radar_L3B_Historic_v\\d+$',
+        network: 'ICATMAR',
+        eastward: 'u',
+        northward: 'v',
+        countVariable: 'qcflag',
+        institution: 'ICATMAR',
+      },
+      {
+        Class: SourceErddapHFRadars,
+        src: 'https://erddap.hfrnode.eu/erddap/index.html',
+        provider: 'ICATMAR',
+        label: 'EU HFR Node',
+        datasets: ['EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3'],
+        network: 'ICATMAR',
+        useProxy: false,
+        institution: 'EU HFR Node',
+      },
+      // EU: every network on the node
+      {
+        Class: SourceErddapHFRadars,
+        src: 'https://erddap.hfrnode.eu/erddap/index.html',
+        provider: 'EU',
+        label: 'EU HFR Node',
+        // Every network's gridded totals; the group names the network
+        datasetPattern: '^EUHFR_NRTcurrent_HFR-(.+)-Total_v3$',
+        preferNetwork: 'ICATMAR',
+        useProxy: false,
+        institution: 'EU HFR Node',
+      },
+      // Github - also the newest hours of ICATMAR's totals maps
       {
         Class: SourceGithubHFR,
         institution: 'ICATMAR',
-        src: 'https://github.com/ICATMAR/data/'
+        src: 'https://github.com/ICATMAR/data/',
+        provider: 'ICATMAR',
+        label: 'GitHub',
       },
       // Static file
       {

@@ -16,8 +16,15 @@
       
 
 
+      <!-- Where there is data: one line per HF radar network in view, red on
+           the hours with a map, gray on those without (see availabilityRows) -->
+      <div class="availability-rows" v-if="availabilityRows.length">
+        <div v-for="row in availabilityRows" :key="row.network" class="availability-row"
+          :title="row.network" :style="{ background: row.background }"></div>
+      </div>
+
       <!-- Progress line -->
-      <div class="timeline-progress">
+      <div class="timeline-progress" v-else>
         <div class="timeline-progress-completion"
           :style="{ width: (100 - percentageInTimeline - percentageNotAvailable) + '%' }"></div>
         <div class="timeline-progress-not-available" :style="{ width: percentageNotAvailable + '%' }"></div>
@@ -50,6 +57,13 @@
 <script>
 
 import TimelineHandle from './TimelineHandle.vue';
+
+// Availability rows (see availabilityRows)
+const AVAILABILITY_FULL = 'rgb(255, 115, 105)'; // --red
+const AVAILABILITY_LOW = 'rgb(176, 128, 124)';  // the red, grayed
+const AVAILABILITY_NONE = 'rgb(78, 78, 78)';    // --gray
+// Below this fraction of a network's fullest map, an hour counts as thin
+const LOW_FRACTION = 0.7;
 
 export default {
   name: "ShortTimeline",
@@ -162,6 +176,35 @@ export default {
     pixelsPerDay() {
       return this.timelinePixelWidth / this.timelineDays.length;
     },
+    // One row per network with its hours coloured: red where it has a map,
+    // a grayer red where the map is thin (fewer than LOW_FRACTION of the
+    // network's fullest map in the range), gray where there is none. Each
+    // hour is centred on its own tick - the handle sits on the hour - so
+    // it spans half an hour either side. Drawn as one gradient per row with
+    // hard stops, rather than an element per hour.
+    availabilityRows() {
+      if (this.$gui.selectedDashboard !== 'hfr') return [];
+      const hours = this.hoursInTimeline;
+      const start = this.startDate.getTime();
+      return this.$gui.hfrAvailability.map(row => {
+        const max = Math.max(0, ...Object.values(row.hours));
+        const colors = [];
+        for (let i = 0; i <= hours; i++) {
+          const count = row.hours[new Date(start + i * 3600 * 1000).toISOString()] ?? 0;
+          colors.push(count === 0 ? AVAILABILITY_NONE : count < LOW_FRACTION * max ? AVAILABILITY_LOW : AVAILABILITY_FULL);
+        }
+        const stops = [];
+        colors.forEach((color, i) => {
+          const from = Math.max(0, (i - 0.5) / hours * 100);
+          const to = Math.min(100, (i + 0.5) / hours * 100);
+          const last = stops[stops.length - 1];
+          if (last && last.color === color) last.to = to;
+          else stops.push({ color, from, to });
+        });
+        const gradient = stops.map(s => `${s.color} ${s.from}% ${s.to}%`).join(', ');
+        return { network: row.network, background: `linear-gradient(to right, ${gradient})` };
+      });
+    },
   },
   components: {
     TimelineHandle
@@ -181,6 +224,17 @@ export default {
   height: 4px;
   display: flex;
   justify-content: flex-end;
+}
+
+.availability-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.availability-row {
+  height: 4px;
+  width: 100%;
 }
 
 .timeline-progress-completion {

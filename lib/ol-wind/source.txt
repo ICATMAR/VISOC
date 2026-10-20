@@ -1,0 +1,1 @@
+https://github.com/sakitam-fdd/wind-layer (packages/ol) - ol-wind v1.1.9, UMD build dist/ol-wind.js from https://cdn.jsdelivr.net/npm/ol-wind@1.1.9/dist/ol-wind.js
