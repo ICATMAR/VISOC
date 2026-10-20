@@ -32,8 +32,8 @@
   <div class="filled-container">
     <!-- On/Off options -->
     <div class="horizontal wrap options-container">
-      <OnOffButtonWithText ref="toggleShowBuoys" :checked="false" :text="$t('buoys')" :inSize="'8px'"
-        @toggle="toggleShowBuoys($event)"></OnOffButtonWithText>
+      <OnOffButtonWithText ref="toggleShowBuoys" :checked="$gui.hfrShowBuoys" :text="$t('buoys')" :inSize="'8px'"
+        @toggle="$gui.hfrShowBuoys = $event"></OnOffButtonWithText>
       <OnOffButtonWithText ref="toggleShowDrifters" :checked="false" :text="$t('drifters')" :inSize="'8px'"
         @change="toggleShowDrifters($event)"></OnOffButtonWithText>
     </div>
@@ -42,10 +42,10 @@
   <!-- Data source -->
   <div class="filled-container">
     <div class="horizontal wrap button-group">
-      <button class="clickable" :class="{ 'selectedOption': selectedSource == 'ICATMAR' }"
-        @click="selectedSource = 'ICATMAR'"><span>{{ $t('ICATMAR') }}</span></button>
-      <button class="clickable" :class="{ 'selectedOption': selectedSource == 'EU HFR Node' }"
-        @click="selectedSource = 'EU HFR Node'"><span>{{ $t('EU HFR Node') }}</span></button>
+      <button class="clickable" :class="{ 'selectedOption': $gui.hfrSource == 'ICATMAR' }"
+        @click="$gui.hfrSource = 'ICATMAR'"><span>{{ $t('ICATMAR') }}</span></button>
+      <button class="clickable" :class="{ 'selectedOption': $gui.hfrSource == 'EU' }"
+        @click="$gui.hfrSource = 'EU'"><span>{{ $t('EU HFR Node') }}</span></button>
       <!-- <OnOffButtonWithText ref="toggleExternalSources" :checked="false" :text="$t('EU HFR Node data')" :inSize="'8px'"
       @change="toggleExternalSources($event)"></OnOffButtonWithText> -->
     </div>
@@ -82,15 +82,10 @@ export default {
     return {
       selectedHFRProduct: 'currents',
       radials: ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL'],
-      selectedSource: 'ICATMAR'
     }
   },
   methods: {
     //onclick: function(e){},
-    toggleShowBuoys(e) {
-      console.log(e);
-      this.$emit('toggleShowBuoys');
-    },
     toggleShowDrifters(e) {
       this.$emit('toggleShowDrifters');
     },

@@ -8,6 +8,8 @@
   <MapOverlayHFRStations></MapOverlayHFRStations>
   <MapOverlayBuoys></MapOverlayBuoys>
   <!-- <MapOverlayDrifters></MapOverlayDrifters> -->
+  <!-- Short screens: the selected buoy's circle arrows -->
+  <MapOverlayPlatformArrows></MapOverlayPlatformArrows>
 </template>
 
 
@@ -17,6 +19,7 @@ import MapOverlayHFRStations from './MapOverlayHFRStations.vue';
 import MapOverlayMockup from './MapOverlayMockup.vue';
 import MapOverlayBuoys from './MapOverlayBuoys.vue';
 import MapOverlayDrifters from './MapOverlayDrifters.vue';
+import MapOverlayPlatformArrows from './MapOverlayPlatformArrows.vue';
 
 export default {
   name: "Map",
@@ -60,6 +63,7 @@ export default {
     MapOverlayHFRStations,
     MapOverlayBuoys,
     MapOverlayDrifters,
+    MapOverlayPlatformArrows,
   }
 }
 

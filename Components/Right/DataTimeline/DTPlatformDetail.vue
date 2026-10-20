@@ -17,18 +17,20 @@ import DTAPDriftersPlatformDetail from './AllPlatforms/PlatformDetails/DTAPDrift
 export default {
   name: "DTPlatformDetail",
   computed: {
+    // A platform's detail is the same in All platforms (on its view) and in
+    // its own dashboard
+    isViewOf() {
+      return dashboardId => this.$gui.selectedDashboard === dashboardId
+        || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === dashboardId);
+    },
     isTotalsView() {
-      return this.$gui.selectedDashboard === 'platforms'
-        && this.$gui.timelineDashboardId === 'hfr'
-        && this.$gui.selectedPlatform?.stationId === 'TOTALS';
+      return this.isViewOf('hfr') && this.$gui.selectedPlatform?.stationId === 'TOTALS';
     },
     isHFRView() {
-      return this.$gui.selectedDashboard === 'platforms'
-        && this.$gui.timelineDashboardId === 'hfr'
-        && this.$gui.selectedPlatform?.stationId !== 'TOTALS';
+      return this.isViewOf('hfr') && this.$gui.selectedPlatform?.stationId !== 'TOTALS';
     },
     isBuoysView() {
-      return this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'buoys';
+      return this.isViewOf('buoys');
     },
     isDriftersView() {
       return (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'drifters')

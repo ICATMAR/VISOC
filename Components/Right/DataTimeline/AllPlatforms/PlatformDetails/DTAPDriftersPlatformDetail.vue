@@ -68,7 +68,7 @@
       </div>
 
       <!-- Switch to Drifters dashboard -->
-      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'drifters'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'drifters'" @click="$gui.selectedDashboard = 'drifters'">
         <div class="pd-switch-btn-circle">
           <img :src="driftersDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
@@ -89,6 +89,7 @@ import MapCircleArrows from '../../MapCircleArrows.vue';
 
 export default {
   name: "DTAPDriftersPlatformDetail",
+  mixins: [window.pdFocusMixin],
   created() {
     this.map = undefined;
     this.markerOverlay = undefined;
@@ -172,14 +173,7 @@ export default {
         controls: [],
         interactions: [],
         layers: [
-          new ol.layer.Tile({
-            source: new ol.source.XYZ({
-              url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-              attributions: '© Esri',
-              cacheSize: 500,
-              crossOrigin: 'anonymous',
-            }),
-          }),
+          ...window.createDetailMapLayers(),
           this.trajLayer,
         ],
         view: new ol.View({
@@ -208,6 +202,9 @@ export default {
       this.drawTrajectory();
       if (this.sp?.lat != null && this.sp?.lon != null) this.focusPoint(false);
       else this.fitTrajectory();
+      // The trajectory arrives after the panel opened, so the short-screen
+      // focus (pdFocusMixin) had nothing to fit yet
+      if (this.compactFocusKey != null) this.centerMainMap();
     },
     drawTrajectory() {
       if (!this.trajLayer) return;
@@ -246,13 +243,9 @@ export default {
       if (p) this.markerOverlay.setPosition(ol.proj.fromLonLat([p.lon, p.lat]));
     },
     centerMainMap() {
-      const mainMap = this.$gui.olMap;
-      if (!mainMap || this.trajectory.length < 2) return;
-      const view = mainMap.getView();
+      if (this.trajectory.length < 2) return;
       const coords = this.trajectory.map(p => ol.proj.fromLonLat([p.lon, p.lat]));
-      const ext = new ol.geom.LineString(coords).getExtent();
-      // Big bottom padding to clear the DT + platform-detail UI overlay.
-      view.fit(ext, { padding: [40, 60, 420, 60], maxZoom: 12, duration: 600 });
+      this.$gui.fitMainMapTo(new ol.geom.LineString(coords).getExtent(), 12);
     },
     arrowStyle(dir) {
       // fa-location-arrow points NE (45°). Current "to" direction → rotate dir-45.
@@ -267,6 +260,8 @@ export default {
     },
   },
   computed: {
+    // See pdFocusMixin
+    mainMapFocusKey() { return this.drifter?.id; },
     drifter() {
       if (!this.$gui.selectedPlatform?.stationId) return null;
       return this.$requests.getDrifterStation(this.$gui.selectedPlatform.stationId);
@@ -314,7 +309,7 @@ export default {
       if (!this.drifter) return '';
       const hours = this.$requests.getLastUpdateHoursAgo(this.drifter.id, 'drifter');
       if (hours == null) return '';
-      if (hours < 1) return 'Less than 1h ago';
+      if (hours < 1) return Math.max(1, Math.floor(hours * 60)) + ' min ago';
       if (hours < 2) return '1h ago';
       if (hours < 24) return Math.floor(hours) + 'h ago';
       const days = Math.floor(hours / 24);

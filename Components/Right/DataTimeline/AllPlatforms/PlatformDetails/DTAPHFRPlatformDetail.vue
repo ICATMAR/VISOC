@@ -52,7 +52,7 @@
       </div>
 
       <!-- Switch to HFR currents dashboard -->
-      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'hfr'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="$gui.selectedDashboard = 'hfr'">
         <div class="pd-switch-btn-circle">
           <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
@@ -79,6 +79,7 @@
 <script>
 export default {
   name: "DTAPHFRPlatformDetail",
+  mixins: [window.pdFocusMixin],
   created() {
     this.map = undefined;
     this.markerOverlay = undefined;
@@ -132,16 +133,7 @@ export default {
         target: this.$refs.stationMap,
         controls: [],
         interactions: [],
-        layers: [
-          new ol.layer.Tile({
-            source: new ol.source.XYZ({
-              url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-              attributions: '© Esri',
-              cacheSize: 500,
-              crossOrigin: 'anonymous',
-            }),
-          }),
-        ],
+        layers: window.createDetailMapLayers(),
         view: new ol.View({
           center: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
           zoom: 11
@@ -149,19 +141,9 @@ export default {
       });
     },
     centerMainMap() {
-      const mainMap = this.$gui.olMap;
-      if (!mainMap || !this.station) return;
-      const view = mainMap.getView();
-      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
-      const targetZoom = view.getZoom() < 7 ? 11 : view.getZoom();
-      const mapSize = mainMap.getSize(); // [width, height]
-      const bottomCovered = 380; // data timeline + platform detail
-      const visibleHeight = mapSize[1] - bottomCovered;
-      const targetY = Math.max(50, visibleHeight * 0.66); // 35% from top of visible area
-      // Shift center so coords appear at targetY instead of canvas center
-      const resolution = view.getResolutionForZoom(targetZoom);
-      const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
-      view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
+      if (!this.station) return;
+      const zoom = this.$gui.olMap?.getView().getZoom() < 7 ? 11 : undefined;
+      this.$gui.centerMainMapOn(this.station.longitude, this.station.latitude, zoom);
     },
     // Rounded on screen, exact on the clipboard: the panel is too narrow for
     // full precision, but a pasted position is meant to be used.
@@ -187,7 +169,7 @@ export default {
     },
     formatTimeAgo(hours) {
       if (hours == null) return '';
-      if (hours < 1) return 'Less than 1h ago';
+      if (hours < 1) return Math.max(1, Math.floor(hours * 60)) + ' min ago';
       if (hours < 2) return '1h ago';
       if (hours < 24) return Math.floor(hours) + 'h ago';
       const days = Math.floor(hours / 24);
@@ -197,6 +179,8 @@ export default {
     },
   },
   computed: {
+    // See pdFocusMixin
+    mainMapFocusKey() { return this.station?.id; },
     station() {
       const id = this.$gui.selectedPlatform?.stationId;
       if (!id) return null;

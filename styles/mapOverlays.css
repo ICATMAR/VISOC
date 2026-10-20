@@ -61,3 +61,34 @@
 .platform-status-indicator.inactive { background: #757575; }
 .platform-status-indicator.static { background: #757575; }
 .platform-status-indicator.offline  { background: #757575; }
+/* LOADING
+   A platform whose data is still being fetched pulses between the light and
+   the dark blue instead of showing gray, which would read as offline. Its
+   status dot turns blue with a spinning ring, slightly larger so the ring is
+   visible. */
+@keyframes platform-loading-pulse {
+  0%, 100% { background-color: var(--lightBlue); }
+  50%      { background-color: var(--blue); }
+}
+
+.platform-icon.loading {
+  animation: platform-loading-pulse 1.4s ease-in-out infinite;
+}
+
+.platform-status-indicator.loading {
+  width: 10px;
+  height: 10px;
+  translate: 21px -1px;
+  background: var(--blue);
+  box-sizing: border-box;
+}
+
+.platform-status-indicator.loading::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border: 1.5px solid white;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: .75s linear infinite spinner-border;
+}

@@ -19,12 +19,25 @@ class GUIManager {
   ]
 
 
-  _selectedDashboard = 'hfr';
+  // The dashboard is mirrored in the URL as #/<dashboard> (see main.js for the
+  // other direction). Pushed, not replaced, so Back returns to the previous
+  // dashboard.
+  _selectedDashboard = 'platforms';
   get selectedDashboard() { return this._selectedDashboard; }
   set selectedDashboard(id) {
     this._selectedDashboard = id;
     this.isDataTimelineOpen = false;
     this.isPlatformDetailOpen = false;
+    const hash = '#/' + id;
+    if (window.location.hash !== hash) window.location.hash = hash;
+  }
+  // The dashboard a hash like #/<dashboard>[/<platformId>] points to, or
+  // 'platforms' when it names nothing that can be shown. The platform part is
+  // accepted but not acted on yet.
+  dashboardFromHash(hash) {
+    const id = /^#\/([^/?&]+)/.exec(hash)?.[1];
+    const dashboard = this.dashboards.find(d => d.id === id && d.isAvailable);
+    return dashboard ? dashboard.id : 'platforms';
   }
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Icons/allPlatforms.png', image: './Assets/Images/dashboardIcons/allPlatforms.png', isAvailable: true },
@@ -48,6 +61,81 @@ class GUIManager {
 
 
   ];
+
+  // HFR DASHBOARD
+  // Which provider's HF radar data the HFR dashboard shows: 'ICATMAR' (only
+  // ICATMAR's network) or 'EU' (every network on the EU HFR Node).
+  hfrSource = 'ICATMAR';
+  // Buoys can be overlaid on the HFR dashboard (bottom-right toggle).
+  hfrShowBuoys = false;
+
+  // Opening a platform, from its map marker or the menu's platform list.
+  // Inside the platform's own dashboard (hfr, buoys) it stays there and opens
+  // that dashboard's timeline; from anywhere else it goes to All platforms,
+  // on that platform's view.
+  selectPlatform(dashboardId, stationId) {
+    if (this.selectedDashboard !== dashboardId) {
+      // timelineDashboardId BEFORE selectedDashboard, so DTAllPlatforms can
+      // read it in created()
+      this.timelineDashboardId = dashboardId;
+      this.selectedPlatform = { stationId };
+      this.selectedDashboard = 'platforms';
+    } else {
+      this.selectedPlatform = { stationId };
+    }
+    this.isDataTimelineOpen = true;
+    this.isPlatformDetailOpen = true;
+    this.isMenuOpen = false;
+  }
+  // Whether a platform of dashboard `dashboardId` is the one selected: in its
+  // own dashboard, or in All platforms on its view.
+  isPlatformSelected(dashboardId, stationId) {
+    const inView = this.selectedDashboard === dashboardId
+      || (this.selectedDashboard === 'platforms' && this.timelineDashboardId === dashboardId);
+    return inView && this.selectedPlatform?.stationId === stationId;
+  }
+
+  // SHORT SCREENS
+  // Below this window height the platform detail stops floating above the
+  // timeline as a 180px card and becomes a slim strip: no mini map (the main
+  // map zooms to the platform instead), info and readings in one row. The one
+  // number to tune; main.js keeps isShortScreen in step with it.
+  SHORT_SCREEN_MAX_HEIGHT = 820;
+  isShortScreen = false;
+
+  // How many pixels at the bottom of the main map the timeline and the
+  // platform detail cover - read off the panes themselves, at the moment it is
+  // asked, so it is right whichever layout (card or strip) is showing.
+  // offsetHeight rather than a bounding box: the panes slide in with a
+  // transform, which a bounding box would include.
+  bottomCoveredPx() {
+    const timeline = document.getElementById('dataTimelinePane');
+    const detail = document.getElementById('platformDetailPane');
+    return (timeline?.offsetHeight ?? 0) + (this.isPlatformDetailOpen ? detail?.offsetHeight ?? 0 : 0);
+  }
+
+  // Centres the main map on a point, two thirds of the way down the part of
+  // the map the bottom panes leave visible. Keeps the current zoom unless the
+  // map is zoomed far out.
+  centerMainMapOn(longitude, latitude, zoom) {
+    const map = this.olMap;
+    if (!map) return;
+    const view = map.getView();
+    const coords = ol.proj.fromLonLat([longitude, latitude]);
+    const targetZoom = zoom ?? (view.getZoom() < 7 ? 10 : view.getZoom());
+    const mapSize = map.getSize();
+    const visibleHeight = mapSize[1] - this.bottomCoveredPx();
+    const targetY = Math.max(50, visibleHeight * 0.66);
+    const resolution = view.getResolutionForZoom(targetZoom);
+    const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
+    view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
+  }
+
+  // Fits the main map to an extent (map projection) within the part of it the
+  // bottom panes leave visible.
+  fitMainMapTo(extent, maxZoom) {
+    this.olMap?.getView().fit(extent, { padding: [40, 60, this.bottomCoveredPx() + 40, 60], maxZoom, duration: 600 });
+  }
 
   defaultTimelineDays = 4;
 

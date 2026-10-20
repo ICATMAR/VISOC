@@ -4,8 +4,9 @@
   <div class="overlay-container">
 
     <!-- Platform icon -->
-    <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id">
-      <img class="platform-icon clickable" :class="{ selected: isIconSelected(station), offline: stationStatus(station) === 'offline' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
+    <!-- v-show, not v-if: OpenLayers holds on to each element (see createOverlays) -->
+    <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id" v-show="isStationVisible(station)">
+      <img class="platform-icon clickable" :class="{ selected: isIconSelected(station), offline: stationStatus(station) === 'offline', loading: stationStatus(station) === 'loading' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
       <!-- Status indicator -->
       <div class="platform-status-indicator" :class="stationStatus(station)" v-if="stationStatus(station) != 'offline'"></div>
       <!-- ICATMAR marker - only for ICATMAR's own stations -->
@@ -39,6 +40,9 @@ export default {
       iconURL: './Assets/Icons/radar.svg',
       icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
       stations: [],
+      // Until the live fetch answers, a station with no coverage end is still
+      // loading, not inactive
+      isLiveLoaded: false,
     }
   },
   methods: {
@@ -52,7 +56,12 @@ export default {
       await this.$nextTick(); // wait for the v-for to render before refs exist
       this.createOverlays();
       // Get live data for all networks, so that the status of each station can be determined.
-      const networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
+      let networks;
+      try {
+        networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
+      } finally {
+        this.isLiveLoaded = true;
+      }
 
       // Create new stations or merge static ones. The static ones already have
       // an overlay each, so they are updated in place - same objects, same
@@ -98,7 +107,7 @@ export default {
     // delayed, up to 30 days inactive, older than that offline.
     stationStatus(station) {
       const endStr = station.metadata?.time_coverage_end;
-      if (!endStr) return 'inactive';
+      if (!endStr) return this.isLiveLoaded ? 'inactive' : 'loading';
 
       const ageHours = (Date.now() - new Date(endStr).getTime()) / 3600000;
       if (ageHours < 3) return 'active';
@@ -110,9 +119,17 @@ export default {
       return station.metadata?.network === 'HFR-ICATMAR' && station.id != 'CNET';
     },
     isIconSelected(station) {
-      if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'hfr') return false;
-      const id = this.$gui.selectedPlatform?.stationId;
-      return id === 'TOTALS' || id === station.id;
+      // TOTALS stands for the whole network, so it lights up every station
+      return this.$gui.isPlatformSelected('hfr', station.id) || this.$gui.isPlatformSelected('hfr', 'TOTALS');
+    },
+    // Stations belong on All platforms and the HFR dashboard. On the HFR
+    // dashboard, the source picked there decides: ICATMAR's network only, or
+    // every network on the EU HFR Node.
+    isStationVisible(station) {
+      const dashboard = this.$gui.selectedDashboard;
+      if (dashboard === 'platforms') return true;
+      if (dashboard !== 'hfr') return false;
+      return this.$gui.hfrSource === 'EU' || station.metadata?.network === 'HFR-ICATMAR';
     },
     updateZIndices() {
       for (const station of this.stations) {
@@ -122,12 +139,7 @@ export default {
     },
     platformClicked: function(e, station) {
       e.stopPropagation();
-      this.$gui.timelineDashboardId = 'hfr';
-      this.$gui.selectedPlatform = { stationId: station.id };
-      this.$gui.selectedDashboard = 'platforms';
-      this.$gui.isDataTimelineOpen = true;
-      this.$gui.isPlatformDetailOpen = true;
-      this.$gui.isMenuOpen = false;
+      this.$gui.selectPlatform('hfr', station.id);
     }
   },
   watch: {

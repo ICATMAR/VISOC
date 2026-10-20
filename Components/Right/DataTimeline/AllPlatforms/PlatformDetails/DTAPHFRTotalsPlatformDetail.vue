@@ -51,7 +51,7 @@
       </div>
 
       <!-- Switch to HFR currents dashboard -->
-      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'hfr'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="$gui.selectedDashboard = 'hfr'">
         <div class="pd-switch-btn-circle">
           <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
@@ -65,6 +65,7 @@
 <script>
 export default {
   name: "DTAPHFRTotalsPlatformDetail",
+  mixins: [window.pdFocusMixin],
   created() {
     this.map = undefined;
   },
@@ -97,16 +98,7 @@ export default {
         target: this.$refs.stationMap,
         controls: [],
         interactions: [],
-        layers: [
-          new ol.layer.Tile({
-            source: new ol.source.XYZ({
-              url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-              attributions: '© Esri',
-              cacheSize: 500,
-              crossOrigin: 'anonymous',
-            }),
-          }),
-        ],
+        layers: window.createDetailMapLayers(),
         view: new ol.View({
           center: ol.proj.fromLonLat([2.4, 42.0]),
           zoom: 7
@@ -140,17 +132,13 @@ export default {
       });
     },
     centerMainMap() {
-      const mainMap = this.$gui.olMap;
-      if (!mainMap) return;
-      const view = mainMap.getView();
       const ext = [Infinity, Infinity, -Infinity, -Infinity];
       for (const s of this.$requests.hfrStations) {
         const [x, y] = ol.proj.fromLonLat([s.lon, s.lat]);
         if (x < ext[0]) ext[0] = x; if (y < ext[1]) ext[1] = y;
         if (x > ext[2]) ext[2] = x; if (y > ext[3]) ext[3] = y;
       }
-      // Large bottom padding pushes the network into the visible area above the UI
-      view.fit(ext, { padding: [40, 60, 420, 60], maxZoom: 9, duration: 600 });
+      this.$gui.fitMainMapTo(ext, 9);
     },
     onScrollDragStart(e) {
       this.isDragging = true;
@@ -160,6 +148,8 @@ export default {
     },
   },
   computed: {
+    // See pdFocusMixin - the network as a whole, so once per opening
+    mainMapFocusKey() { return 'TOTALS'; },
     sp() { return this.$gui.selectedPlatform; },
     formattedDate() {
       const date = this.sp?.date;

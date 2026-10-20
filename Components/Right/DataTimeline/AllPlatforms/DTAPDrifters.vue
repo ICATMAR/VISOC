@@ -111,11 +111,11 @@
               </div>
             </div>
           </div>
-
-          <!-- Info section (end of the horizontal scroll) -->
-          <DTInfoSection></DTInfoSection>
         </div>
       </div>
+
+      <!-- Info section: fixed beside the timeline, not part of its scroll -->
+      <DTInfoSection class="dt-info-fixed"></DTInfoSection>
     </div>
 
     <!-- Current-speed colour legend (bottom) -->

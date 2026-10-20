@@ -138,7 +138,7 @@
       </div>
 
       <!-- Switch to Buoys dashboard -->
-      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'buoys'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'buoys'" @click="$gui.selectedDashboard = 'buoys'">
         <div class="pd-switch-btn-circle">
           <img :src="buoysDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
@@ -159,6 +159,7 @@ import MapCircleArrows from '../../MapCircleArrows.vue';
 
 export default {
   name: "DTAPBuoysPlatformDetail",
+  mixins: [window.pdFocusMixin],
   // The buoy catalogue this panel reads position/status from - static first
   // (synchronous, so whatever's already selected resolves immediately),
   // refined once the live sources (ERDDAP/MSM/SOMO) resolve and can supply a
@@ -277,35 +278,15 @@ export default {
         target: this.$refs.stationMap,
         controls: [],
         interactions: [],
-        layers: [
-          new ol.layer.Tile({
-            source: new ol.source.XYZ({
-              url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-              attributions: '© Esri',
-              cacheSize: 500,
-              crossOrigin: 'anonymous',
-            }),
-          }),
-        ],
+        layers: window.createDetailMapLayers(),
         view: new ol.View({
           center: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
-          zoom: 9
+          zoom: this.miniMapZoom,
         })
       });
     },
     centerMainMap() {
-      const mainMap = this.$gui.olMap;
-      if (!mainMap || !this.station) return;
-      const view = mainMap.getView();
-      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
-      const targetZoom = view.getZoom() < 7 ? 10 : view.getZoom();
-      const mapSize = mainMap.getSize();
-      const bottomCovered = 380;
-      const visibleHeight = mapSize[1] - bottomCovered;
-      const targetY = Math.max(50, visibleHeight * 0.66);
-      const resolution = view.getResolutionForZoom(targetZoom);
-      const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
-      view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
+      if (this.station) this.$gui.centerMainMapOn(this.station.longitude, this.station.latitude);
     },
     copyCoords() {
       const text = `${this.station.latitude.toFixed(2)}, ${this.station.longitude.toFixed(2)}`;
@@ -326,7 +307,7 @@ export default {
     },
     formatTimeAgo(hours) {
       if (hours == null) return '';
-      if (hours < 1) return 'Less than 1h ago';
+      if (hours < 1) return Math.max(1, Math.floor(hours * 60)) + ' min ago';
       if (hours < 2) return '1h ago';
       if (hours < 24) return Math.floor(hours) + 'h ago';
       const days = Math.floor(hours / 24);
@@ -394,22 +375,25 @@ export default {
     maxWave() {
       return this.maxWaveCode ? this.sp[this.maxWaveCode] : null;
     },
-    // What the circle arrows put in their tooltips: the second reading beside
-    // each magnitude, and `from` - the sensor and server DTAPBuoys recorded
-    // for it. No `?? 0` on the extra readings, unlike the directions: a
-    // bearing of 0 is due north and the arrow needs a number either way, but a
-    // gust or period of 0 is not a measurement, and the tooltip drops what is
-    // missing rather than printing it as zero.
-    wind()    { const p = this.sp; return p?.WSPD != null ? { speed: p.WSPD, dir: p.WDIR ?? 0, gust: p.GSPD, from: p.from?.WSPD, raw: p.raw } : null; },
-    waves()   { const p = this.sp; return p?.VHM0 != null ? { height: p.VHM0, dir: p.VMDR ?? 0, period: p.VTM02, from: p.from?.VHM0, raw: p.raw } : null; },
-    current() { const p = this.sp; return p?.HCSP != null ? { speed: p.HCSP, dir: p.HCDT ?? 0, from: p.from?.HCSP, raw: p.raw } : null; },
+    // What the circle arrows draw (see Assets/Scripts/circleArrows.js)
+    circleArrows() { return window.buoyCircleArrows(this.sp); },
+    wind()    { return this.circleArrows.wind; },
+    waves()   { return this.circleArrows.waves; },
+    current() { return this.circleArrows.current; },
+    // See pdFocusMixin
+    mainMapFocusKey() { return this.station?.id; },
+    // Zoom 9 near the shore; an offshore buoy zooms out until the coast is in
+    // view, going by its distanceToCoast (km, Data/buoys/buoys.js)
+    miniMapZoom() {
+      return window.zoomToShowCoast(this.station?.distanceToCoast, this.station?.latitude ?? 41, 9);
+    },
   },
   watch: {
     '$gui.selectedPlatform'() {
       if (!this.map || !this.station) return;
       const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
       this.markerOverlay?.setPosition(coords);
-      this.map.getView().animate({ center: coords, duration: 300 });
+      this.map.getView().animate({ center: coords, zoom: this.miniMapZoom, duration: 300 });
     }
   },
   components: { MapCircleArrows }

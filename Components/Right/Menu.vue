@@ -28,6 +28,9 @@
           <!-- Divider -->
           <div class="divider-small"></div>
 
+          <!-- Platforms of the current dashboard (HFR, buoys) -->
+          <MenuPlatformList></MenuPlatformList>
+
           <!-- All platforms -->
           <div class="dashboard-container clickable" v-on:click="() => { $gui.selectedDashboard = allPlatformsDashboard.id }" :class="dashboardClasses[allPlatformsDashboard.id]">
             <div class="dashboard-img-container">
@@ -155,6 +158,7 @@
 
 <script>
 import ServiceStatus from './Panels/ServiceStatus.vue';
+import MenuPlatformList from './MenuPlatformList.vue';
 
 
 
@@ -209,7 +213,8 @@ export default {
     }
   },
   components: {
-    ServiceStatus
+    ServiceStatus,
+    MenuPlatformList,
   }
 }
 </script>

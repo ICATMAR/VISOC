@@ -300,3 +300,80 @@
   top: -9px;
   left: -9px;
 }
+
+/* ================================================================
+   Compact strip (short screens - see GUIManager.SHORT_SCREEN_MAX_HEIGHT)
+   .pd-compact is set on the pane around whichever detail is showing, so every
+   detail component gets the same strip layout from the same classes:
+   - no mini map: the main map zooms to the platform instead
+   - the info and the readings in one row, the readings taking what is left
+   - the circular gif floats bottom-left, just above the strip
+   ================================================================ */
+.pd-compact .pd-container {
+  height: auto;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  /* Room on the left for the timeline's own close button below */
+  padding: 6px 12px 6px 56px;
+}
+
+.pd-compact .pd-container > .map-container {
+  display: none;
+}
+
+.pd-compact .pd-info {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  overflow: visible;
+}
+
+.pd-compact .pd-info > * {
+  flex-shrink: 0;
+}
+
+.pd-compact .pd-station-name {
+  max-width: 180px;
+}
+
+.pd-compact .pd-values-wrapper {
+  flex: 1 1 auto;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.pd-compact .pd-values-scroll {
+  padding-bottom: 0;
+}
+
+.pd-compact .pd-switch-btn {
+  margin: 0;
+  align-self: center;
+}
+
+/* The strip is closed with the timeline's own button, below it */
+.pd-compact .pd-close-btn {
+  display: none;
+}
+
+.pd-compact .pd-media-container {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
+  pointer-events: none;
+}
+
+.pd-compact .pd-circular-media,
+.pd-compact .pd-circular-fallback {
+  width: 110px;
+  height: 110px;
+  margin: 0;
+}
+
+/* Shown while the mini map's tiles load: the dark gray canvas' own sea (see
+   Assets/Scripts/mapLayers.js) */
+.pd-map {
+  background: #262629;
+}

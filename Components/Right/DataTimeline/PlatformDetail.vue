@@ -68,16 +68,7 @@ export default {
       target: this.$refs.platformMap,
       controls: [],
       interactions: [],
-      layers: [
-        new ol.layer.Tile({
-          source: new ol.source.XYZ({ // https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/0
-            url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-            attributions: '© Esri, Maxar, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community',
-            cacheSize: 500,
-            crossOrigin: 'anonymous',
-          }),
-        })
-      ],
+      layers: window.createDetailMapLayers(),
       view: new ol.View({
         center: ol.proj.fromLonLat([2.5, 41.5]),
         zoom: 10

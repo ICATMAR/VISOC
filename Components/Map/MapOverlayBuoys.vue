@@ -4,8 +4,9 @@
   <div class="overlay-container">
 
     <!-- Platform icon -->
-    <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id">
-      <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy), offline: buoyStatus(buoy) === 'offline' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
+    <!-- v-show, not v-if: OpenLayers holds on to each element (see createOverlays) -->
+    <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id" v-show="isVisible">
+      <img class="platform-icon clickable" :class="{ selected: isIconSelected(buoy), offline: buoyStatus(buoy) === 'offline', loading: buoyStatus(buoy) === 'loading' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, buoy)">
       <!-- Status indicator -->
       <div class="platform-status-indicator" :class="buoyStatus(buoy)" v-if="buoyStatus(buoy) != 'offline'"></div>
       <!-- ICATMAR marker - only for ICATMAR's own buoys -->
@@ -39,6 +40,9 @@ export default {
       iconURL: './Assets/Icons/buoy.svg',
       icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
       buoys: [],
+      // Until the live fetch answers, a buoy with no dates is still loading,
+      // not offline
+      isLiveLoaded: false,
     }
   },
   methods: {
@@ -52,15 +56,19 @@ export default {
       await this.$nextTick(); // wait for the v-for to render before refs exist
       this.createOverlays();
 
-      const liveBuoys = await this.$dataService.buoys.loadBuoys();
-      const liveById = new Map(liveBuoys.map(b => [b.id, b]));
-      this.buoys.forEach(buoy => {
-        const live = liveById.get(buoy.id);
-        if (live) {
-          buoy.startDate = live.startDate;
-          buoy.endDate = live.endDate;
-        }
-      });
+      try {
+        const liveBuoys = await this.$dataService.buoys.loadBuoys();
+        const liveById = new Map(liveBuoys.map(b => [b.id, b]));
+        this.buoys.forEach(buoy => {
+          const live = liveById.get(buoy.id);
+          if (live) {
+            buoy.startDate = live.startDate;
+            buoy.endDate = live.endDate;
+          }
+        });
+      } finally {
+        this.isLiveLoaded = true;
+      }
     },
     createOverlays() {
       for (let i = 0; i < this.buoys.length; i++) {
@@ -79,10 +87,10 @@ export default {
       }
     },
     // Based on how stale endDate is: <3h active, up to 1 day delayed, up to
-    // 30 days inactive, older (or no date yet - static-only, or the live
-    // fetch hasn't resolved) offline.
+    // 30 days inactive, older (or no date at all - static-only) offline.
+    // 'loading' while the live fetch that would bring the date is in flight.
     buoyStatus(buoy) {
-      if (!buoy.endDate) return 'offline';
+      if (!buoy.endDate) return this.isLiveLoaded ? 'offline' : 'loading';
 
       const ageHours = (Date.now() - new Date(buoy.endDate).getTime()) / 3600000;
       if (ageHours < 3) return 'active';
@@ -94,8 +102,7 @@ export default {
       return buoy.institution === 'ICATMAR';
     },
     isIconSelected(buoy) {
-      if (this.$gui.selectedDashboard !== 'platforms' || this.$gui.timelineDashboardId !== 'buoys') return false;
-      return this.$gui.selectedPlatform?.stationId === buoy.id;
+      return this.$gui.isPlatformSelected('buoys', buoy.id);
     },
     updateZIndices() {
       for (const buoy of this.buoys) {
@@ -105,14 +112,16 @@ export default {
     },
     platformClicked(e, buoy) {
       e.stopPropagation();
-      // Set timelineDashboardId BEFORE selectedDashboard so DTAllPlatforms can read it in created()
-      this.$gui.timelineDashboardId = 'buoys';
-      this.$gui.selectedPlatform = { stationId: buoy.id };
-      this.$gui.selectedDashboard = 'platforms';
-      this.$gui.isDataTimelineOpen = true;
-      this.$gui.isPlatformDetailOpen = true;
-      this.$gui.isMenuOpen = false;
+      this.$gui.selectPlatform('buoys', buoy.id);
     }
+  },
+  computed: {
+    // Buoys belong on All platforms and their own dashboard, and on the HFR
+    // dashboard only when asked for there
+    isVisible() {
+      const dashboard = this.$gui.selectedDashboard;
+      return dashboard === 'platforms' || dashboard === 'buoys' || (dashboard === 'hfr' && this.$gui.hfrShowBuoys);
+    },
   },
   watch: {
     '$gui.selectedPlatform'()    { this.$nextTick(() => this.updateZIndices()); },

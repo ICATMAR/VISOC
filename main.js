@@ -25,6 +25,16 @@ import DataService from './Assets/Scripts/data/DataService.js';
 // Vue mixin to poll for data and update the GUI, common for several .vue components
 import pollMixin from './Assets/Scripts/pollMixin.js';
 window.pollMixin = pollMixin;
+// Vue mixin for the platform details: short screens move the map focus to the main map
+import pdFocusMixin from './Assets/Scripts/pdFocusMixin.js';
+window.pdFocusMixin = pdFocusMixin;
+// What MapCircleArrows draws for a selected buoy reading
+import { buoyCircleArrows } from './Assets/Scripts/circleArrows.js';
+window.buoyCircleArrows = buoyCircleArrows;
+// Base map and zoom helper for the platform-detail mini maps
+import { createDetailMapLayers, zoomToShowCoast } from './Assets/Scripts/mapLayers.js';
+window.createDetailMapLayers = createDetailMapLayers;
+window.zoomToShowCoast = zoomToShowCoast;
 
 // Globals
 window.MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
@@ -34,6 +44,33 @@ window.WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
 window.GUIManager = Vue.reactive(new GUIManager());
 window.RequestsManager = new RequestsManager(); // Probably will delete, for now no use
 window.DataService = new DataService(FetchManager);
+
+// Routing: #/<dashboard>. The first dashboard comes from the URL, written back
+// with replaceState so an invalid or empty hash doesn't leave a history entry.
+// After that, Back/Forward (hashchange) drive the dashboard, and the
+// selectedDashboard setter drives the hash. The check against the current
+// dashboard matters: the setter's own hash write fires hashchange too, and
+// setting the same dashboard again would close a timeline opened just after.
+{
+  const initial = window.GUIManager.dashboardFromHash(window.location.hash);
+  window.GUIManager._selectedDashboard = initial;
+  if (!window.location.hash.startsWith('#/' + initial)) history.replaceState(null, '', '#/' + initial);
+  window.addEventListener('hashchange', () => {
+    const id = window.GUIManager.dashboardFromHash(window.location.hash);
+    if (id !== window.GUIManager.selectedDashboard) window.GUIManager.selectedDashboard = id;
+    // Same dashboard but a hash that didn't name it (#/foo): tidy the URL
+    else if (!window.location.hash.startsWith('#/' + id)) history.replaceState(null, '', '#/' + id);
+  });
+}
+
+
+// Short screens (see GUIManager.SHORT_SCREEN_MAX_HEIGHT). Set here rather than
+// in GUIManager's constructor so the listener writes through the reactive proxy.
+{
+  const query = window.matchMedia(`(max-height: ${window.GUIManager.SHORT_SCREEN_MAX_HEIGHT}px)`);
+  window.GUIManager.isShortScreen = query.matches;
+  query.addEventListener('change', e => { window.GUIManager.isShortScreen = e.matches; });
+}
 
 
 // Declare translations
