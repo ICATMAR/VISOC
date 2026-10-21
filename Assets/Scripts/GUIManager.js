@@ -96,8 +96,10 @@ class GUIManager {
   // chip that was clicked, or a point on the map -
   // { lon, lat, kind: 'buoy' | 'drifter' | 'point', id, name }
   hfrPoint = null;
-  // Which view of it the bottom section shows: 'Currents' | 'Radials' | 'Compare'
-  hfrTab = 'Compare';
+  // Which view the bottom section shows: about the stations ('Network' - the
+  // availability of the network's stations - or 'Station'), or about hfrPoint
+  // ('Point' or 'Compare')
+  hfrTab = 'Network';
   // What the Compare view has at the selected time, for the circle arrows on
   // the map (MapOverlayPoint): [{ name, code, speed, direction, tag }]
   hfrPointArrows = [];
@@ -143,16 +145,19 @@ class GUIManager {
   // Opening a platform, from its map marker or the menu's platform list.
   // Inside the platform's own dashboard (hfr, buoys) it stays there and opens
   // that dashboard's timeline; from anywhere else it goes to All platforms,
-  // on that platform's view.
-  selectPlatform(dashboardId, stationId) {
+  // on that platform's view. `details` adds to the selection - an HF radar
+  // station's network, since codes repeat across networks.
+  selectPlatform(dashboardId, stationId, details = {}) {
     if (this.selectedDashboard !== dashboardId) {
       // timelineDashboardId BEFORE selectedDashboard, so DTAllPlatforms can
       // read it in created()
       this.timelineDashboardId = dashboardId;
-      this.selectedPlatform = { stationId };
+      this.selectedPlatform = { stationId, ...details };
       this.selectedDashboard = 'platforms';
     } else {
-      this.selectedPlatform = { stationId };
+      this.selectedPlatform = { stationId, ...details };
+      // On the HFR dashboard a station opens its network's availability
+      if (dashboardId === 'hfr') this.hfrTab = 'Network';
     }
     this.isDataTimelineOpen = true;
     this.isPlatformDetailOpen = true;

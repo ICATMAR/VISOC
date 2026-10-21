@@ -288,6 +288,10 @@ export default {
   // resolves immediately) then refined once the live sources merge in - the
   // same two-step every other buoy view uses.
   created() {
+    // Shared with the map (memoized): for another network's stations
+    this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations)
+      .then(networks => { this.hfrNetworks = networks; })
+      .catch(error => console.error('Error loading HFR networks for the info section:', error));
     this.buoys = this.$dataService.buoys.getBuoys();
     this.$dataService.buoys.loadBuoys()
       .then(buoys => { this.buoys = buoys; })
@@ -301,6 +305,7 @@ export default {
       codeIconURL: './Assets/Icons/code.svg',
       svpIconURL: './Assets/Icons/svp.svg',
       buoys: [],
+      hfrNetworks: [],
     }
   },
   computed: {
@@ -321,7 +326,48 @@ export default {
     },
     // A data source picked in the HFR Compare view (see GUIManager.hfrSourceInfo)
     sourceInfo() {
-      return this.$gui.selectedDashboard === 'hfr' ? this.$gui.hfrSourceInfo : null;
+      if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Compare' && this.$gui.hfrSourceInfo)
+        return this.$gui.hfrSourceInfo;
+      return this.euNetworkInfo;
+    },
+    // A station or the Total of another network than ICATMAR's, as the EU HFR
+    // Node describes it - the static catalogue only knows ICATMAR's
+    euNetworkInfo() {
+      const { stationId: id, network: code } = this.$gui.selectedPlatform ?? {};
+      if (!this.isHFRContext || !id || !code || code === 'HFR-ICATMAR') return null;
+      const network = this.hfrNetworks.find(n => this.$dataService.hfrnetwork.networkCode(n) === code);
+      if (!network) return null;
+      const row = (label, value, extra = {}) => value ? [{ label, value: String(value).replace(/\s+/g, ' ').trim(), ...extra }] : [];
+      if (id === 'TOTALS') {
+        const total = network.total ?? {};
+        return {
+          title: 'TOTALS', subtitle: code, icon: this.radarIconURL,
+          rows: [
+            { label: 'Platform type', value: 'High-frequency radar network' },
+            ...row('Institution', total.institution),
+            { label: 'Stations', value: network.stations.filter(s => !s.notOnEUNode).map(s => s.id).join(', ') },
+            ...row('License', total.license),
+            ...row('Summary', total.summary, { long: true }),
+          ],
+        };
+      }
+      const station = network.stations.find(s => s.id === id);
+      if (!station) return null;
+      const meta = station.metadata ?? {};
+      return {
+        title: id, subtitle: code, icon: this.radarIconURL,
+        rows: [
+          { label: 'Platform type', value: 'High-frequency radar station' },
+          ...row('Institution', meta.institution),
+          { label: 'Position', value: `${Math.abs(station.latitude).toFixed(2)}° ${station.latitude < 0 ? 'S' : 'N'}, `
+            + `${Math.abs(station.longitude).toFixed(2)}° ${station.longitude < 0 ? 'W' : 'E'}` },
+          // Many stations write the same string in both
+          ...row('Sensor', [...new Set([meta.manufacturer, meta.sensor_model].filter(Boolean))].join(' · ')),
+          ...row('Method', meta.doa_estimation_method),
+          ...row('Last calibration', meta.last_calibration_date && this.formatInstallDate(meta.last_calibration_date.slice(0, 10))),
+          ...row('Data', meta.time_coverage_start && `${meta.time_coverage_start.slice(0, 10)} – ${meta.time_coverage_end?.slice(0, 10) ?? ''}`),
+        ],
+      };
     },
     isHFRContext() {
       if (this.hfrPlatformKind) return false;

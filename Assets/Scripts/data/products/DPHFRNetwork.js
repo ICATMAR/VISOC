@@ -199,6 +199,25 @@ class DPHFRNetwork extends DP {
     return { merged: { total, stations }, notMatchingKeys };
   }
 
+  // One of getAllNetworks()' groups by its code ('HFR-DeltaEbro'): the
+  // Total's site code, or its stations' network should the Total's metadata
+  // have failed to load
+  networkCode(network) {
+    return network?.total?.site_code ?? network?.stations[0]?.metadata?.network;
+  }
+
+  // getNumberOfValidPointsPerNetwork() for any network on the EU HFR Node,
+  // as the node publishes it: `network` is one of getAllNetworks()' groups.
+  // Without the static catalogue and GitHub that the ICATMAR network's own
+  // counts draw on - those are for ICATMAR's processing, not the node's.
+  getNumberOfValidPointsForEUNetwork(stationsProduct, network, startDate, endDate) {
+    const euHFRSource = stationsProduct.sources.find(s => s instanceof SourceErddapEUHFR);
+    const code = this.networkCode(network);
+    if (!euHFRSource || !code) return [];
+    const stationIds = network.stations.filter(s => !s.notOnEUNode).map(s => s.id);
+    return euHFRSource.getNumberOfValidPointsForNetwork(code, stationIds, startDate, endDate);
+  }
+
   // One station: live winning, but for the static fields (see
   // mergePreferringLive), and for `staticMetadata` within its metadata
   mergeStation(liveStation, staticStation, notMatchingKeys, staticMetadata) {

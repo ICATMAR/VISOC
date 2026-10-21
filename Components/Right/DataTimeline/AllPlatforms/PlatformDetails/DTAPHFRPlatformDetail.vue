@@ -21,7 +21,7 @@
       </div>
 
       <!-- Line 2: name + status -->
-      <span class="pd-station-name">{{ station.name }}</span>
+      <span class="pd-station-name">{{ station.name ?? station.id }}</span>
       <div class="pd-status">
         <div class="pd-status-dot" :class="status"></div>
         <span>{{ $t(statusLabel) }}</span>
@@ -90,20 +90,7 @@ export default {
     this.loadStations();
   },
   mounted() {
-    if (!this.station) return;
-    this.initMap();
-    const iconEl = document.createElement('div');
-    iconEl.className = 'pd-map-icon';
-    const markerImg = document.createElement('img');
-    markerImg.src = this.radarIconURL;
-    iconEl.appendChild(markerImg);
-    this.markerOverlay = new ol.Overlay({
-      element: iconEl,
-      positioning: 'center-center',
-      stopEvent: false,
-      position: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
-    });
-    this.map.addOverlay(this.markerOverlay);
+    this.showStationOnMap();
     this._onDocMouseMove = (e) => {
       if (!this.isDragging) return;
       if (this.$refs.valuesScroll)
@@ -125,20 +112,44 @@ export default {
       dragStartX: 0,
       dragScrollLeft: 0,
       stations: [],
+      networks: [], // every network on the EU HFR Node, for another network's station
     }
   },
   methods: {
-    initMap() {
+    // The mini map, on the selected station. Its element only exists while a
+    // station is (the template's v-if), and a station can arrive after this
+    // mounts - another network's, once the EU HFR Node's networks load - or
+    // go and come back, which renders a new element: so the map is created
+    // or moved onto whatever element is there now.
+    showStationOnMap() {
+      const target = this.$refs.stationMap;
+      if (!this.station || !target) return;
+      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
+      if (!this.map) {
+        this.initMap(target, coords);
+      } else if (this.map.getTargetElement() !== target) {
+        this.map.setTarget(target);
+        this.map.getView().setCenter(coords);
+      } else {
+        this.map.getView().animate({ center: coords, duration: 300 });
+      }
+      this.markerOverlay.setPosition(coords);
+    },
+    initMap(target, coords) {
       this.map = new ol.Map({
-        target: this.$refs.stationMap,
+        target,
         controls: [],
         interactions: [],
         layers: window.createDetailMapLayers(),
-        view: new ol.View({
-          center: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
-          zoom: 11
-        })
+        view: new ol.View({ center: coords, zoom: 11 }),
       });
+      const iconEl = document.createElement('div');
+      iconEl.className = 'pd-map-icon';
+      const markerImg = document.createElement('img');
+      markerImg.src = this.radarIconURL;
+      iconEl.appendChild(markerImg);
+      this.markerOverlay = new ol.Overlay({ element: iconEl, positioning: 'center-center', stopEvent: false });
+      this.map.addOverlay(this.markerOverlay);
     },
     centerMainMap() {
       if (!this.station) return;
@@ -163,6 +174,7 @@ export default {
     async loadStations() {
       try {
         this.stations = await this.$dataService.hfrnetwork.getICATMARStations(this.$dataService.hfrstations);
+        this.networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
       } catch (error) {
         console.error('Error loading HFR stations:', error);
       }
@@ -182,13 +194,20 @@ export default {
     // See pdFocusMixin
     mainMapFocusKey() { return this.station?.id; },
     station() {
-      const id = this.$gui.selectedPlatform?.stationId;
+      const { stationId: id, network } = this.$gui.selectedPlatform ?? {};
       if (!id) return null;
+      // Another network's, as the EU HFR Node publishes it - by its network,
+      // since codes repeat across networks
+      if (network && network !== 'HFR-ICATMAR') {
+        const group = this.networks.find(n => this.$dataService.hfrnetwork.networkCode(n) === network);
+        return group?.stations.find(station => station.id === id) ?? null;
+      }
       return this.stations.find(station => station.id === id) ?? null;
     },
     coordsLabel() {
       if (!this.station) return '';
-      return `${this.station.latitude.toFixed(2)}° N, ${this.station.longitude.toFixed(2)}° E`;
+      const { latitude, longitude } = this.station;
+      return `${Math.abs(latitude).toFixed(2)}° ${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(2)}° ${longitude < 0 ? 'W' : 'E'}`;
     },
     sp() { return this.$gui.selectedPlatform; },
     formattedDate() {
@@ -239,11 +258,8 @@ export default {
     // bar click (same station, new date), and it fires again when the live
     // sources replace the static entry with one carrying the real position.
     station() {
-      if (!this.map || !this.station) return;
       this.imgError = false;
-      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
-      this.markerOverlay?.setPosition(coords);
-      this.map.getView().animate({ center: coords, duration: 300 });
+      this.$nextTick(() => this.showStationOnMap()); // once the v-if has rendered the element
     }
   }
 }

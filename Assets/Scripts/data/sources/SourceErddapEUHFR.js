@@ -13,9 +13,16 @@ const NETWORK_METADATA_KEYS = ['acknowledgement', 'institution', 'site_code','ci
 // ago have since drifted (AREN/PBCN/GNST were recalibrated in May 2026).
 const STATION_METADATA_KEYS = ['doa_estimation_method', 'institution', 'network', 'title', 'sensor_model', 'manufacturer', 'summary', 'wmo_platform_code', 'last_calibration_date', 'time_coverage_start', 'time_coverage_end'];
 
+// The node serves some text double-encoded - 'DirecciÃ³' where 'Direcció'
+// belongs. Undone where that pattern shows; left alone otherwise.
+const repairEncoding = text => {
+  if (typeof text !== 'string' || !/[\u00c0-\u00ff][\u0080-\u00bf]/.test(text)) return text;
+  try { return decodeURIComponent(escape(text)); } catch { return text; }
+};
+
 function pick(metadata, keys) {
   const picked = {};
-  keys.forEach(key => { if (metadata[key] !== undefined) picked[key] = metadata[key]; });
+  keys.forEach(key => { if (metadata[key] !== undefined) picked[key] = repairEncoding(metadata[key]); });
   return picked;
 }
 
@@ -218,7 +225,16 @@ class SourceErddapEUHFR extends Source {
           latitude: Number(metadata['site_lat']),
           longitude: Number(metadata['site_lon']),
           coverage: coverageFrom(metadata),
-          metadata: pick(metadata, STATION_METADATA_KEYS),
+          metadata: {
+            ...pick(metadata, STATION_METADATA_KEYS),
+            // The network's code, from the dataset id - what identifies the
+            // station's network everywhere (getAllNetworks()' groups, the
+            // selection). The station's own `network` attribute is free text
+            // each operator writes its own way ('HFR_Galicia', 'GULF OF
+            // TRIESTE (GOT)'), kept as network_name.
+            network: `HFR-${networkName}`,
+            ...(metadata['network'] && metadata['network'] !== `HFR-${networkName}` ? { network_name: repairEncoding(metadata['network']) } : {}),
+          },
         };
       })().catch(skipFailed(dataset))));
 
@@ -328,19 +344,55 @@ class SourceErddapEUHFR extends Source {
       const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
       const dataset = allDatasets.map(d => d['datasetID'])
         .find(datasetID => { const parsed = this.parseDatasetId(datasetID); return parsed?.station === id && !parsed.isTable; });
-      if (!dataset) return undefined;
-      const metadata = await this.fetchMetadata(dataset, ['time_coverage_start', 'time_coverage_end']);
-      return {
-        dataset,
-        isGriddap: true,
-        startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
-        endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
-      };
+      return dataset ? this.griddapEntry(dataset) : undefined;
     })().catch(error => {
       console.warn(`EU HFR Node: no dataset for ${id}:`, error);
       return undefined;
     });
     return this.otherNetworkStations[id];
+  }
+
+  // A plain (griddap) dataset as an entry fetchGriddapValidPointsCount() can
+  // count and cache into - its time coverage read from its info. One per
+  // dataset.
+  griddapEntry(dataset) {
+    this.griddapEntries ??= {};
+    this.griddapEntries[dataset] ??= this.fetchMetadata(dataset, ['time_coverage_start', 'time_coverage_end'])
+      .then(metadata => ({
+        dataset,
+        isGriddap: true,
+        startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
+        endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+      }))
+      .catch(error => { delete this.griddapEntries[dataset]; throw error; });
+    return this.griddapEntries[dataset];
+  }
+
+  // Valid points per hour for one network as the node publishes it -
+  // `network` its site code ('HFR-DeltaEbro') - its Total ('TOTALS') and each
+  // of `stationIds`: an array of promises of { id, points }, one per entity,
+  // like getNumberOfValidPointsPerStations(). A station's _table dataset is
+  // counted with orderByCount (ICATMAR's), any other on its griddap QCflag.
+  // points is undefined for a dataset the node doesn't have.
+  getNumberOfValidPointsForNetwork(network, stationIds, startDate, endDate) {
+    const code = network.replace(/^HFR-/, '');
+    const count = async (id, dataset) => {
+      try {
+        const known = this.stations[`${code}-${id}`]; // from getAllNetworks()
+        const entry = known?.dataset.endsWith('_table') ? known : await this.griddapEntry(known?.dataset ?? dataset);
+        const points = entry.isGriddap
+          ? await this.fetchGriddapValidPointsCount(entry, startDate, endDate)
+          : await this.fetchValidPointsCount(entry, 'RDVA', startDate, endDate);
+        return { id, points };
+      } catch (error) {
+        console.warn(`EU HFR Node: no valid points for ${network} ${id}:`, error);
+        return { id, points: undefined };
+      }
+    };
+    return [
+      count('TOTALS', `EUHFR_NRTcurrent_HFR-${code}-Total_v3`),
+      ...stationIds.map(id => count(id, `EUHFR_NRTcurrent_HFR-${code}-${id}_v3`)),
+    ];
   }
 
   // fetchValidPointsCount() for a dataset with no _table variant: the

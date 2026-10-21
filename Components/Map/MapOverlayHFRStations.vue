@@ -127,6 +127,10 @@ export default {
         && !NON_ICATMAR_INSTITUTIONS.includes(station.metadata?.institution);
     },
     isIconSelected(station) {
+      // Only in the selected station's network (ICATMAR's when none is
+      // named) - codes repeat across networks
+      const network = this.$gui.selectedPlatform?.network ?? 'HFR-ICATMAR';
+      if (station.metadata?.network !== network) return false;
       // TOTALS stands for the whole network, so it lights up every station
       return this.$gui.isPlatformSelected('hfr', station.id) || this.$gui.isPlatformSelected('hfr', 'TOTALS');
     },
@@ -161,7 +165,7 @@ export default {
     },
     platformClicked: function(e, station) {
       e.stopPropagation();
-      this.$gui.selectPlatform('hfr', station.id);
+      this.$gui.selectPlatform('hfr', station.id, { network: station.metadata?.network });
     }
   },
   computed: {

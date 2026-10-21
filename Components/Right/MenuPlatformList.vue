@@ -259,7 +259,7 @@ export default {
       this.openNetworks = { ...this.openNetworks, [network]: !this.openNetworks[network] };
     },
     select(platform) {
-      this.$gui.selectPlatform(this.dashboardId, platform.id);
+      this.$gui.selectPlatform(this.dashboardId, platform.id, platform.network ? { network: platform.network } : {});
       this.$nextTick(() => this.$gui.centerMainMapOn(platform.longitude, platform.latitude));
     },
   },

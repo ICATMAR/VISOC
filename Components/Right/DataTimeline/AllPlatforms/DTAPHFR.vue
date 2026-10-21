@@ -64,59 +64,80 @@
 import DTLayout from '../Shared/DTLayout.vue';
 import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 
+// ICATMAR's network, as ICATMAR processes it
+const ICATMAR_STATIONS = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL',
+  // Puertos del Estado's (GitHub, or their HFR-DeltaEbro copies on the EU HFR Node)
+  'SALO', 'ALFA', 'VINA'];
+
+const emptyRow = name => ({ name, hourlyData: [], maxValue: 0 });
+
 export default {
   name: "DTAPHFR",
+  props: {
+    // A network as the EU HFR Node publishes it (one of getAllNetworks()'
+    // groups); ICATMAR's own network when not given
+    network: { type: Object, default: null },
+  },
   created() {
     this.loadStations();
+    this.selectBarAtSelectedTime(); // a platform picked before this opened
   },
   data() {
     return {
       hoveredStation: null,
       selectedBar: null,
-      totals: { name: 'TOTALS', hourlyData: [], maxValue: 0 },
-      stations: [
-        { name: 'CNET', hourlyData: [], maxValue: 0 },
-        { name: 'CREU', hourlyData: [], maxValue: 0 },
-        { name: 'BEGU', hourlyData: [], maxValue: 0 },
-        { name: 'TOSS', hourlyData: [], maxValue: 0 },
-        { name: 'AREN', hourlyData: [], maxValue: 0 },
-        { name: 'PBCN', hourlyData: [], maxValue: 0 },
-        { name: 'GNST', hourlyData: [], maxValue: 0 },
-        { name: 'SCAL', hourlyData: [], maxValue: 0 },
-        // Puertos del Estado's (GitHub only, like SCAL)
-        { name: 'SALO', hourlyData: [], maxValue: 0 },
-        { name: 'ALFA', hourlyData: [], maxValue: 0 },
-        { name: 'VINA', hourlyData: [], maxValue: 0 },
-      ],
+      totals: emptyRow('TOTALS'),
+      stations: this.stationRows(),
     }
   },
   methods: {
+    stationRows() {
+      const ids = this.network
+        ? [...this.network.stations].filter(s => !s.notOnEUNode).sort((a, b) => b.latitude - a.latitude).map(s => s.id)
+        : ICATMAR_STATIONS;
+      return ids.map(emptyRow);
+    },
+    // What a click on a row selects, besides the station: its network, when
+    // it is another network's - codes repeat across networks
+    selectionDetails() {
+      return this.network ? { network: this.networkCode } : {};
+    },
     // getNumberOfValidPointsPerNetwork() resolves to an array of per-entity
     // promises (one per station, plus one for TOTALS), not a single
     // Promise<object> - each row's bars are filled in as soon as ITS own
     // promise resolves, instead of everything waiting on the slowest one.
     async loadStations() {
+      const request = (this.request ?? 0) + 1; // a newer network's rows supersede these
+      this.request = request;
       this.stations.forEach(s => { s.loading = true; });
       this.totals.loading = true;
 
-      const promises = await this.$dataService.hfrnetwork.getNumberOfValidPointsPerNetwork(
-        this.$dataService.hfrstations, this.$dataService.hfrtotals,
-        this.$gui.timelineStartDate, this.$gui.timelineEndDate
-      );
+      const promises = this.network
+        ? this.$dataService.hfrnetwork.getNumberOfValidPointsForEUNetwork(
+          this.$dataService.hfrstations, this.network,
+          this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+        : await this.$dataService.hfrnetwork.getNumberOfValidPointsPerNetwork(
+          this.$dataService.hfrstations, this.$dataService.hfrtotals,
+          this.$gui.timelineStartDate, this.$gui.timelineEndDate);
 
       const startMs = this.$gui.timelineStartDate.getTime();
       promises.forEach(promise => promise.then(({ id, points }) => {
+        if (request !== this.request) return;
         const entry = id === 'TOTALS' ? this.totals : this.stations.find(s => s.name === id);
         if (!entry) return;
         entry.loading = false;
         if (points == null) { entry.noData = true; return; } // e.g. SCAL - no EU HFR Node dataset
 
         Object.entries(points).forEach(([timeStr, count]) => {
-          const hourIndex = Math.round((new Date(timeStr).getTime() - startMs) / (1000 * 3600));
+          // A bar is the hour ENDING at its time: 13:00's count is drawn
+          // between 12:00 and 13:00
+          const hourIndex = Math.ceil((new Date(timeStr).getTime() - startMs) / (1000 * 3600)) - 1;
           if (hourIndex < 0) return;
           entry.hourlyData[hourIndex] = count;
           if (count > entry.maxValue) entry.maxValue = count;
         });
+        // The selected bar's count has arrived
+        if (this.$gui.selectedPlatform?.stationId === id) this.selectBarAtSelectedTime();
       }));
     },
     totalsValue(cellIndex, subIndex) {
@@ -128,24 +149,52 @@ export default {
       return `${pts} valid points`;
     },
     totalsClicked(cellIndex, subIndex, cellDate) {
-      const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
+      const date = new Date(cellDate.getTime() + (subIndex + 1) * 3600 * 1000); // the bar's end
+      this.$gui.selectedTime = date;
       this.$gui.selectedPlatform = {
         stationId: 'TOTALS',
         value: this.totalsValue(cellIndex, subIndex),
         date,
+        ...this.selectionDetails(),
       };
       this.selectedBar = { stationName: 'TOTALS', cellIndex, subIndex };
       this.$gui.isPlatformDetailOpen = true;
     },
     stationClicked(station, cellIndex, subIndex, cellDate) {
-      const date = new Date(cellDate.getTime() + subIndex * 3600 * 1000);
+      const date = new Date(cellDate.getTime() + (subIndex + 1) * 3600 * 1000); // the bar's end
+      this.$gui.selectedTime = date;
       this.$gui.selectedPlatform = {
         stationId: station.name,
         value: this.getHourlyValue(station, cellIndex, subIndex),
         date,
+        ...this.selectionDetails(),
       };
       this.selectedBar = { stationName: station.name, cellIndex, subIndex };
       this.$gui.isPlatformDetailOpen = true;
+    },
+    // The bar of the hour `time` belongs to, as the map rounds it (9:30 up
+    // to 10:30 is 10:00): the bar ending at that hour. { cellIndex, subIndex,
+    // date } - null outside the timeline.
+    barAt(time) {
+      const hour = Math.floor((new Date(time).getTime() + 1800000) / 3600000) * 3600000;
+      const start = this.$gui.timelineStartDate.getTime();
+      if (hour <= start || hour > this.$gui.timelineEndDate.getTime()) return null;
+      const absHour = Math.round((hour - start) / 3600000) - 1;
+      return { cellIndex: Math.floor(absHour / this.barsPerCell), subIndex: absHour % this.barsPerCell, date: new Date(hour) };
+    },
+    // The selected platform's bar at the selected time, its count and hour
+    // written into the selection for the platform detail
+    selectBarAtSelectedTime() {
+      const selection = this.$gui.selectedPlatform;
+      const id = selection?.stationId;
+      const entry = id === 'TOTALS' ? this.totals : this.stations.find(s => s.name === id);
+      if (!entry || !this.$gui.isPlatformDetailOpen) { this.selectedBar = null; return; }
+      const bar = this.barAt(this.$gui.selectedTime);
+      if (!bar) { this.selectedBar = null; return; }
+      this.selectedBar = { stationName: id, cellIndex: bar.cellIndex, subIndex: bar.subIndex };
+      const value = this.getHourlyValue(entry, bar.cellIndex, bar.subIndex);
+      if (selection.date?.getTime() !== bar.date.getTime() || selection.value !== value)
+        this.$gui.selectedPlatform = { ...selection, value, date: bar.date };
     },
     isBarSelected(stationName, cellIndex, subIndex) {
       return this.selectedBar?.stationName === stationName
@@ -160,7 +209,7 @@ export default {
         && this.$gui.selectedPlatform?.stationId === stationName;
     },
     stationNameClicked(v) {
-      this.$gui.selectedPlatform = { stationId: v.name };
+      this.$gui.selectedPlatform = { stationId: v.name, ...this.selectionDetails() };
       this.$gui.isPlatformDetailOpen = true;
     },
   },
@@ -171,41 +220,29 @@ export default {
     allVariables() {
       return [this.totals, ...this.stations];
     },
+    networkCode() {
+      return this.$dataService.hfrnetwork.networkCode(this.network);
+    },
   },
   watch: {
-    '$gui.isPlatformDetailOpen'(isOpen) {
-      if (!isOpen) this.selectedBar = null;
-    },
-    '$gui.timelineEffectiveIntervalMinutes'() {
+    // Another network: its own rows, from scratch
+    networkCode() {
       this.selectedBar = null;
+      this.totals = emptyRow('TOTALS');
+      this.stations = this.stationRows();
+      this.loadStations();
     },
-    '$gui.selectedPlatform'(newP, oldP) {
-      if (!this.selectedBar) return;
-      if (newP?.date) return;
-      const newId = newP?.stationId;
-      const oldId = oldP?.stationId;
-      // Double-click fix: same entity, map click cleared the date → restore from selectedBar
-      if (newId && newId === oldId && !newP.date && oldP?.date) {
-        const entry = newId === 'TOTALS' ? this.totals : this.stations.find(st => st.name === newId);
-        if (entry) {
-          const value = this.getHourlyValue(entry, this.selectedBar.cellIndex, this.selectedBar.subIndex);
-          this.$gui.selectedPlatform = { stationId: newId, value, date: oldP.date };
-        }
-        return;
-      }
-      if (!newId || !oldId || newId === oldId) return;
-      const newEntry = newId === 'TOTALS' ? this.totals : this.stations.find(s => s.name === newId);
-      if (!newEntry) return;
-      const oldDate = oldP?.date;
-      if (!oldDate) return;
-      const elapsedHours = (oldDate.getTime() - this.$gui.timelineStartDate.getTime()) / (1000 * 3600);
-      const absHour = Math.floor(elapsedHours);
-      const subIndex = absHour % this.barsPerCell;
-      const cellIndex = Math.floor(absHour / this.barsPerCell);
-      const value = this.getHourlyValue(newEntry, cellIndex, subIndex);
-      this.$gui.selectedPlatform = { stationId: newId, value, date: oldDate };
-      this.selectedBar = { stationName: newId, cellIndex, subIndex };
+    '$gui.isPlatformDetailOpen'(isOpen) {
+      if (isOpen) this.selectBarAtSelectedTime();
+      else this.selectedBar = null;
     },
+    // The bars are grouped differently after a zoom
+    '$gui.timelineEffectiveIntervalMinutes'() { this.selectBarAtSelectedTime(); },
+    // The selected bar is always the selected time's: a bar click sets that
+    // time, a platform picked elsewhere (map, menu, its name) opens on it,
+    // and the time handle moves it
+    '$gui.selectedPlatform'() { this.selectBarAtSelectedTime(); },
+    '$gui.selectedTime'() { this.selectBarAtSelectedTime(); },
   },
   components: {
     DTLayout,
