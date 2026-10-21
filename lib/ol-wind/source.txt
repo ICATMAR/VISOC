@@ -17,3 +17,6 @@ VISOC patches (search the file for "VISOC patch" - re-apply them on an update):
   random age; every respawn after it lives a full maxAge.
 - WindLayerRender.setData: clears the canvas before the new field's particles
   are seeded - the previous data's trails used to linger under the new ones.
+- WindCore.fadeIn: option `fadeAlpha` (number or function) - the trails'
+  per-frame persistence, separate from globalAlpha (the lines' opacity), so
+  the trail length can follow the zoom. `residueAlpha` may be a function too.

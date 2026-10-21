@@ -13,12 +13,17 @@
 
 // Particle look
 const PARTICLE_MAX_AGE = 120;   // frames a particle lives - with the speed below, its trail length
-const ALPHA_OVERLAP = 0.98; // The persistance of trail (lower - disappears faster)
+const ALPHA_OVERLAP = 0.98; // The persistance of trail (lower - disappears faster), at REFERENCE_ZOOM and further out
 const PARTICLE_SPACING = 6;   // px between particles, on average, where there is data
 const TRAIL_WIDTH = 4;
-// How fast a particle crosses the screen: px per frame for 1 m/s, the same at
-// every zoom (see velocityScale)
+// How fast a particle crosses the screen at REFERENCE_ZOOM: px per frame for
+// 1 m/s. The speed is constant on the MAP (see velocityScale), so zooming in
+// a level doubles it on the screen.
 const PX_PER_FRAME_PER_MS = 0.6;
+const REFERENCE_ZOOM = 8;
+// How much shorter the trails get per zoom level in, so the faster particles
+// don't leave long streaks (see fadeAlpha)
+const FADE_PER_ZOOM = 0.05;
 // Grid points: a network whose points would be closer than this on screen is
 // shown as one circle with its count instead
 const MIN_POINT_SPACING_PX = 4;
@@ -139,11 +144,12 @@ export default {
             paths: this.particleCount(),
             lineWidth: TRAIL_WIDTH,
             globalAlpha: ALPHA_OVERLAP,
+            fadeAlpha: () => this.fadeAlpha(),
             frameRate: 16,
             // Clear the trails' faint leftovers about once a second (see the
             // VISOC patches in lib/ol-wind)
             residueEvery: 60,
-            residueAlpha: 8,
+            residueAlpha: () => this.residueAlpha(),
             colorScale: speed => this.$gui.colorFor('HCSP', speed) ?? '#fff',
           },
           fieldOptions: { wrapX: false, flipY: true },
@@ -181,18 +187,34 @@ export default {
       };
       field.__latitudeCorrected = true;
     },
-    // Degrees per frame for 1 m/s such that a particle crosses the screen at
-    // PX_PER_FRAME_PER_MS whatever the zoom. In Web Mercator a screen pixel
-    // spans 360 / (256 * 2^zoom) degrees of longitude, but only cos(latitude)
-    // of that in latitude; with the correction above both directions take the
-    // latitude's length, hence the cos() here (at the view's centre - the
-    // field is a few degrees tall at most). Checked on the map: 0.5 m/s east
-    // and 0.5 m/s north cross the same number of pixels per frame.
+    // Degrees per frame for 1 m/s: constant on the MAP, as in the old
+    // AnimationEngine (whose particles stepped a fixed distance in lon/lat per
+    // frame) - so a particle crosses the same stretch of sea in the same time
+    // at any zoom, and zooming in a level doubles its speed on the screen.
+    // Calibrated to cross PX_PER_FRAME_PER_MS screen pixels at REFERENCE_ZOOM:
+    // a pixel spans 360 / (256 * 2^zoom) degrees of longitude, and only
+    // cos(latitude) of that in latitude; with the correction above both
+    // directions take the latitude's length, hence the cos() (at the view's
+    // centre - the field is a few degrees tall at most).
     velocityScale() {
       const view = this.map?.getView();
-      const zoom = view?.getZoom() ?? 8;
       const latitude = view ? ol.proj.toLonLat(view.getCenter())[1] : 41.5;
-      return PX_PER_FRAME_PER_MS * 360 / (256 * 2 ** zoom) * Math.cos(latitude * DEG);
+      return PX_PER_FRAME_PER_MS * 360 / (256 * 2 ** REFERENCE_ZOOM) * Math.cos(latitude * DEG);
+    },
+    // How much of the trails survives each frame: ALPHA_OVERLAP at
+    // REFERENCE_ZOOM and further out, FADE_PER_ZOOM less per zoom level in -
+    // the old AnimationEngine's adaptive trail length (0.98 - 0.05 per level
+    // past 8.5), so particles that move faster on screen leave trails of
+    // about the same length.
+    fadeAlpha() {
+      const zoom = this.map?.getView().getZoom() ?? REFERENCE_ZOOM;
+      return Math.min(ALPHA_OVERLAP, ALPHA_OVERLAP - FADE_PER_ZOOM * (zoom - REFERENCE_ZOOM - 0.5));
+    },
+    // The faintest alpha the fade still takes down: below 0.5 / (1 - fade) a
+    // pixel rounds back to itself every frame (8-bit alpha) and would stay
+    // forever, so the residue cleanup clears everything under it
+    residueAlpha() {
+      return Math.ceil(0.5 / (1 - this.fadeAlpha())) + 1;
     },
     // Particles are only spawned where there is data (see the VISOC patches
     // in lib/ol-wind), so the count follows the screen area the radars cover:
