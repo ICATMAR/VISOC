@@ -15,6 +15,7 @@
 const PARTICLE_MAX_AGE = 120;   // frames a particle lives - with the speed below, its trail length
 const ALPHA_OVERLAP = 0.98; // The persistance of trail (lower - disappears faster)
 const PARTICLE_SPACING = 6;   // px between particles, on average, where there is data
+const TRAIL_WIDTH = 4;
 // How fast a particle crosses the screen: px per frame for 1 m/s, the same at
 // every zoom (see velocityScale)
 const PX_PER_FRAME_PER_MS = 0.6;
@@ -136,9 +137,13 @@ export default {
             velocityScale: () => this.velocityScale(),
             maxAge: PARTICLE_MAX_AGE,
             paths: this.particleCount(),
-            lineWidth: 3,
+            lineWidth: TRAIL_WIDTH,
             globalAlpha: ALPHA_OVERLAP,
             frameRate: 16,
+            // Clear the trails' faint leftovers about once a second (see the
+            // VISOC patches in lib/ol-wind)
+            residueEvery: 60,
+            residueAlpha: 8,
             colorScale: speed => this.$gui.colorFor('HCSP', speed) ?? '#fff',
           },
           fieldOptions: { wrapX: false, flipY: true },

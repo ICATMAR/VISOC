@@ -1,1 +1,12 @@
 https://github.com/sakitam-fdd/wind-layer (packages/ol) - ol-wind v1.1.9, UMD build dist/ol-wind.js from https://cdn.jsdelivr.net/npm/ol-wind@1.1.9/dist/ol-wind.js
+
+VISOC patches (search the file for "VISOC patch" - re-apply them on an update):
+- WindLayerRender.prepareFrame: stops the animation and clears the canvas while
+  the map is interacting/animating, and flags any view change (programmatic
+  ones included) - the stale canvas used to flash up after a pan or zoom.
+- WindLayerRender.renderFrame: after a view change, clears the canvas and
+  re-seeds every particle in the new view - no segments or trail residue left
+  from the previous view.
+- WindCore.render / clearResidue: options `residueEvery` (frames, 0 = off) and
+  `residueAlpha` - clears pixels the destination-in fade can never take to
+  zero (8-bit rounding), which otherwise build up as a faint haze.
