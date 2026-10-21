@@ -194,17 +194,13 @@ export default {
       const latitude = view ? ol.proj.toLonLat(view.getCenter())[1] : 41.5;
       return PX_PER_FRAME_PER_MS * 360 / (256 * 2 ** zoom) * Math.cos(latitude * DEG);
     },
-    // Particles are spawned anywhere on screen and die at once outside the
-    // data, so how many are needed depends on how much of the screen the
-    // radars cover: enough for an even density there, without paying for a
-    // full screen of them when the coverage is a corner of it. A particle in
-    // the coverage lives PARTICLE_MAX_AGE frames, one outside it about two.
+    // Particles are only spawned where there is data (see the VISOC patches
+    // in lib/ol-wind), so the count follows the screen area the radars cover:
+    // an even density there, however much of the screen that is.
     particleCount() {
       const size = this.map.getSize();
-      const screenPx = size[0] * size[1];
-      const coveredPx = Math.min(screenPx, this.coveredPixels());
-      const density = 1 / (PARTICLE_SPACING * PARTICLE_SPACING);
-      const count = density * coveredPx + 2 * density * (screenPx - coveredPx) / PARTICLE_MAX_AGE;
+      const coveredPx = Math.min(size[0] * size[1], this.coveredPixels());
+      const count = coveredPx / (PARTICLE_SPACING * PARTICLE_SPACING);
       return Math.round(Math.min(8000, Math.max(200, count)));
     },
     // Screen area of the cells with data that are in view

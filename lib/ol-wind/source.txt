@@ -10,3 +10,8 @@ VISOC patches (search the file for "VISOC patch" - re-apply them on an update):
 - WindCore.render / clearResidue: options `residueEvery` (frames, 0 = off) and
   `residueAlpha` - clears pixels the destination-in fade can never take to
   zero (8-bit rounding), which otherwise build up as a faint haze.
+- WindCore.spawn (used by prepareParticlePaths and the respawn in
+  moveParticles): particles are placed where the field has data (up to 20
+  tries) - placed anywhere, those off a small field died on their first frame
+  and respawned as one synchronized cohort. A particle's first life has a
+  random age; every respawn after it lives a full maxAge.
