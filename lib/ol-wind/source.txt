@@ -15,3 +15,5 @@ VISOC patches (search the file for "VISOC patch" - re-apply them on an update):
   tries) - placed anywhere, those off a small field died on their first frame
   and respawned as one synchronized cohort. A particle's first life has a
   random age; every respawn after it lives a full maxAge.
+- WindLayerRender.setData: clears the canvas before the new field's particles
+  are seeded - the previous data's trails used to linger under the new ones.
