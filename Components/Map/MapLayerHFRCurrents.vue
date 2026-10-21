@@ -13,10 +13,11 @@
 
 // Particle look
 const PARTICLE_MAX_AGE = 120;   // frames a particle lives - with the speed below, its trail length
+const ALPHA_OVERLAP = 0.98; // The persistance of trail (lower - disappears faster)
 const PARTICLE_SPACING = 6;   // px between particles, on average, where there is data
 // How fast a particle crosses the screen: px per frame for 1 m/s, the same at
 // every zoom (see velocityScale)
-const PX_PER_FRAME_PER_MS = 1;
+const PX_PER_FRAME_PER_MS = 0.6;
 // Grid points: a network whose points would be closer than this on screen is
 // shown as one circle with its count instead
 const MIN_POINT_SPACING_PX = 4;
@@ -136,7 +137,7 @@ export default {
             maxAge: PARTICLE_MAX_AGE,
             paths: this.particleCount(),
             lineWidth: 3,
-            globalAlpha: 0.97,
+            globalAlpha: ALPHA_OVERLAP,
             frameRate: 16,
             colorScale: speed => this.$gui.colorFor('HCSP', speed) ?? '#fff',
           },
