@@ -3,9 +3,10 @@
        arrow) and how fast, on the current-speed colour scale - the same one
        the HF radar particles are painted with, so the two can be compared at
        a glance. -->
+  <!-- The number alone: the unit is in the tooltip and on the legend -->
   <div class="current-chip" :style="{ background: color }" :title="title">
     <i v-if="direction != null" class="fa fa-location-arrow current-chip-arrow" :style="{ rotate: (direction - 45) + 'deg' }"></i>
-    <span>{{ value }}</span>
+    <span>{{ number }}</span>
   </div>
 </template>
 
@@ -21,9 +22,12 @@ export default {
   },
   computed: {
     unit() { return this.$gui.unitFor('HCSP'); },
+    number() {
+      const { decimals, toDisplay } = this.unit;
+      return toDisplay(this.speed).toFixed(decimals);
+    },
     value() {
-      const { decimals, toDisplay, unit } = this.unit;
-      return `${toDisplay(this.speed).toFixed(decimals)} ${unit}`;
+      return `${this.number} ${this.unit.unit}`;
     },
     color() {
       return this.$gui.colorFor('HCSP', this.speed) ?? 'white';
@@ -43,15 +47,21 @@ export default {
 .current-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 7px;
+  gap: 2px;
+  padding: 0px 3px;
+  border-radius: 10px;
   font-size: 0.7rem;
-  font-weight: bold;
   color: black;
   text-shadow: none;
   white-space: nowrap;
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
+}
+
+/* Black and unshadowed, over the global span style (white with a shadow) */
+.current-chip span,
+.current-chip i {
+  color: black;
+  text-shadow: none;
 }
 
 /* fa-location-arrow points north-east, hence the -45º */

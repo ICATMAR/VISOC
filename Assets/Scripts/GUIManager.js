@@ -66,8 +66,10 @@ class GUIManager {
   // Which provider's HF radar data the HFR dashboard shows: 'ICATMAR' (only
   // ICATMAR's network) or 'EU' (every network on the EU HFR Node).
   hfrSource = 'ICATMAR';
-  // Buoys can be overlaid on the HFR dashboard (bottom-right toggle).
+  // Buoys can be overlaid on the HFR dashboard (bottom-right toggle), and
+  // their currents are loading while this is true
   hfrShowBuoys = false;
+  hfrBuoysLoading = false;
   // What the currents layer draws (bottom-right toggles): moving particles,
   // and/or the totals' grid points - where the measurements are
   hfrShowParticles = true;

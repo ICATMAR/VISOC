@@ -134,7 +134,8 @@ export default {
       const request = (this.currentsRequest ?? 0) + 1;
       this.currentsRequest = request;
       this.currents = {};
-      if (!hour) return;
+      if (!hour) { this.$gui.hfrBuoysLoading = false; return; }
+      this.$gui.hfrBuoysLoading = true;
       const start = new Date(hour.getTime() - 2 * HALF_HOUR_MS);
       const end = new Date(hour.getTime() + 2 * HALF_HOUR_MS);
       let promises = [];
@@ -143,6 +144,10 @@ export default {
       } catch (error) {
         console.error('Could not load the buoys\' currents:', error);
       }
+      // Loading until every buoy has answered (the toggle shows a spinner)
+      Promise.allSettled(promises).then(() => {
+        if (request === this.currentsRequest) this.$gui.hfrBuoysLoading = false;
+      });
       promises.forEach(promise => promise.then(({ buoyId, data }) => {
         if (request !== this.currentsRequest) return;
         let best;

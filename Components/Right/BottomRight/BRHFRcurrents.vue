@@ -33,6 +33,7 @@
     <!-- On/Off options -->
     <div class="horizontal wrap options-container">
       <OnOffButtonWithText ref="toggleShowBuoys" :checked="$gui.hfrShowBuoys" :text="$t('buoys')" :inSize="'8px'"
+        :loading="$gui.hfrShowBuoys && $gui.hfrBuoysLoading"
         @toggle="$gui.hfrShowBuoys = $event"></OnOffButtonWithText>
       <OnOffButtonWithText ref="toggleShowDrifters" :checked="$gui.hfrShowDrifters" :text="$t('drifters')" :inSize="'8px'"
         @toggle="$gui.hfrShowDrifters = $event"></OnOffButtonWithText>
