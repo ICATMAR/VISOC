@@ -91,6 +91,7 @@ export default {
   },
   methods: {
     buildRows(buoys) {
+      this.catalogueBuoys = buoys; // to rebuild from when the external toggle changes
       // `name` is what DTLayout shows AND what it matches the hovered/selected
       // row by, and the map sets $gui.selectedPlatform.stationId to the buoy's
       // id - so the id has to be the name here for the two to line up.
@@ -98,7 +99,9 @@ export default {
       // Sorted north to south so the rows read like the coast does on the map
       // above them. A buoy with no position sinks to the bottom rather than
       // jumping to the top, which is where NaN comparisons would put it.
+      // Other institutions' buoys only with external platforms on
       this.buoys = buoys
+        .filter(buoy => this.$gui.isPlatformShown(buoy.institution))
         .map(buoy => ({
           id: buoy.id,
           name: buoy.id,
@@ -471,6 +474,9 @@ export default {
     },
   },
   watch: {
+    '$gui.platformsShowExternal'() {
+      this.buildRows(this.catalogueBuoys);
+    },
     '$gui.isPlatformDetailOpen'(isOpen) {
       if (!isOpen) this.selectedCell = null;
     },

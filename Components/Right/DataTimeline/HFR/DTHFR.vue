@@ -1,35 +1,40 @@
 <template>
-  <!-- Selected view -->
-  <component :is="currentView"></component>
+  <!-- Selected view: Compare once a buoy, drifter or point has been picked on
+       the map; until then (and for the views still to come) what to do -->
+  <DTHFRCompare v-if="$gui.hfrTab === 'Compare' && $gui.hfrPoint"></DTHFRCompare>
+  <div v-else class="horizontal hfr-placeholder">
+    <span>{{ $t(placeholder) }}</span>
+  </div>
 
   <!-- Bottom options -->
   <div class="horizontal wrap button-group bottom-bar">
-    <button v-for="opt in bottomOptions" :key="opt" class="clickable" :class="{ 'selectedOption': selectedOption == opt }"
-      @click="selectedOption = opt"><span>{{ $t(opt) }}</span></button>
+    <button v-for="tab in tabs" :key="tab" class="clickable" :class="{ 'selectedOption': $gui.hfrTab == tab }"
+      @click="$gui.hfrTab = tab"><span>{{ $t(tab) }}</span></button>
   </div>
 </template>
 
 
 <script>
-import DTHFRDefault from './DTHFRDefault.vue';
-import DTHFRModels from './DTHFRModels.vue';
+import DTHFRCompare from './DTHFRCompare.vue';
 
+// The HFR dashboard's bottom section, about one place (GUIManager.hfrPoint):
+// the current measured there, the radials behind it, and how the radars,
+// the platforms and the models compare.
 export default {
   name: "DTHFR",
   data() {
     return {
-      bottomOptions: ['Default view', 'Compare with models', 'Detail currents'],
-      selectedOption: 'Default view',
+      tabs: ['Currents', 'Radials', 'Compare'],
     }
   },
   computed: {
-    currentView() {
-      return this.selectedOption == 'Compare with models' ? 'DTHFRModels' : 'DTHFRDefault';
-    }
+    placeholder() {
+      if (this.$gui.hfrTab === 'Compare') return 'Click a buoy or a drifter on the map to compare it with the HF radars and the models';
+      return 'Coming soon: click a point on the map to see the currents and radials there';
+    },
   },
   components: {
-    DTHFRDefault,
-    DTHFRModels
+    DTHFRCompare,
   }
 }
 
@@ -46,4 +51,12 @@ export default {
   font-size: small;
 }
 
+.hfr-placeholder {
+  width: 100vw;
+  height: 90px;
+  align-items: center;
+  justify-content: center;
+  background: var(--lightBlue);
+  font-size: small;
+}
 </style>

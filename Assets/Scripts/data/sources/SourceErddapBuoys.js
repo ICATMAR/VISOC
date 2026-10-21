@@ -281,6 +281,9 @@ class SourceErddapBuoys extends SourceBuoys {
         if (isFinite(depth)) {
           if (depths[timestamp] != undefined && depths[timestamp] >= depth) return;
           depths[timestamp] = depth;
+          // Carried along as DEPTH, so a reading can say how deep it was
+          // measured (DPBuoys puts it on the point)
+          values.DEPTH = depth;
         }
       }
 

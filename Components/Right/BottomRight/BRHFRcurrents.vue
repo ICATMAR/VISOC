@@ -54,15 +54,13 @@
 
 
   <!-- Colour bar: the same current-speed scale as the timelines and chips,
-       so a particle's colour reads the same as a cell's. The unit beside it
-       switches app-wide, like every unit. -->
+       so a particle's colour reads the same as a cell's. The unit is written
+       inside the bar and switches app-wide, like every unit. -->
   <div class="filled-container legend-container">
-    <div class="horizontal legend-row">
-      <span class="legend-holder"><DTColorLegend code="HCSP" :range="$gui.rangeFor('HCSP')"></DTColorLegend></span>
-      <span class="legend-unit" :class="{ clickable: $gui.isUnitSwitchable('HCSP') }"
-        :title="$t('Click to change units')" @click="$gui.cycleUnit('HCSP')">{{ $gui.unitFor('HCSP').unit }}</span>
+    <div class="legend-row">
+      <DTColorLegend code="HCSP" :range="$gui.rangeFor('HCSP')" :showUnit="true" :fullWidth="true"></DTColorLegend>
     </div>
-    <!-- Which map is on the screen -->
+    <!-- Which map is on the screen, and what is under the cursor -->
     <div class="field-status">
       <template v-if="$gui.hfrFieldStatus.state === 'loading'">
         <span class="spinner-border field-spinner"></span>{{ $t('Loading') }}
@@ -71,6 +69,14 @@
         {{ $gui.hfrFieldStatus.label }} · {{ formatTime($gui.hfrFieldStatus.time) }}
       </template>
       <template v-else>{{ $t('No HF radar data at') }} {{ formatTime($gui.hfrFieldStatus.time) }}</template>
+    </div>
+    <div class="field-status cursor-status" v-if="$gui.hfrCursor">
+      <span>{{ formatPosition($gui.hfrCursor) }}</span>
+      <!-- The value as the map draws a platform's: a chip on the legend's
+           colour, with the arrow - the unit is on the legend above -->
+      <CurrentChip v-if="$gui.hfrCursor.speed != null" :speed="$gui.hfrCursor.speed"
+        :direction="$gui.hfrCursor.direction" :label="$gui.hfrCursor.network"></CurrentChip>
+      <span v-else class="cursor-no-data">· {{ $t('no data') }}</span>
     </div>
   </div>
 
@@ -81,6 +87,7 @@
 import OnOffButton from '../../Utils/OnOffButton.vue';
 import OnOffButtonWithText from '../../Utils/OnOffButtonWithText.vue';
 import DTColorLegend from '../DataTimeline/Shared/DTColorLegend.vue';
+import CurrentChip from '../../Map/CurrentChip.vue';
 
 export default {
   props: {
@@ -94,11 +101,15 @@ export default {
   data() {
     return {
       selectedHFRProduct: 'currents',
-      radials: ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL'],
+      radials: ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL', 'SALO', 'ALFA', 'VINA'],
     }
   },
   methods: {
     //onclick: function(e){},
+    // 41.38ºN 2.17ºE
+    formatPosition({ lon, lat }) {
+      return `${Math.abs(lat).toFixed(2)}º${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(2)}º${lon >= 0 ? 'E' : 'W'}`;
+    },
     // The map's hour, in the timeline's time zone
     formatTime(time) {
       if (!time) return '';
@@ -117,6 +128,7 @@ export default {
     OnOffButton,
     OnOffButtonWithText,
     DTColorLegend,
+    CurrentChip,
   }
 }
 </script>
@@ -124,29 +136,17 @@ export default {
 <style scoped>
 
 .legend-row {
-  align-items: center;
-  gap: 8px;
   margin: 5px 12px 0;
 }
 
-/* Not a class of DTColorLegend's own (it has a .legend-scale inside) */
-.legend-holder {
-  display: flex;
-  flex: 1;
-  min-width: 0;
+.cursor-status {
+  margin-top: 0;
 }
-
-/* Like every unit in the app: quieter than its value, underlined where a
-   click switches it */
-.legend-unit {
-  font-size: 0.7rem;
-  font-style: italic;
-  opacity: 0.8;
+.cursor-status .current-chip {
+  box-shadow: none;
 }
-.legend-unit.clickable {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
+.cursor-no-data {
+  opacity: 0.6;
 }
 
 .field-status {
@@ -162,22 +162,6 @@ export default {
   width: 10px;
   height: 10px;
   border-width: 2px;
-}
-
-.colorbar {
-  height: 15px;
-  margin: 5px 20px;
-  background: linear-gradient(to right, blue, cyan, green, yellow, red);
-  border-radius: 10px;
-  box-shadow: 0 0 2px black;
-}
-
-.legend-numbers {
-  display: flex;
-  flex-wrap: nowrap;
-  flex-direction: row;
-  justify-content: space-between;
-  margin: 0px 20px;
 }
 
 </style>

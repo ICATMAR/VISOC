@@ -4,8 +4,10 @@
        Hidden for a drifter with no reading in that hour. -->
   <div class="overlay-container">
     <!-- v-show, not v-if: OpenLayers holds on to each element -->
-    <div v-for="drifter in drifters" :key="drifter.id" :ref="'drifter-' + drifter.id" v-show="readings[drifter.id]">
-      <CurrentChip v-if="readings[drifter.id]" :speed="readings[drifter.id].speed"
+    <!-- The clicked one gives way to the circle arrows drawn in its place -->
+    <div v-for="drifter in drifters" :key="drifter.id" :ref="'drifter-' + drifter.id"
+      v-show="readings[drifter.id] && !$gui.isHFRPointChip('drifter', drifter.id)">
+      <CurrentChip v-if="readings[drifter.id]" class="clickable" @click="chipClicked($event, drifter)" :speed="readings[drifter.id].speed"
         :direction="readings[drifter.id].direction" :label="drifter.id" :time="readings[drifter.id].time"></CurrentChip>
     </div>
   </div>
@@ -49,6 +51,13 @@ export default {
     }
   },
   methods: {
+    // Compare the drifter's current with the radars and the models, where it
+    // was at the hour of its reading
+    chipClicked(e, drifter) {
+      e.stopPropagation();
+      const reading = this.readings[drifter.id];
+      this.$gui.openHFRPoint({ lon: reading.lon, lat: reading.lat, kind: 'drifter', id: drifter.id, name: drifter.id }, reading.time);
+    },
     // Each drifter's reading closest to the selected hour, within it
     update() {
       const hour = roundToHour(new Date(this.$gui.selectedTime));

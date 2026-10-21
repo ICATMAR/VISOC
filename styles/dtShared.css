@@ -30,6 +30,10 @@ div.info-section.dt-info-fixed {
   flex-shrink: 0;
   height: auto;
   align-self: stretch;
+  /* Sized by the timeline beside it, never the other way round: a long
+     description (a dataset's license text) scrolls inside the panel
+     (.info-col) rather than making the whole bottom section taller */
+  contain: size;
 }
 
 @media (max-width: 900px) {

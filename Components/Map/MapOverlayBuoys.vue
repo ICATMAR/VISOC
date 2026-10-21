@@ -6,11 +6,11 @@
     <!-- Platform icon -->
     <!-- v-show, not v-if: OpenLayers holds on to each element (see createOverlays) -->
     <div class="platform-icon-container" v-for="buoy in buoys" :ref="buoy.id" :id="buoy.id"
-      v-show="isVisible && (!showsCurrents || currents[buoy.id])">
+      v-show="isVisible && isBuoyShown(buoy) && (!showsCurrents || (currents[buoy.id] && !$gui.isHFRPointChip('buoy', buoy.id)))">
       <!-- On the HFR dashboard: the current the buoy measured at the selected
            hour, to set against the radar's, instead of its icon -->
       <template v-if="showsCurrents">
-        <CurrentChip v-if="currents[buoy.id]" class="clickable" @click="platformClicked($event, buoy)"
+        <CurrentChip v-if="currents[buoy.id]" class="clickable" @click="chipClicked($event, buoy)"
           :speed="currents[buoy.id].speed" :direction="currents[buoy.id].direction"
           :label="buoy.name" :time="currents[buoy.id].time"></CurrentChip>
       </template>
@@ -162,10 +162,22 @@ export default {
         if (best) this.currents = { ...this.currents, [buoyId]: best };
       }).catch(() => {}));
     },
+    // HFR dashboard: compare what the buoy measured with the radars and the
+    // models, on the hour of its reading
+    chipClicked(e, buoy) {
+      e.stopPropagation();
+      this.$gui.openHFRPoint(
+        { lon: buoy.longitude, lat: buoy.latitude, kind: 'buoy', id: buoy.id, name: buoy.name },
+        this.currents[buoy.id]?.time);
+    },
     platformClicked(e, buoy) {
       e.stopPropagation();
       this.$gui.selectPlatform('buoys', buoy.id);
-    }
+    },
+    // All platforms leaves other institutions' buoys out unless asked for
+    isBuoyShown(buoy) {
+      return this.$gui.selectedDashboard !== 'platforms' || this.$gui.isPlatformShown(buoy.institution);
+    },
   },
   computed: {
     // On the HFR dashboard a buoy shows its current rather than its icon

@@ -44,12 +44,29 @@ export default {
         else { this.updateParticleCount(); this.updateGridPoints(); }
       };
       this.map.on('moveend', this.onMoveEnd);
+      // What is under the cursor, for the bottom-right panel - at most once a
+      // frame, however fast the pointer moves
+      this.onPointerMove = event => {
+        if (event.dragging) return;
+        this.cursorPixel = event.pixel;
+        this.cursorFrame ??= requestAnimationFrame(() => {
+          this.cursorFrame = null;
+          this.updateCursor(this.cursorPixel);
+        });
+      };
+      this.onPointerLeave = () => { this.$gui.hfrCursor = null; };
+      this.map.on('pointermove', this.onPointerMove);
+      this.map.getViewport().addEventListener('mouseleave', this.onPointerLeave);
       this.goToLatest();
       this.loadAvailability();
     });
   },
   beforeUnmount() {
     this.map?.un('moveend', this.onMoveEnd);
+    this.map?.un('pointermove', this.onPointerMove);
+    this.map?.getViewport().removeEventListener('mouseleave', this.onPointerLeave);
+    if (this.cursorFrame) cancelAnimationFrame(this.cursorFrame);
+    this.$gui.hfrCursor = null;
     this.removeParticles();
     if (this.pointLayer) this.map?.removeLayer(this.pointLayer);
     this.$gui.hfrFieldStatus = { state: 'loading' };
@@ -257,6 +274,25 @@ export default {
       const warn = console.warn;
       console.warn = (...args) => { if (!String(args[0]).startsWith('[wind-core]')) warn(...args); };
       try { return fn(); } finally { console.warn = warn; }
+    },
+
+    // The current under a screen pixel, from the map on screen - read on each
+    // network's own grid (field.parts), where the measurements are, rather
+    // than the merged one the animation runs on
+    updateCursor(pixel) {
+      const [lon, lat] = ol.proj.toLonLat(this.map.getCoordinateFromPixel(pixel));
+      const parts = this.field?.parts ?? (this.field ? [this.field] : []);
+      let value = null, network;
+      for (const part of parts) {
+        value = part.sample(lon, lat);
+        if (value) { network = part.label; break; }
+      }
+      this.$gui.hfrCursor = {
+        lon, lat, network,
+        speed: value ? Math.hypot(value.u, value.v) : undefined,
+        // where the water goes, clockwise from north
+        direction: value ? (Math.atan2(value.u, value.v) / DEG + 360) % 360 : undefined,
+      };
     },
 
     // GRID POINTS

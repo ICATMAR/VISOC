@@ -1,8 +1,39 @@
 <template>
   <div class="info-section horizontal">
 
+    <!-- HFR Compare: a data source picked in the names column, described as
+         its own metadata says (GUIManager.hfrSourceInfo, see DTHFRCompare) -->
+    <template v-if="sourceInfo">
+      <div class="photo-col">
+        <div class="photo-fallback">
+          <img v-if="sourceInfo.icon" :src="sourceInfo.icon" class="fallback-icon" alt="">
+          <i v-else :class="sourceInfo.faIcon" class="fallback-fa"></i>
+        </div>
+      </div>
+      <div class="info-col vertical">
+        <div class="info-header">
+          <span class="info-abbr">{{ $t(sourceInfo.title) }}</span>
+          <template v-if="sourceInfo.subtitle">
+            <span class="info-sep">·</span>
+            <span class="info-name">{{ sourceInfo.subtitle }}</span>
+          </template>
+        </div>
+        <div class="info-rows">
+          <div class="info-row" v-for="(row, index) in sourceInfo.rows" :key="index">
+            <span class="info-label">{{ $t(row.label) }}</span>
+            <a v-if="row.url" :href="row.url" target="_blank" rel="noopener" class="info-link">{{ row.value }}</a>
+            <span v-else class="info-value" :class="{ 'info-ack': row.long }">{{ row.value }}</span>
+          </div>
+          <div class="info-row" v-if="sourceInfo.loading">
+            <span class="info-label"></span>
+            <span class="info-value"><span class="spinner-border source-spinner"></span> {{ $t('Loading') }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- HFR individual station -->
-    <template v-if="hfrStation">
+    <template v-else-if="hfrStation">
       <div class="photo-col">
         <div class="photo-fallback"><img :src="radarIconURL" class="fallback-icon" alt=""></div>
         <div class="station-photo" :style="{ backgroundImage: 'url(\'' + stationPhotoURL + '\')' }"></div>
@@ -282,7 +313,18 @@ export default {
     drifterStationPhotoURL() {
       return './Assets/Images/platforms/Drifters/' + (this.drifterStation?.type ?? '') + '.jpg';
     },
+    // On the HFR dashboard a buoy or drifter chip can be the selection too
+    // (GUIManager.openHFRPoint) - told apart by its kind, since codes clash:
+    // BEGU is both the Begur radar station and the Mar Begur buoy
+    hfrPlatformKind() {
+      return this.$gui.selectedDashboard === 'hfr' ? this.$gui.selectedPlatform?.kind : undefined;
+    },
+    // A data source picked in the HFR Compare view (see GUIManager.hfrSourceInfo)
+    sourceInfo() {
+      return this.$gui.selectedDashboard === 'hfr' ? this.$gui.hfrSourceInfo : null;
+    },
     isHFRContext() {
+      if (this.hfrPlatformKind) return false;
       return this.$gui.selectedDashboard === 'hfr'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'hfr');
     },
@@ -306,7 +348,7 @@ export default {
       return this.$requests.hfrStations.length;
     },
     isBuoyContext() {
-      return this.$gui.selectedDashboard === 'buoys'
+      return this.$gui.selectedDashboard === 'buoys' || this.hfrPlatformKind === 'buoy'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'buoys');
     },
     // The real catalogue (DPBuoys), not RequestsManager's mock list - that one
@@ -341,7 +383,7 @@ export default {
       return text ? String(text).replace(/\s+/g, ' ').trim() : '';
     },
     isDrifterContext() {
-      return this.$gui.selectedDashboard === 'drifters'
+      return this.$gui.selectedDashboard === 'drifters' || this.hfrPlatformKind === 'drifter'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'drifters');
     },
     drifterStation() {
@@ -493,6 +535,18 @@ export default {
   align-items: center;
   justify-content: center;
   background: var(--blue);
+}
+
+.fallback-fa {
+  font-size: 48px;
+  color: white;
+  opacity: 0.3;
+}
+
+.source-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
 }
 
 .fallback-icon {

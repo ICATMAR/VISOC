@@ -566,6 +566,9 @@ class DPBuoys extends DP {
               if (value == undefined) return;
               if (points[code] == undefined) points[code] = {};
               points[code][timestamp] = { value, sensor: sensorId, source: source.src, instrument, rawName };
+              // How deep it was measured, where the dataset says (ADCP bins;
+              // see SourceErddapBuoys.parseCSV) - metres, negative downward
+              if (standardized.DEPTH != undefined) points[code][timestamp].depth = standardized.DEPTH;
               delivered.add(code);
             });
           });

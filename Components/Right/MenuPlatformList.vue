@@ -276,7 +276,10 @@ export default {
     rows() {
       const platforms = this.dashboardId === 'hfr'
         ? this.stations
-          .filter(s => this.$gui.hfrSource === 'EU' || s.metadata?.network === 'HFR-ICATMAR')
+          // ICATMAR: its network (Puertos del Estado's stations it uses
+          // included). EU: what the node publishes - not the stations only
+          // ICATMAR has (see DPHFRNetwork's notOnEUNode)
+          .filter(s => this.$gui.hfrSource === 'EU' ? !s.notOnEUNode : s.metadata?.network === 'HFR-ICATMAR')
           // Stations of other networks only have a code
           .map(s => ({ id: s.id, name: s.name ?? s.id, latitude: s.latitude, longitude: s.longitude, endDate: s.metadata?.time_coverage_end,
             coverage: s.coverage, network: s.metadata?.network ?? '', isICATMAR: s.metadata?.network === 'HFR-ICATMAR' }))

@@ -46,6 +46,8 @@ const UPSCALE = 4;
 // minutes; the one closest to the hour is used.
 const HALF_HOUR_MS = 30 * 60 * 1000;
 const inHour = (t, hour) => t.getTime() >= hour.getTime() - HALF_HOUR_MS && t.getTime() < hour.getTime() + HALF_HOUR_MS;
+// The hour a time belongs to (see inHour)
+const hourOf = time => new Date(Math.floor((time.getTime() + HALF_HOUR_MS) / 3600000) * 3600000);
 
 // After a failed load(), how long before it is tried again - not on every
 // call, which would keep a rate-limited server (HTTP 429) limiting
@@ -239,6 +241,66 @@ class SourceErddapHFRadars extends Source {
     return this.useProxy ? SourceErddap.proxied(url) : url;
   }
 
+  // A dataset's description, as its ERDDAP publishes it (NC_GLOBAL), plus
+  // where to read about it
+  async getDatasetMetadata(dataset) {
+    const { metadata } = await this.grid(dataset);
+    return { ...metadata, infoUrl: `${this.baseUrl}/info/${dataset}/index.html` };
+  }
+
+  // The current at one point, hour by hour over [startDate, endDate], as
+  // numbers - exact, unlike the maps (which are for drawing). One griddap
+  // request per dataset for the whole window, at the grid cell nearest the
+  // point (ERDDAP snaps to it and says which). Every network covering the
+  // point is asked, the preferred one first, and an hour already filled is
+  // kept:
+  //   { cell: { latitude, longitude }, network,
+  //     data: { '<ISO hour>': { u, v, speed, direction, time } } }
+  // `direction` is where the water goes, clockwise from north.
+  async getPointSeries(lon, lat, startDate, endDate) {
+    const networks = (await this.networksIn([lon, lat, lon, lat], startDate))
+      .filter(n => !n.startDate || n.startDate <= endDate);
+    const result = { cell: undefined, network: undefined, dataset: undefined, data: {} };
+    for (const network of networks) {
+      const from = network.startDate && startDate < network.startDate ? network.startDate : startDate;
+      // Up to the dataset's last time - asking past it is an error
+      const to = network.endDate && endDate >= network.endDate ? 'last' : `(${stamp(endDate)})`;
+      const { dimensions } = await this.grid(network.dataset);
+      const selectors = (dimensions[this.eastward] ?? ['time', 'depth', 'latitude', 'longitude']).map(dimension => {
+        if (dimension === 'time') return `[(${stamp(from)}):1:${to}]`;
+        if (dimension === 'latitude') return `[(${lat})]`;
+        if (dimension === 'longitude') return `[(${lon})]`;
+        return '[0]';
+      }).join('');
+      const url = `${this.baseUrl}/griddap/${network.dataset}.csv?`
+        + `${this.eastward}${encodeURIComponent(selectors)},${this.northward}${encodeURIComponent(selectors)}`;
+      let text;
+      try {
+        text = await this.fetchManager.fetch(this.url(url), TIMES_TTL, TIMEOUT).then(res => res.text());
+      } catch (error) {
+        if (error.name === 'HTTPError') continue; // nothing there in the window
+        throw error;
+      }
+      const lines = text.trim().split(/\r?\n/);
+      const header = lines[0].split(',');
+      const at = name => header.indexOf(name);
+      lines.slice(2).forEach(line => {
+        const cells = line.split(',');
+        const u = Number(cells[at(this.eastward)]);
+        const v = Number(cells[at(this.northward)]);
+        if (cells[at(this.eastward)] === 'NaN' || !isFinite(u) || !isFinite(v)) return;
+        const time = new Date(cells[at('time')]);
+        const key = hourOf(time).toISOString();
+        if (result.data[key]) return;
+        result.data[key] = { u, v, speed: Math.hypot(u, v), direction: (Math.atan2(u, v) * 180 / Math.PI + 360) % 360, time };
+        result.cell ??= { latitude: Number(cells[at('latitude')]), longitude: Number(cells[at('longitude')]) };
+        result.network ??= network.network;
+        result.dataset ??= network.dataset;
+      });
+    }
+    return result;
+  }
+
   // How much data each network in `bbox` has, hour by hour, from `startDate`
   // to its latest map: [{ network, hours: { '<ISO hour>': count } }], the
   // preferred network first. A count is the number of cells with data in
@@ -309,6 +371,7 @@ class SourceErddapHFRadars extends Source {
         const dimensions = {};
         const ranges = {};
         const counts = {};
+        const metadata = {}; // the dataset's NC_GLOBAL attributes (title, institution, license...)
         text.trim().split('\n').filter(line => line).forEach(line => {
           const row = JSON.parse(line);
           const name = row['Variable Name'];
@@ -316,6 +379,7 @@ class SourceErddapHFRadars extends Source {
             dimensions[name] = String(row['Value'] ?? '').split(',').map(d => d.trim()).filter(Boolean);
           if (row['Row Type'] === 'dimension')
             counts[name] = Number(/nValues=(\d+)/.exec(String(row['Value']))?.[1]);
+          if (name === 'NC_GLOBAL' && row['Attribute Name']) metadata[row['Attribute Name']] = row['Value'];
           if (row['Attribute Name'] === 'actual_range' && (name === 'latitude' || name === 'longitude'))
             ranges[name] = String(row['Value']).split(',').map(Number);
         });
@@ -323,6 +387,7 @@ class SourceErddapHFRadars extends Source {
           throw new Error(`No latitude/longitude range in the info of ${dataset}`);
         return {
           dimensions,
+          metadata,
           axes: {
             lonMin: Math.min(...ranges.longitude), lonMax: Math.max(...ranges.longitude),
             latMin: Math.min(...ranges.latitude), latMax: Math.max(...ranges.latitude),

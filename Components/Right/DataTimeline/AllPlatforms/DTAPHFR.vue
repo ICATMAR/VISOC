@@ -83,6 +83,10 @@ export default {
         { name: 'PBCN', hourlyData: [], maxValue: 0 },
         { name: 'GNST', hourlyData: [], maxValue: 0 },
         { name: 'SCAL', hourlyData: [], maxValue: 0 },
+        // Puertos del Estado's (GitHub only, like SCAL)
+        { name: 'SALO', hourlyData: [], maxValue: 0 },
+        { name: 'ALFA', hourlyData: [], maxValue: 0 },
+        { name: 'VINA', hourlyData: [], maxValue: 0 },
       ],
     }
   },

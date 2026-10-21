@@ -11,6 +11,8 @@
   <!-- HF radar currents, on the HFR dashboard only -->
   <MapLayerHFRCurrents v-if="$gui.selectedDashboard === 'hfr'"></MapLayerHFRCurrents>
   <MapOverlayHFRDrifters v-if="$gui.selectedDashboard === 'hfr' && $gui.hfrShowDrifters"></MapOverlayHFRDrifters>
+  <!-- HFR dashboard: circle arrows at the place the Compare view is about -->
+  <MapOverlayPoint v-if="$gui.selectedDashboard === 'hfr'"></MapOverlayPoint>
   <!-- Short screens: the selected buoy's circle arrows -->
   <MapOverlayPlatformArrows></MapOverlayPlatformArrows>
 </template>
@@ -25,6 +27,7 @@ import MapOverlayDrifters from './MapOverlayDrifters.vue';
 import MapOverlayPlatformArrows from './MapOverlayPlatformArrows.vue';
 import MapLayerHFRCurrents from './MapLayerHFRCurrents.vue';
 import MapOverlayHFRDrifters from './MapOverlayHFRDrifters.vue';
+import MapOverlayPoint from './MapOverlayPoint.vue';
 
 export default {
   name: "Map",
@@ -75,6 +78,7 @@ export default {
     MapOverlayPlatformArrows,
     MapLayerHFRCurrents,
     MapOverlayHFRDrifters,
+    MapOverlayPoint,
   }
 }
 

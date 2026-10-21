@@ -12,15 +12,15 @@
          when the panel opened - leaving two chips stuck on the same z-index,
          ordered by DOM position instead of rotating. Remounting also re-reads
          the --duration and --maxZIndex the count just changed. -->
-    <template v-for="(item, index) in items" :key="items.length + '-' + index">
+    <template v-for="(item, index) in allItems" :key="allItems.length + '-' + index">
       <!-- Spoke: a hairline from the centre out to the chip, turned to the
            same bearing. -->
       <div class="variableSpoke" :style="{ rotate: (item.angle - 90) + 'deg' }"></div>
       <!-- Variable name label -->
       <div class="variableName animatedLayer" :style="{
         rotate: (item.angle - 90) + 'deg',
-        '--maxZIndex': items.length,
-        '--duration': (items.length * loopInterval) + 's',
+        '--maxZIndex': allItems.length,
+        '--duration': (allItems.length * loopInterval) + 's',
         '--delay': (-index * loopInterval) + 's'
         }">
         <span :style="{rotate: textRotation(item.angle), display: 'block'}">{{ $t(item.name) }}</span>
@@ -34,8 +34,8 @@
            its white text. -->
       <div class="variableValue horizontal animatedLayer" :title="item.title" :style="{
         rotate: (item.angle - 90) + 'deg',
-        '--maxZIndex': items.length,
-        '--duration': (items.length * loopInterval) + 's',
+        '--maxZIndex': allItems.length,
+        '--duration': (allItems.length * loopInterval) + 's',
         '--delay': (-index * loopInterval) + 's',
         background: item.color,
         color: item.color ? 'black' : undefined,
@@ -47,9 +47,11 @@
              on the lower half of the circle would read "m/s 1.2". -->
         <span class="chipReading" :style="{ rotate: textRotation(item.angle) }">
           <span>{{ item.value }}</span>
-          <span class="chipUnit" :class="{ clickable: item.switchable }"
+          <span v-if="!item.hideUnit" class="chipUnit" :class="{ clickable: item.switchable }"
             :title="item.switchable ? $t('Change units') : ''"
             @click.stop="cycleUnit(item)">{{ item.unit }}</span>
+          <!-- Whose reading this is, when several sources share the circle -->
+          <span v-if="item.tag" class="chipTag">{{ item.tag }}</span>
         </span>
       </div>
     </template>
@@ -67,6 +69,13 @@ export default {
     wind:    { type: Object, default: null }, // { speed, dir, gust, from }
     waves:   { type: Object, default: null }, // { height, dir, period, from }
     current: { type: Object, default: null }, // { speed, dir, from }
+    // Any number of readings, for a circle comparing sources (the HFR
+    // dashboard): [{ name, code, speed, direction, tag, title }] - `speed`
+    // standard, `direction` where it GOES (as currents are given). `name` is
+    // the outer label (who measured or modelled it); the chip itself holds
+    // the bare value - all of them share one quantity, so no unit on each.
+    // `tag`, if given, is written at the end of the chip.
+    items: { type: Array, default: null },
     // `raw` on each: standard code -> the name the source published it under.
   },
   data() {
@@ -130,8 +139,24 @@ export default {
     // the chip its stylesheet background rather than painting a guess over it.
     // The ranges in colorLegends.js are standard too, so the magnitudes go to
     // colorFor untouched - only format() converts.
-    items() {
+    allItems() {
       const result = [];
+      (this.items ?? []).forEach(item => {
+        if (item.speed == null || !isFinite(item.speed)) return;
+        result.push({
+          name: item.name, code: item.code, tag: item.tag, hideUnit: true,
+          unit: this.$gui.unitFor(item.code).unit,
+          switchable: this.$gui.isUnitSwitchable(item.code),
+          value: this.number(item.code, item.speed),
+          // The chip sits on the side it comes FROM, pointing in
+          angle: isFinite(item.direction) ? (item.direction + 180) % 360 : 0,
+          color: this.$gui.colorFor(item.code, item.speed),
+          title: item.title ?? this.title([
+            { label: item.name, code: item.code, value: item.speed },
+            { label: 'Direction', code: 'HCDT', value: item.direction, bearing: true },
+          ]),
+        });
+      });
       if (this.wind?.speed != null)
         result.push({ name: 'Wind', code: 'WSPD', unit: this.$gui.unitFor('WSPD').unit,
           switchable: this.$gui.isUnitSwitchable('WSPD'), value: this.number('WSPD', this.wind.speed), angle: this.wind.dir ?? 0,
@@ -152,7 +177,9 @@ export default {
           ], this.waves.from, this.waves.raw) });
       if (this.current?.speed != null)
         result.push({ name: 'Currents', code: 'HCSP', unit: this.$gui.unitFor('HCSP').unit,
-          switchable: this.$gui.isUnitSwitchable('HCSP'), value: this.number('HCSP', this.current.speed), angle: (this.current.dir + 180) % 360 ?? 0,
+          switchable: this.$gui.isUnitSwitchable('HCSP'), value: this.number('HCSP', this.current.speed),
+          // `?? 0` would never catch a missing direction: undefined + 180 is NaN, not nullish
+          angle: isFinite(this.current.dir) ? (this.current.dir + 180) % 360 : 0,
           color: this.$gui.colorFor('HCSP', this.current.speed),
           title: this.title([
             { label: 'Current speed', code: 'HCSP', value: this.current.speed },
@@ -221,6 +248,9 @@ export default {
   transform: translateX(calc(50% + 52px));
   background: var(--darkBlue);
   font-size: 0.7rem;
+  /* One line, however long the label ("Model ROMS ICATMAR") - wrapping would
+     widen it sideways off the spoke */
+  white-space: nowrap;
   padding-right: 6px;
   padding-left: 2px;
   border-radius: 0 5px 5px 0;
@@ -262,6 +292,15 @@ export default {
    font-weight is declared rather than left alone because the rule above sets
    bold on the box these sit in, and an inherited value loses to a declared
    one. */
+.chipTag {
+  font-size: 0.55rem !important;
+  font-weight: normal;
+  opacity: 0.75;
+  margin-left: 2px;
+  padding-left: 3px;
+  border-left: 1px solid rgba(0, 0, 0, 0.3);
+}
+
 .chipUnit {
   font-size: 0.6rem!important;
   font-weight: normal;

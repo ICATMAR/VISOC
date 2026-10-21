@@ -1,5 +1,6 @@
 <template>
-  <DTAPHFRTotalsPlatformDetail v-if="isTotalsView"></DTAPHFRTotalsPlatformDetail>
+  <DTHFRPlatformDetail v-if="isHFRPlatformView"></DTHFRPlatformDetail>
+  <DTAPHFRTotalsPlatformDetail v-else-if="isTotalsView"></DTAPHFRTotalsPlatformDetail>
   <DTAPHFRPlatformDetail v-else-if="isHFRView"></DTAPHFRPlatformDetail>
   <DTAPBuoysPlatformDetail v-else-if="isBuoysView"></DTAPBuoysPlatformDetail>
   <DTAPDriftersPlatformDetail v-else-if="isDriftersView"></DTAPDriftersPlatformDetail>
@@ -13,6 +14,7 @@ import DTAPHFRPlatformDetail from './AllPlatforms/PlatformDetails/DTAPHFRPlatfor
 import DTAPHFRTotalsPlatformDetail from './AllPlatforms/PlatformDetails/DTAPHFRTotalsPlatformDetail.vue';
 import DTAPBuoysPlatformDetail from './AllPlatforms/PlatformDetails/DTAPBuoysPlatformDetail.vue';
 import DTAPDriftersPlatformDetail from './AllPlatforms/PlatformDetails/DTAPDriftersPlatformDetail.vue';
+import DTHFRPlatformDetail from './HFR/DTHFRPlatformDetail.vue';
 
 export default {
   name: "DTPlatformDetail",
@@ -22,6 +24,11 @@ export default {
     isViewOf() {
       return dashboardId => this.$gui.selectedDashboard === dashboardId
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === dashboardId);
+    },
+    // A buoy or drifter chip clicked on the HFR dashboard (GUIManager.openHFRPoint)
+    isHFRPlatformView() {
+      const kind = this.$gui.selectedPlatform?.kind;
+      return this.$gui.selectedDashboard === 'hfr' && (kind === 'buoy' || kind === 'drifter') && this.$gui.hfrPoint != null;
     },
     isTotalsView() {
       return this.isViewOf('hfr') && this.$gui.selectedPlatform?.stationId === 'TOTALS';
@@ -43,6 +50,7 @@ export default {
     DTAPHFRTotalsPlatformDetail,
     DTAPBuoysPlatformDetail,
     DTAPDriftersPlatformDetail,
+    DTHFRPlatformDetail,
   }
 }
 

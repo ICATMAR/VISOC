@@ -7,7 +7,13 @@
 
        Give it a `code` (which legend) and a `range` IN STANDARD UNITS (what
        the gradient spans). -->
-  <div class="horizontal legend">
+  <div class="horizontal legend" :class="{ 'legend-full': fullWidth }">
+    <!-- showUnit: the unit inside the bar, on the left, as Windy writes it -
+         clickable like every unit in the app (GUIManager.cycleUnit) -->
+    <span v-if="showUnit" class="legend-unit-cap" :style="{ background: endColor(0) }"
+      :class="{ clickable: $gui.isUnitSwitchable(code) }"
+      :title="$gui.isUnitSwitchable(code) ? $t('Click to change units') : ''"
+      @click.stop="$gui.cycleUnit(code)">{{ unit.unit }}</span>
     <span class="legend-cap" :style="{ background: endColor(0) }"></span>
     <div class="legend-scale" :style="{ background: gradient }">
       <span v-for="tick in ticks" :key="tick.percent" class="legend-tick"
@@ -25,6 +31,8 @@ export default {
   props: {
     code: { type: String, required: true },  // standard code - picks the legend
     range: { type: Array, required: true },  // [min, max] in STANDARD units
+    showUnit: Boolean,   // write the unit inside the bar, on the left
+    fullWidth: Boolean,  // take the container's whole width (no 200px cap)
   },
   methods: {
     // The flat colour the gradient starts and ends on. The caps carry it a
@@ -82,6 +90,28 @@ export default {
   border-radius: 9px;
   overflow: hidden;
   align-self: center;
+}
+
+.legend-full {
+  max-width: none;
+  margin-left: 0;
+}
+
+/* The unit, inside the bar on its first colour */
+.legend-unit-cap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 8px;
+  font-size: 0.6rem;
+  font-style: italic;
+  color: rgba(0, 0, 0, 0.8);
+  text-shadow: none;
+}
+.legend-unit-cap.clickable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 /* Flat run of the end colour, so the outermost labels have a readable place to

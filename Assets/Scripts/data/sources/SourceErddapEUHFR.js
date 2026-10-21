@@ -1,5 +1,6 @@
 import Source from './Source.js';
 import SourceErddap from './SourceErddap.js';
+import { readNetCDF3 } from '../parsers/netcdf3.js';
 
 
 // Kept from the network's (the 'Total' dataset's) NC_GLOBAL attributes - shared
@@ -185,10 +186,19 @@ class SourceErddapEUHFR extends Source {
       if (parsed.isTable === preferTable) entry.stationDatasets.push(d['datasetID']);
     });
 
-    return Promise.all([...byNetwork.entries()].map(async ([networkName, { totalDataset, stationDatasets }]) => {
-      const total = totalDataset ? await this.fetchMetadata(totalDataset, NETWORK_METADATA_KEYS) : undefined;
+    // A dataset that fails to answer (the node or the proxy erroring now and
+    // then) costs only itself, not every network
+    const skipFailed = dataset => error => {
+      console.warn(`EU HFR Node: skipping ${dataset}:`, error);
+      return undefined;
+    };
 
-      const stations = await Promise.all(stationDatasets.map(async dataset => {
+    return Promise.all([...byNetwork.entries()].map(async ([networkName, { totalDataset, stationDatasets }]) => {
+      const total = totalDataset
+        ? await this.fetchMetadata(totalDataset, NETWORK_METADATA_KEYS).catch(skipFailed(totalDataset))
+        : undefined;
+
+      const stations = await Promise.all(stationDatasets.map(dataset => (async () => {
         const infoUrl = `${this.baseUrl}/info/${dataset}/index.jsonlKVP`;
         const infoText = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
         const { variables, metadata } = this.parseERDDAPMetadata(infoText);
@@ -210,9 +220,9 @@ class SourceErddapEUHFR extends Source {
           coverage: coverageFrom(metadata),
           metadata: pick(metadata, STATION_METADATA_KEYS),
         };
-      }));
+      })().catch(skipFailed(dataset))));
 
-      return { total, stations: stations.filter(s => !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
+      return { total, stations: stations.filter(s => s && !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
     }));
   }
 
@@ -300,10 +310,82 @@ class SourceErddapEUHFR extends Source {
   // Per-hour count of valid (QC-passing, non-NaN RDVA) radial vectors for ONE
   // station, within [startDate, endDate] (endDate defaults to now).
   async getNumberOfValidPointsPerStation(id, startDate, endDate) {
-    const station = this.stations[id];
+    const station = this.stations[id] ?? await this.otherNetworkStation(id);
     if (!station) return { id, points: undefined };
-    const points = await this.fetchValidPointsCount(station, 'RDVA', startDate, endDate);
+    const points = station.isGriddap
+      ? await this.fetchGriddapValidPointsCount(station, startDate, endDate)
+      : await this.fetchValidPointsCount(station, 'RDVA', startDate, endDate);
     return { id, points };
+  }
+
+  // A station of ICATMAR's network that the node publishes under another
+  // network rather than HFR-ICATMAR - Puertos del Estado's ALFA, SALO and VINA
+  // are HFR-DeltaEbro's there. Its plain (griddap) dataset, as a station
+  // entry like load()'s; undefined if no network has the code. Looked up once.
+  otherNetworkStation(id) {
+    this.otherNetworkStations ??= {};
+    this.otherNetworkStations[id] ??= (async () => {
+      const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+      const dataset = allDatasets.map(d => d['datasetID'])
+        .find(datasetID => { const parsed = this.parseDatasetId(datasetID); return parsed?.station === id && !parsed.isTable; });
+      if (!dataset) return undefined;
+      const metadata = await this.fetchMetadata(dataset, ['time_coverage_start', 'time_coverage_end']);
+      return {
+        dataset,
+        isGriddap: true,
+        startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
+        endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+      };
+    })().catch(error => {
+      console.warn(`EU HFR Node: no dataset for ${id}:`, error);
+      return undefined;
+    });
+    return this.otherNetworkStations[id];
+  }
+
+  // fetchValidPointsCount() for a dataset with no _table variant: the
+  // radials' QCflag grid as .nc, counting the cells with a radial in each map
+  // - the same number orderByCount gives on a _table (QC-good and -bad
+  // alike). Straight from the node, which allows CORS: binary is better kept
+  // off the proxy. Cached into `entry` the same way.
+  async fetchGriddapValidPointsCount(entry, startDate, endDate) {
+    const end = endDate ?? new Date();
+    const rangeStart = entry.startDate && entry.startDate > startDate ? entry.startDate : startDate;
+    const rangeEnd = entry.endDate && entry.endDate < end ? entry.endDate : end;
+
+    if (!entry.validPoints) entry.validPoints = {};
+    if (rangeStart > rangeEnd) return entry.validPoints;
+    const range = entry.validPointsRange;
+    if (range && rangeStart >= range.start && rangeEnd <= range.end) return entry.validPoints;
+
+    const selectors = `[(${rangeStart.toISOString()}):1:(${rangeEnd.toISOString()})][0][0:1:last][0:1:last]`;
+    const url = `${this.baseUrl}/griddap/${entry.dataset}.nc?QCflag${encodeURIComponent(selectors)}`;
+    const buffer = await this.fetchManager.fetch(url, 1)
+      .then(res => res.arrayBuffer())
+      .catch(err => {
+        if (err.name === 'HTTPError' && err.status === 404) return null; // no map in the range
+        throw err;
+      });
+
+    if (buffer) {
+      const file = readNetCDF3(buffer);
+      const values = file.variables['QCflag'].read();
+      const fill = file.variables['QCflag'].attributes['_FillValue'];
+      const times = file.variables['time'].read(); // seconds since 1970
+      const perTime = values.length / times.length;
+      times.forEach((seconds, k) => {
+        let count = 0;
+        for (let i = k * perTime; i < (k + 1) * perTime; i++) if (values[i] !== fill && !Number.isNaN(values[i])) count++;
+        // Keyed as the _table counts are: '2026-10-21T01:00:00Z'
+        if (count > 0) entry.validPoints[new Date(seconds * 1000).toISOString().replace('.000Z', 'Z')] = count;
+      });
+    }
+
+    entry.validPointsRange = {
+      start: range ? new Date(Math.min(range.start, rangeStart)) : rangeStart,
+      end: range ? new Date(Math.max(range.end, rangeEnd)) : rangeEnd,
+    };
+    return entry.validPoints;
   }
 
   // Array of per-station promises (NOT a single Promise<object> resolved via

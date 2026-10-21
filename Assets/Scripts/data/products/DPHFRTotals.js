@@ -92,6 +92,41 @@ class DPHFRTotals extends DP {
     return valid.length ? new Date(Math.max(...valid)) : undefined;
   }
 
+  // The current at one point, hour by hour, from one provider, as numbers:
+  // its sources in catalogue order, as for the maps, an hour coming from the
+  // first that has it (ICATMAR's ERDDAP, then the EU HFR Node's copy of its
+  // network). Sources without point series (GitHub - a file per hour is too
+  // heavy for a series) are skipped.
+  //   { cell, data: { '<ISO hour>': { u, v, speed, direction, time, source } },
+  //     used: [{ source, dataset, network, cell, hours }] } - which sources
+  //     filled how many of the hours, for describing the series
+  async getPointSeries(provider, lon, lat, startDate, endDate) {
+    const result = { cell: undefined, data: {}, used: [] };
+    for (const source of this.mapSources(provider).filter(s => typeof s.getPointSeries === 'function')) {
+      try {
+        const series = await source.getPointSeries(lon, lat, startDate, endDate);
+        result.cell ??= series.cell;
+        let hours = 0;
+        Object.entries(series.data).forEach(([hour, value]) => {
+          if (result.data[hour]) return;
+          result.data[hour] = { ...value, source: source.label, network: series.network };
+          hours++;
+        });
+        if (hours > 0) result.used.push({ source: source.label, dataset: series.dataset, network: series.network, cell: series.cell, hours });
+      } catch (error) {
+        console.error(`HF radar series from ${source.label}:`, error);
+      }
+    }
+    return result;
+  }
+
+  // A dataset's description from the source that serves it (by its label, as
+  // getPointSeries' `used` names it)
+  async getDatasetMetadata(provider, sourceLabel, dataset) {
+    const source = this.mapSources(provider).find(s => s.label === sourceLabel);
+    return source?.getDatasetMetadata ? source.getDatasetMetadata(dataset) : {};
+  }
+
   // The provider's map sources, in catalogue order
   mapSources(provider) {
     return this.sources.filter(s => s.provider === provider && typeof s.getField === 'function');

@@ -30,7 +30,13 @@
             @click="$emit('varClick', v)"><span v-if="v.loading" class="spinner-border name-spinner"></span>{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
-          <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
+          <!-- A row that names its variable (`code`) switches that quantity's
+               unit app-wide on a click (GUIManager.cycleUnit), and is
+               underlined only where there is another unit to go to -->
+          <span v-for="v in variables" :key="v.name" class="clickable unit-cell"
+            :class="{ 'unit-switchable': !v.code || $gui.isUnitSwitchable(v.code) }"
+            :title="v.code && $gui.isUnitSwitchable(v.code) ? $t('Click to change units') : ''"
+            @click.stop="v.code && $gui.cycleUnit(v.code)">{{ v.unit }}</span>
         </div>
       </div>
     </div>
@@ -105,7 +111,7 @@ export default {
   name: "DTLayout",
   emits: ['varClick'],
   props: {
-    variables: Array, // [{ name, unit }]
+    variables: Array, // [{ name, unit, code }] - `code` makes the unit switchable
     activeVar: String,   // name of the variable to highlight in bold (hover)
     selectedVar: String, // name of the selected station — kept bold while selected
     // Time steps the zoom buttons step through, coarse → fine. A view whose
@@ -482,17 +488,30 @@ export default {
 }
 
 /* 44px: the two header rows above (interval picker and timezone) */
+/* Never wider than the column: the names give way (with an ellipsis, see
+   below) so the units beside them always fit. Without the width cap the row
+   overflowed to the LEFT - right-aligned - and the clipping cut off the start
+   of a long name instead of its end. */
 .variable-names-row {
   padding-right: 10px;
   text-align: right;
   align-self: flex-end;
   max-height: calc(var(--dt-max-height) - 44px);
   overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .variable-names-subcontainer {
   align-self: flex-start;
   padding-top: 3px;
+  flex-shrink: 0;
+}
+
+/* The names column shrinks, the units one doesn't */
+.variable-names-subcontainer:first-child {
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .variable-names-subcontainer > span {
@@ -503,12 +522,20 @@ export default {
   align-items: flex-end;
   align-content: center;
   padding-left: 5px;
-  max-width: 110px;
+  max-width: min(110px, 100%);
+  box-sizing: border-box;
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
 }
 
+
+.unit-cell {
+  font-style: italic;
+}
+.unit-switchable {
+  text-decoration: underline;
+}
 
 .active-var {
   font-weight: bold;

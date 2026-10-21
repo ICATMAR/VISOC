@@ -5,7 +5,9 @@
 
     <!-- Platform icon -->
     <!-- v-show, not v-if: OpenLayers holds on to each element (see createOverlays) -->
-    <div class="platform-icon-container" v-for="station in stations" :ref="station.id" :id="station.id" v-show="isStationVisible(station)">
+    <!-- Keyed by network AND code: the same code can be in two networks
+         (ALFA is ICATMAR's and DeltaEbro's) -->
+    <div class="platform-icon-container" v-for="station in stations" :key="keyOf(station)" :ref="keyOf(station)" :id="keyOf(station)" v-show="isStationVisible(station)">
       <img class="platform-icon clickable" :class="{ selected: isIconSelected(station), offline: stationStatus(station) === 'offline', loading: stationStatus(station) === 'loading' }" :src="iconURL" alt="Platform icon" @click="platformClicked($event, station)">
       <!-- Status indicator -->
       <div class="platform-status-indicator" :class="stationStatus(station)" v-if="stationStatus(station) != 'offline'"></div>
@@ -23,6 +25,9 @@
 
 
 <script>
+
+// Stations in ICATMAR's network that other institutions run
+const NON_ICATMAR_INSTITUTIONS = ['CEFREM', 'Puertos del Estado'];
 
 export default {
   name: "MapOverlayHFRStations",
@@ -71,7 +76,7 @@ export default {
       // them.
       const newStations = [];
       networks.flatMap(network => network.stations).forEach(live => {
-        const station = this.stations.find(s => s.id === live.id);
+        const station = this.stations.find(s => this.keyOf(s) === this.keyOf(live));
         // Nothing static is lost by assigning: getAllNetworks() has already
         // merged the two for the ICATMAR network, static winning (see
         // mergeKeepingStatic), so what arrives here is static plus whatever
@@ -91,7 +96,7 @@ export default {
       for (let i = 0; i < stations.length; i++) {
         let station = stations[i];
         const olOverlay = new ol.Overlay({
-          element: this.$refs[station.id]?.[0],
+          element: this.$refs[this.keyOf(station)]?.[0],
           positioning: 'center-center',
           position: ol.proj.fromLonLat([station.longitude, station.latitude]),
           stopEvent: false,
@@ -115,25 +120,42 @@ export default {
       if (ageHours <= 24 * 30) return 'inactive';
       return 'offline';
     },
+    // ICATMAR's logo only on the stations ICATMAR runs: the network also
+    // takes in CEFREM's CNET and Puertos del Estado's ALFA, SALO and VINA
     isICATMARStation(station) {
-      return station.metadata?.network === 'HFR-ICATMAR' && station.id != 'CNET';
+      return station.metadata?.network === 'HFR-ICATMAR'
+        && !NON_ICATMAR_INSTITUTIONS.includes(station.metadata?.institution);
     },
     isIconSelected(station) {
       // TOTALS stands for the whole network, so it lights up every station
       return this.$gui.isPlatformSelected('hfr', station.id) || this.$gui.isPlatformSelected('hfr', 'TOTALS');
     },
+    // A station's identity: its network and its code
+    keyOf(station) {
+      return `${station.metadata?.network ?? ''}:${station.id}`;
+    },
     // Stations belong on All platforms and the HFR dashboard. On the HFR
-    // dashboard, the source picked there decides: ICATMAR's network only, or
-    // every network on the EU HFR Node.
+    // dashboard, the source picked there decides: ICATMAR's network only
+    // (Puertos del Estado's stations it uses included), or what the EU HFR
+    // Node publishes - every network, but not the stations only ICATMAR has
+    // (SCAL, and ALFA/SALO/VINA, which the node lists under DeltaEbro).
     isStationVisible(station) {
       const dashboard = this.$gui.selectedDashboard;
-      if (dashboard === 'platforms') return true;
-      if (dashboard !== 'hfr') return false;
-      return this.$gui.hfrSource === 'EU' || station.metadata?.network === 'HFR-ICATMAR';
+      if (dashboard !== 'platforms' && dashboard !== 'hfr') return false;
+      const isICATMARNetwork = station.metadata?.network === 'HFR-ICATMAR';
+      // All platforms: ICATMAR's network (the stations of other institutions
+      // it uses included). With external platforms, every network too, each
+      // station once - one ICATMAR's network lists (Puertos del Estado's) as
+      // ICATMAR's, not again as DeltaEbro's
+      if (dashboard === 'platforms')
+        return isICATMARNetwork || (this.$gui.platformsShowExternal && !this.icatmarIds.has(station.id));
+      // HFR: ICATMAR's network, or what the EU node publishes
+      if (this.$gui.hfrSource === 'EU') return !station.notOnEUNode;
+      return isICATMARNetwork;
     },
     updateZIndices() {
       for (const station of this.stations) {
-        const wrapper = this.$refs[station.id]?.[0]?.parentElement;
+        const wrapper = this.$refs[this.keyOf(station)]?.[0]?.parentElement;
         if (wrapper) wrapper.style.zIndex = this.isIconSelected(station) ? '10' : '';
       }
     },
@@ -141,6 +163,12 @@ export default {
       e.stopPropagation();
       this.$gui.selectPlatform('hfr', station.id);
     }
+  },
+  computed: {
+    // The codes of the stations in ICATMAR's network
+    icatmarIds() {
+      return new Set(this.stations.filter(s => s.metadata?.network === 'HFR-ICATMAR').map(s => s.id));
+    },
   },
   watch: {
     '$gui.selectedPlatform'()    { this.$nextTick(() => this.updateZIndices()); },

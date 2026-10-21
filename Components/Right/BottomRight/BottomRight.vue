@@ -1,7 +1,11 @@
 <template>
   <div class="bottom-right-container">
+    <!-- All platforms -->
+    <template v-if="$gui.selectedDashboard == 'platforms'">
+      <BRPlatforms></BRPlatforms>
+    </template>
     <!-- HFR currents -->
-    <template v-if="$gui.selectedDashboard == 'hfr'">
+    <template v-else-if="$gui.selectedDashboard == 'hfr'">
       <BRHFRcurrents></BRHFRcurrents>
     </template>
     <!-- Buoys -->
@@ -30,6 +34,7 @@
 
 
 <script>
+import BRPlatforms from './BRPlatforms.vue';
 import BRHFRcurrents from './BRHFRcurrents.vue';
 import BRBuoys from './BRBuoys.vue';
 import BRDrifters from './BRDrifters.vue';
@@ -54,6 +59,7 @@ export default {
     //onclick: function(e){},
   },
   components: {
+    BRPlatforms,
     BRHFRcurrents,
     BRBuoys,
     BRDrifters,

@@ -62,6 +62,18 @@ class GUIManager {
 
   ];
 
+  // ALL PLATFORMS DASHBOARD
+  // ICATMAR's platforms only (its HF radar network - other institutions'
+  // stations it uses included - and the buoys it runs), or other
+  // institutions' as well (bottom-right toggle)
+  platformsShowExternal = false;
+  // Whether All platforms shows a platform of these institutions (written
+  // 'A / B' for joint ownership)
+  isPlatformShown(institution) {
+    return this.platformsShowExternal
+      || String(institution ?? '').split('/').some(name => name.trim() === 'ICATMAR');
+  }
+
   // HFR DASHBOARD
   // Which provider's HF radar data the HFR dashboard shows: 'ICATMAR' (only
   // ICATMAR's network) or 'EU' (every network on the EU HFR Node).
@@ -80,6 +92,51 @@ class GUIManager {
   // Which hours have maps, one row per network in view, for the bottom
   // timeline to draw: [{ network, hours: { '<ISO hour>': count } }]
   hfrAvailability = [];
+  // The place the HFR dashboard's bottom section is about: a buoy or drifter
+  // chip that was clicked, or a point on the map -
+  // { lon, lat, kind: 'buoy' | 'drifter' | 'point', id, name }
+  hfrPoint = null;
+  // Which view of it the bottom section shows: 'Currents' | 'Radials' | 'Compare'
+  hfrTab = 'Compare';
+  // What the Compare view has at the selected time, for the circle arrows on
+  // the map (MapOverlayPoint): [{ name, code, speed, direction, tag }]
+  hfrPointArrows = [];
+  // Whether the circle arrows are up at hfrPoint (MapOverlayPoint) - the
+  // clicked platform's own chip gives way to them, the circle saying all it
+  // did and more
+  get isHFRPointCircleShown() {
+    return this.selectedDashboard === 'hfr' && this.isDataTimelineOpen && this.hfrTab === 'Compare'
+      && this.hfrPoint != null && this.hfrPointArrows.length > 0;
+  }
+  isHFRPointChip(kind, id) {
+    return this.isHFRPointCircleShown && this.hfrPoint.kind === kind && this.hfrPoint.id === id;
+  }
+  // The buoy reading behind the selected cell, for the platform detail:
+  // { sensor, instrument, depth, time }
+  hfrPointReading = null;
+  // A data source picked in the Compare view's names column, described in the
+  // info panel instead of the platform: { key, title, subtitle, icon, rows:
+  // [{ label, value, url, long }], loading } - null for the platform itself
+  hfrSourceInfo = null;
+  // Set by "Switch to dashboard" from the HFR buoy detail: which view the
+  // buoys timeline should open on ({ mode: 'variable', group: 'currents' })
+  buoysView = null;
+
+  // Opens the HFR bottom section on a buoy or drifter chip: Compare, on the
+  // hour of the reading that was clicked, with its detail panel
+  openHFRPoint(point, time) {
+    this.hfrPoint = point;
+    this.hfrTab = 'Compare';
+    if (time) this.selectedTime = new Date(Math.floor((time.getTime() + 1800000) / 3600000) * 3600000);
+    this.selectedPlatform = { stationId: point.id, kind: point.kind, date: time };
+    this.isDataTimelineOpen = true;
+    this.isPlatformDetailOpen = true;
+    this.isMenuOpen = false;
+  }
+
+  // What is under the cursor on the HFR map: { lon, lat, speed, direction,
+  // network } (speed and direction undefined where there is no data), or null
+  hfrCursor = null;
   // Drifters can be overlaid on the HFR dashboard (bottom-right toggle)
   hfrShowDrifters = false;
 
@@ -104,6 +161,9 @@ class GUIManager {
   // Whether a platform of dashboard `dashboardId` is the one selected: in its
   // own dashboard, or in All platforms on its view.
   isPlatformSelected(dashboardId, stationId) {
+    // A buoy or drifter chip selected on the HFR dashboard (openHFRPoint) is
+    // not a radar station, whatever its code (BEGU is both)
+    if (dashboardId === 'hfr' && this.selectedPlatform?.kind) return false;
     const inView = this.selectedDashboard === dashboardId
       || (this.selectedDashboard === 'platforms' && this.timelineDashboardId === dashboardId);
     return inView && this.selectedPlatform?.stationId === stationId;
