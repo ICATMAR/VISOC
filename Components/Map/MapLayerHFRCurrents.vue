@@ -149,7 +149,7 @@ export default {
 
     // PARTICLES
     updateParticles() {
-      if (!this.field || !this.$gui.hfrShowParticles) { this.removeParticles(); return; }
+      if (!this.field || !this.$gui.hfrShowParticles || !this.showsCurrents) { this.removeParticles(); return; }
       const data = this.field.toWindData();
       if (!this.particleLayer) {
         this.particleLayer = this.quietly(() => new OlWind.WindLayer(data, {
@@ -280,6 +280,7 @@ export default {
     // network's own grid (field.parts), where the measurements are, rather
     // than the merged one the animation runs on
     updateCursor(pixel) {
+      if (!this.showsCurrents) { this.$gui.hfrCursor = null; return; }
       const [lon, lat] = ol.proj.toLonLat(this.map.getCoordinateFromPixel(pixel));
       const parts = this.field?.parts ?? (this.field ? [this.field] : []);
       let value = null, network;
@@ -306,7 +307,7 @@ export default {
     // with its number of points instead, at their centre.
     updateGridPoints() {
       const parts = this.field?.parts ?? (this.field ? [this.field] : []);
-      if (parts.length === 0 || !this.$gui.hfrShowGridPoints) {
+      if (parts.length === 0 || !this.$gui.hfrShowGridPoints || !this.showsCurrents) {
         if (this.pointLayer) { this.map.removeLayer(this.pointLayer); this.pointLayer = undefined; }
         return;
       }
@@ -382,6 +383,9 @@ export default {
       return this.gridPointStyle;
     },
   },
+  computed: {
+    showsCurrents() { return this.$gui.hfrProduct === 'currents'; },
+  },
   watch: {
     // The maps are hourly: only a change of hour fetches anything
     '$gui.selectedTime'(time, previous) {
@@ -391,6 +395,9 @@ export default {
     '$gui.hfrSource'() { this.loadField(); this.loadAvailability(); },
     '$gui.hfrShowParticles'() { this.updateParticles(); },
     '$gui.hfrShowGridPoints'() { this.updateGridPoints(); },
+    // Radials on the map instead (MapLayerHFRRadials): nothing drawn here,
+    // though the maps keep loading - the timeline marks the hours that have one
+    showsCurrents() { this.updateParticles(); this.updateGridPoints(); this.$gui.hfrCursor = null; },
   },
 }
 </script>

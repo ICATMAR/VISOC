@@ -86,6 +86,23 @@ class GUIManager {
   // and/or the totals' grid points - where the measurements are
   hfrShowParticles = true;
   hfrShowGridPoints = false;
+  // What the HFR main map shows (bottom-right): 'currents' (the totals) or
+  // 'radials' (each station's, see MapLayerHFRRadials)
+  hfrProduct = 'currents';
+  // Radials: all points, or (bottom-right toggle) only those no QC test
+  // flagged. Off by default: a flag doesn't always mean the point is wrong -
+  // finer QC choices may come later (configuration). On the main map and in
+  // a station's mini map alike.
+  hfrRadialsValidOnly = false;
+  // The stations whose radials the main map can draw - those of ICATMAR's
+  // network, or with the EU HFR Node those in view (MapLayerHFRRadials) - as
+  // [{ key: '<network>:<id>', id }], and the keys of those switched off
+  // (bottom-right toggles)
+  hfrRadialStations = [];
+  hfrRadialHidden = [];
+  // What the radials layer is showing, for the bottom-right panel:
+  // { state: 'loading' | 'ok' | 'none', time, count }
+  hfrRadialStatus = { state: 'loading' };
   // What the currents layer is showing, for the bottom-right panel to report:
   // { state: 'loading' | 'ok' | 'none', time, label }
   hfrFieldStatus = { state: 'loading' };

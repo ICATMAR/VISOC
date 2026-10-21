@@ -1,6 +1,6 @@
 <template>
-  <!-- Animation -->
- <div class="horizontal wrap options-container">
+  <!-- Animation (of the currents) -->
+ <div class="horizontal wrap options-container" v-if="$gui.hfrProduct === 'currents'">
     <OnOffButtonWithText :checked="$gui.hfrShowParticles" :text="$t('particle animation')" :inSize="'8px'"
       @toggle="$gui.hfrShowParticles = $event"></OnOffButtonWithText>
     <OnOffButtonWithText :checked="$gui.hfrShowGridPoints" :text="$t('data points')" :inSize="'8px'"
@@ -12,17 +12,26 @@
   <div class="filled-container">
     <!-- Currents or radials -->
     <div class="horizontal wrap button-group">
-      <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'currents' }"
-        @click="selectedHFRProduct = 'currents'"><span>{{ $t('Currents') }}</span></button>
-      <button class="clickable" :class="{ 'selectedOption': selectedHFRProduct == 'radials' }"
-        @click="selectedHFRProduct = 'radials'"><span>{{ $t('Radials') }}</span></button>
+      <button class="clickable" :class="{ 'selectedOption': $gui.hfrProduct == 'currents' }"
+        @click="$gui.hfrProduct = 'currents'"><span>{{ $t('Currents') }}</span></button>
+      <button class="clickable" :class="{ 'selectedOption': $gui.hfrProduct == 'radials' }"
+        @click="$gui.hfrProduct = 'radials'"><span>{{ $t('Radials') }}</span></button>
     </div>
 
-    <!-- Radial antennas on/off -->
+    <!-- Radials: each station on/off (those the map can draw now), and
+         all points or only those no QC test flagged -->
     <Transition name="slideBottom-fade">
-      <div class="horizontal wrap options-container" v-if="selectedHFRProduct == 'radials'">
-        <OnOffButtonWithText v-for="radial in radials" :key="radial" :checked="true" :text="$t(radial)" :inSize="'8px'"
-          @change="toggleShowRadial($event, radial)"></OnOffButtonWithText>
+      <div class="vertical" v-if="$gui.hfrProduct == 'radials'">
+        <div class="horizontal wrap options-container">
+          <OnOffButtonWithText v-for="station in $gui.hfrRadialStations" :key="station.key"
+            :checked="!$gui.hfrRadialHidden.includes(station.key)" :text="station.id" :inSize="'8px'"
+            :title="station.key" @toggle="toggleShowRadial(station.key, $event)"></OnOffButtonWithText>
+        </div>
+        <div class="horizontal wrap options-container">
+          <OnOffButtonWithText :checked="$gui.hfrRadialsValidOnly" :text="$t('Non-flagged QC points')" :inSize="'8px'"
+            :title="$t('On: only the points no QC test flagged. Off: all points.')"
+            @toggle="$gui.hfrRadialsValidOnly = $event"></OnOffButtonWithText>
+        </div>
       </div>
     </Transition>
 
@@ -61,7 +70,16 @@
       <DTColorLegend code="HCSP" :range="$gui.rangeFor('HCSP')" :showUnit="true" :fullWidth="true"></DTColorLegend>
     </div>
     <!-- Which map is on the screen, and what is under the cursor -->
-    <div class="field-status">
+    <div class="field-status" v-if="$gui.hfrProduct === 'radials'">
+      <template v-if="$gui.hfrRadialStatus.state === 'loading'">
+        <span class="spinner-border field-spinner"></span>{{ $t('Loading') }}
+      </template>
+      <template v-else-if="$gui.hfrRadialStatus.state === 'ok'">
+        {{ $t('Radials') }} · {{ $gui.hfrRadialStatus.count }} {{ $t('stations') }} · {{ formatTime($gui.hfrRadialStatus.time) }}
+      </template>
+      <template v-else>{{ $t('No radials at') }} {{ formatTime($gui.hfrRadialStatus.time) }}</template>
+    </div>
+    <div class="field-status" v-else>
       <template v-if="$gui.hfrFieldStatus.state === 'loading'">
         <span class="spinner-border field-spinner"></span>{{ $t('Loading') }}
       </template>
@@ -100,8 +118,6 @@ export default {
 
   data() {
     return {
-      selectedHFRProduct: 'currents',
-      radials: ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST', 'SCAL', 'SALO', 'ALFA', 'VINA'],
     }
   },
   methods: {
@@ -120,8 +136,9 @@ export default {
     toggleExternalSources(e) {
       this.$emit('toggleExternalSources');
     },
-    toggleShowRadial(e, radial) {
-      this.$emit('toggleShowRadial', radial);
+    toggleShowRadial(key, isOn) {
+      const hidden = this.$gui.hfrRadialHidden.filter(k => k !== key);
+      this.$gui.hfrRadialHidden = isOn ? hidden : [...hidden, key];
     }
   },
   components: {

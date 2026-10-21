@@ -2,9 +2,14 @@
   <div class="horizontal pd-container" v-if="station">
     <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
-    <!-- Map (left) -->
-    <div class="map-container map-clickable" @click="centerMainMap" title="Click to center main map">
-      <div ref="stationMap" class="pd-map"></div>
+    <!-- Map (left): the station's radials at the selected hour, the legend
+         of their colours under it (both go on short screens) -->
+    <div class="map-container radial-map-container">
+      <div ref="stationMap" class="pd-map radial-map map-clickable" @click="centerMainMap" :title="$t('Click to center main map')"></div>
+      <span class="radial-message" v-if="radialMessage">{{ $t(radialMessage) }}</span>
+      <div class="radial-legend">
+        <DTColorLegend code="HCSP" :range="$gui.rangeFor('HCSP')" :showUnit="true" :fullWidth="true"></DTColorLegend>
+      </div>
     </div>
 
     <!-- Info (center) -->
@@ -59,24 +64,16 @@
         <span class="pd-switch-btn-label">{{ $t('Switch to dashboard') }}</span>
       </button>
     </div>
-
-    <!-- Media (right): HFR station photo -->
-    <div class="pd-media-container">
-      <img v-if="!imgError"
-        class="pd-circular-media"
-        :src="`./Assets/Images/platforms/HFR/${station.id}.jpg`"
-        :alt="station.name"
-        @error="imgError = true">
-      <div v-else class="pd-circular-fallback">
-        <img :src="radarIconURL" style="width:45%; opacity:0.35; filter:invert(1)" alt="">
-        <span style="font-size:0.7rem; color:rgba(255,255,255,0.4)">{{ station.id }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
 
 <script>
+import DTColorLegend from '../../Shared/DTColorLegend.vue';
+
+// The hour a time belongs to on the map: 9:30 up to (not including) 10:30 is 10:00
+const roundToHour = time => new Date(Math.floor((new Date(time).getTime() + 1800000) / 3600000) * 3600000);
+
 export default {
   name: "DTAPHFRPlatformDetail",
   mixins: [window.pdFocusMixin],
@@ -101,13 +98,16 @@ export default {
     document.addEventListener('mouseup', this._onDocMouseUp);
   },
   beforeUnmount() {
+    this.particles?.destroy();
     document.removeEventListener('mousemove', this._onDocMouseMove);
     document.removeEventListener('mouseup', this._onDocMouseUp);
   },
   data() {
     return {
       radarIconURL: './Assets/Icons/radar.svg',
-      imgError: false,
+      // The radials on the mini map: 'loading', 'ok', 'none' (no map that
+      // hour) or 'unavailable' (not on the EU HFR Node)
+      radialState: 'loading',
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
@@ -150,6 +150,44 @@ export default {
       iconEl.appendChild(markerImg);
       this.markerOverlay = new ol.Overlay({ element: iconEl, positioning: 'center-center', stopEvent: false });
       this.map.addOverlay(this.markerOverlay);
+      this.particles = new window.RadialParticles(this.map, {
+        colorOf: speed => this.$gui.colorFor('HCSP', speed),
+        maxSpeed: this.$gui.rangeFor('HCSP')[1],
+        lineWidth: 1.5,
+      });
+      if (!this.$gui.isShortScreen) this.particles.start();
+      this.loadRadials();
+    },
+    // The selected station's radials at the selected hour, from the EU HFR
+    // Node, fitted into the mini map
+    async loadRadials() {
+      const station = this.station;
+      if (!station || !this.particles) return;
+      const request = (this.radialRequest ?? 0) + 1; // a newer station or hour supersedes this
+      this.radialRequest = request;
+      this.radialState = 'loading';
+      let field;
+      try {
+        field = await this.$dataService.hfrstations.getRadials(station.metadata?.network ?? 'HFR-ICATMAR', station.id, this.hour);
+      } catch (error) {
+        console.error(`Error loading the radials of ${station.id}:`, error);
+        field = null;
+      }
+      if (request !== this.radialRequest) return;
+      this.radialState = field ? 'ok' : field === null ? 'none' : 'unavailable';
+      this.radialField = field ?? null;
+      this.particles.setFields(field ? [field] : [], { showFlagged: !this.$gui.hfrRadialsValidOnly });
+      if (field) this.fitRadials(field.extent);
+    },
+    // The station's radial extent, with the station itself, filling the map -
+    // once per extent, which settles after the first hours (see getRadialField)
+    fitRadials([minLon, minLat, maxLon, maxLat]) {
+      const { longitude, latitude } = this.station;
+      const box = [Math.min(minLon, longitude), Math.min(minLat, latitude), Math.max(maxLon, longitude), Math.max(maxLat, latitude)];
+      const key = `${this.station.id}:${box.join()}`;
+      if (key === this.fittedKey) return;
+      this.fittedKey = key;
+      this.map.getView().fit(ol.proj.transformExtent(box, 'EPSG:4326', 'EPSG:3857'), { padding: [8, 8, 8, 8], maxZoom: 11 });
     },
     centerMainMap() {
       if (!this.station) return;
@@ -210,6 +248,15 @@ export default {
       return `${Math.abs(latitude).toFixed(2)}° ${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(2)}° ${longitude < 0 ? 'W' : 'E'}`;
     },
     sp() { return this.$gui.selectedPlatform; },
+    // The selected time's hour, as a timestamp (a Date would change identity
+    // on every tick of the handle)
+    hourMs() { return roundToHour(this.$gui.selectedTime).getTime(); },
+    hour() { return new Date(this.hourMs); },
+    radialMessage() {
+      if (this.radialState === 'none') return 'No radials at this hour';
+      if (this.radialState === 'unavailable') return 'No radial data on the EU HFR Node';
+      return null;
+    },
     formattedDate() {
       const date = this.sp?.date;
       if (!date) return '';
@@ -257,11 +304,28 @@ export default {
     // The station object, not selectedPlatform: that also changes on every
     // bar click (same station, new date), and it fires again when the live
     // sources replace the static entry with one carrying the real position.
-    station() {
-      this.imgError = false;
-      this.$nextTick(() => this.showStationOnMap()); // once the v-if has rendered the element
-    }
-  }
+    station(station, previous) {
+      this.$nextTick(() => {
+        this.showStationOnMap(); // once the v-if has rendered the element
+        // Another station (not the live copy of the same one): its radials
+        if (station && station.id !== previous?.id || station?.metadata?.network !== previous?.metadata?.network) {
+          this.fittedKey = null;
+          this.loadRadials();
+        }
+      });
+    },
+    hourMs() { this.loadRadials(); },
+    '$gui.hfrRadialsValidOnly'(validOnly) {
+      const showFlagged = !validOnly;
+      this.particles?.setFields(this.radialField ? [this.radialField] : [], { showFlagged });
+    },
+    // No map on short screens: no animation either
+    '$gui.isShortScreen'(isShort) {
+      if (isShort) this.particles?.stop();
+      else this.$nextTick(() => { this.map?.updateSize(); this.particles?.start(); });
+    },
+  },
+  components: { DTColorLegend },
 }
 </script>
 
@@ -270,6 +334,36 @@ export default {
 .map-container {
   position: relative;
   flex-shrink: 0;
+}
+
+/* The map over its legend, together the card's height */
+.radial-map-container {
+  display: flex;
+  flex-direction: column;
+  width: 210px;
+  height: 180px;
+}
+.pd-map.radial-map {
+  width: 210px;
+  height: 154px;
+}
+.radial-legend {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.radial-message {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34px;
+  text-align: center;
+  font-size: 0.65rem;
+  color: white;
+  text-shadow: 0 0 3px black;
+  pointer-events: none;
 }
 
 .map-clickable {

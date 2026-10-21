@@ -36,6 +36,9 @@ import { createDetailMapLayers, zoomToShowCoast } from './Assets/Scripts/mapLaye
 window.createDetailMapLayers = createDetailMapLayers;
 window.zoomToShowCoast = zoomToShowCoast;
 
+import RadialParticles from './Assets/Scripts/RadialParticles.js';
+window.RadialParticles = RadialParticles;
+
 // Globals
 window.MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
 window.NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}

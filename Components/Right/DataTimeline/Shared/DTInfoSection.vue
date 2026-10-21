@@ -78,7 +78,7 @@
     </template>
 
     <!-- HFR totals / network (no specific station selected) -->
-    <template v-else-if="isHFRContext">
+    <template v-else-if="isHFRNetworkCard">
       <div class="info-col vertical" :style="[{ paddingLeft: '12px' }, institutionBgStyle]">
         <div class="info-header">
           <span class="info-abbr">TOTALS</span>
@@ -321,6 +321,13 @@ export default {
     // On the HFR dashboard a buoy or drifter chip can be the selection too
     // (GUIManager.openHFRPoint) - told apart by its kind, since codes clash:
     // BEGU is both the Begur radar station and the Mar Begur buoy
+    // ICATMAR's network: for its TOTALS, and in All platforms' HFR view until
+    // a station is picked. On the HFR dashboard only once something is - with
+    // nothing selected there, the panel stays empty.
+    isHFRNetworkCard() {
+      if (!this.isHFRContext) return false;
+      return this.$gui.selectedDashboard !== 'hfr' || !!this.$gui.selectedPlatform?.stationId;
+    },
     hfrPlatformKind() {
       return this.$gui.selectedDashboard === 'hfr' ? this.$gui.selectedPlatform?.kind : undefined;
     },

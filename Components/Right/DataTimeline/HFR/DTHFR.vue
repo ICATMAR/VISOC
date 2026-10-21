@@ -62,6 +62,15 @@ export default {
       return 'Coming soon: click a point on the map to see the currents there';
     },
   },
+  watch: {
+    // A buoy or drifter picked on the map belongs to Compare: in any other
+    // view it is no longer selected - no detail, nothing in the info panel
+    '$gui.hfrTab'(tab) {
+      if (tab === 'Compare' || !this.$gui.selectedPlatform?.kind) return;
+      this.$gui.selectedPlatform = null;
+      this.$gui.isPlatformDetailOpen = false;
+    },
+  },
   components: {
     DTAPHFR,
     DTHFRCompare,

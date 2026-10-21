@@ -76,6 +76,14 @@ class DPHFRStations extends DP {
   // station's promise - fills in whatever hours ERDDAP's result is missing
   // from GitHub (ERDDAP occasionally lags behind the actual files, and SCAL
   // has no ERDDAP dataset at all), within the repo's retention window only.
+  // One station's radials at `hour`, from the EU HFR Node only (see
+  // SourceErddapEUHFR.getRadialField): null for an hour with no map,
+  // undefined for a station the node doesn't have (SCAL)
+  async getRadials(network, stationId, hour) {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    return euHFRSource ? euHFRSource.getRadialField(network, stationId, hour) : undefined;
+  }
+
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
     stationIds = hfrIcatmarNetwork.stations.map(s => s.id);
     const end = endDate ?? new Date();

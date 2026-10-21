@@ -20,6 +20,35 @@ const repairEncoding = text => {
   try { return decodeURIComponent(escape(text)); } catch { return text; }
 };
 
+// What griddapEntry() reads off a dataset's info
+const GRIDDAP_ENTRY_KEYS = ['time_coverage_start', 'time_coverage_end', 'site_lat', 'site_lon',
+  'geospatial_lat_min', 'geospatial_lat_max', 'geospatial_lon_min', 'geospatial_lon_max'];
+
+// Radial maps: how many (station, hour) to keep, and for how long the
+// requests themselves are cached
+const RADIAL_CACHE_SIZE = 300;
+const RADIAL_TTL_MINUTES = 10;
+const HALF_HOUR_MS = 30 * 60 * 1000;
+
+// The point `km` away from `site` heading `bearing` (degrees true), on a
+// sphere: [lat, lon]. What a polar grid's range and bearing come to.
+const EARTH_RADIUS_KM = 6371;
+const toRad = deg => deg * Math.PI / 180;
+const toDeg = rad => rad * 180 / Math.PI;
+function destination(site, bearing, km) {
+  const d = km / EARTH_RADIUS_KM, b = toRad(bearing), lat1 = toRad(site.lat), lon1 = toRad(site.lon);
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return [toDeg(lat2), toDeg(lon2)];
+}
+// Initial bearing from one point to another, degrees true
+function bearingBetween(lat1, lon1, lat2, lon2) {
+  const p1 = toRad(lat1), p2 = toRad(lat2), dl = toRad(lon2 - lon1);
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
 function pick(metadata, keys) {
   const picked = {};
   keys.forEach(key => { if (metadata[key] !== undefined) picked[key] = repairEncoding(metadata[key]); });
@@ -357,15 +386,135 @@ class SourceErddapEUHFR extends Source {
   // dataset.
   griddapEntry(dataset) {
     this.griddapEntries ??= {};
-    this.griddapEntries[dataset] ??= this.fetchMetadata(dataset, ['time_coverage_start', 'time_coverage_end'])
+    this.griddapEntries[dataset] ??= this.fetchMetadata(dataset, GRIDDAP_ENTRY_KEYS)
       .then(metadata => ({
         dataset,
         isGriddap: true,
         startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
         endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+        // Where the antenna is - what a polar grid's ranges and bearings
+        // count from - and, where the station publishes it, the box its
+        // radials cover
+        site: { lat: Number(metadata['site_lat']), lon: Number(metadata['site_lon']) },
+        coverage: coverageFrom(metadata),
       }))
       .catch(error => { delete this.griddapEntries[dataset]; throw error; });
     return this.griddapEntries[dataset];
+  }
+
+  // One station's radials at `hour` (a Date on the hour), from its griddap
+  // dataset: the map in [hour - 30 min, hour + 30 min) closest to the hour,
+  // never one from another hour - null when there is none, undefined when
+  // the node has no dataset for the station at all (SCAL).
+  //   { time, layout: 'polar' | 'grid', site: { lat, lon },
+  //     lat, lon, velocity, direction: Float32Array (one entry per bin with
+  //     data; velocity in m/s, positive away from the antenna; direction the
+  //     bearing pointing away from it, degrees true),
+  //     qc: Int8Array (QCflag, 1 = good), extent: [minLon, minLat, maxLon, maxLat] }
+  // `extent` is the station's radial extent: its published coverage, or for
+  // a polar grid (which publishes none) the box of every bin with data in
+  // the hours loaded so far - so it settles rather than jumping hour to hour.
+  // `network` is the station's network code; a station ICATMAR's network
+  // takes in from another (Puertos del Estado's, HFR-DeltaEbro's here) is
+  // found by its code.
+  async getRadialField(network, stationId, hour) {
+    const code = network.replace(/^HFR-/, '');
+    const known = this.stations[`${code}-${stationId}`];
+    const entry = known
+      ? await this.griddapEntry(known.dataset.replace(/_table$/, ''))
+      : await this.otherNetworkStation(stationId);
+    if (!entry) return undefined;
+
+    const key = `${entry.dataset}|${hour.toISOString()}`;
+    this.radialFields ??= new Map();
+    if (!this.radialFields.has(key)) {
+      this.radialFields.set(key, this.fetchRadialField(entry, hour).catch(error => {
+        this.radialFields.delete(key);
+        throw error;
+      }));
+      // Least recently added out first
+      if (this.radialFields.size > RADIAL_CACHE_SIZE) this.radialFields.delete(this.radialFields.keys().next().value);
+    }
+    const field = await this.radialFields.get(key);
+    if (!field) return null;
+    return { ...field, extent: this.radialExtent(entry, field) };
+  }
+
+  // The station's radial extent (see getRadialField), widened by `field`
+  radialExtent(entry, field) {
+    const c = entry.coverage;
+    if (c) return [c.minLon, c.minLat, c.maxLon, c.maxLat];
+    this.radialExtents ??= {};
+    const known = this.radialExtents[entry.dataset];
+    const [minLon, minLat, maxLon, maxLat] = field.dataExtent;
+    this.radialExtents[entry.dataset] = known
+      ? [Math.min(known[0], minLon), Math.min(known[1], minLat), Math.max(known[2], maxLon), Math.max(known[3], maxLat)]
+      : field.dataExtent;
+    return this.radialExtents[entry.dataset];
+  }
+
+  async fetchRadialField(entry, hour) {
+    const from = new Date(hour.getTime() - HALF_HOUR_MS);
+    const to = new Date(hour.getTime() + HALF_HOUR_MS);
+    if (entry.startDate && to <= entry.startDate) return null;
+    // Up to the window's end - or the dataset's last map, should that be
+    // earlier: asking past it is an error. ERDDAP snaps both ends to the
+    // nearest map, so what comes back is filtered to the window below.
+    const stop = entry.endDate && to < entry.endDate ? `(${to.toISOString()})` : 'last';
+    const selectors = encodeURIComponent(`[(${from.toISOString()}):1:${stop}][0][0:1:last][0:1:last]`);
+    const url = `${this.baseUrl}/griddap/${entry.dataset}.nc?RDVA${selectors},QCflag${selectors}`;
+    let buffer;
+    try {
+      buffer = await this.fetchManager.fetch(url, RADIAL_TTL_MINUTES).then(res => res.arrayBuffer());
+    } catch (error) {
+      if (error.name === 'HTTPError') return null; // nothing from that hour on
+      throw error;
+    }
+
+    const file = readNetCDF3(buffer);
+    const times = file.variables['time'].read(); // seconds since 1970
+    // The map closest to the hour, inside the window
+    let best = -1;
+    times.forEach((seconds, k) => {
+      const ms = seconds * 1000;
+      if (ms < from.getTime() || ms >= to.getTime()) return;
+      if (best < 0 || Math.abs(ms - hour) < Math.abs(times[best] * 1000 - hour)) best = k;
+    });
+    if (best < 0) return null;
+
+    const rdva = file.variables['RDVA'];
+    const [, , dimA, dimB] = rdva.dimensions; // RNGE, BEAR - or latitude, longitude
+    const isPolar = dimA === 'RNGE';
+    const axisA = file.variables[dimA].read();
+    const axisB = file.variables[dimB].read();
+    const perMap = axisA.length * axisB.length;
+    const velocities = rdva.read().subarray(best * perMap, (best + 1) * perMap);
+    const flags = file.variables['QCflag'].read().subarray(best * perMap, (best + 1) * perMap);
+    const fill = rdva.attributes['_FillValue'];
+
+    const site = entry.site;
+    const lat = [], lon = [], velocity = [], direction = [], qc = [];
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    for (let a = 0; a < axisA.length; a++) {
+      for (let b = 0; b < axisB.length; b++) {
+        const v = velocities[a * axisB.length + b];
+        if (Number.isNaN(v) || v === fill) continue;
+        const [pLat, pLon] = isPolar ? destination(site, axisB[b], axisA[a]) : [axisA[a], axisB[b]];
+        lat.push(pLat); lon.push(pLon); velocity.push(v); qc.push(flags[a * axisB.length + b]);
+        // Away from the antenna, at the bin: the way back to the site, turned round
+        direction.push((bearingBetween(pLat, pLon, site.lat, site.lon) + 180) % 360);
+        if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
+        if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
+      }
+    }
+    return {
+      time: new Date(times[best] * 1000),
+      layout: isPolar ? 'polar' : 'grid',
+      site,
+      lat: Float32Array.from(lat), lon: Float32Array.from(lon),
+      velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),
+      dataExtent: lat.length ? [minLon, minLat, maxLon, maxLat] : [site.lon, site.lat, site.lon, site.lat],
+    };
   }
 
   // Valid points per hour for one network as the node publishes it -
