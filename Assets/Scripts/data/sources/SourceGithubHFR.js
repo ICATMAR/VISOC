@@ -1,11 +1,17 @@
 import Source from './Source.js';
 import VectorField from '../VectorField.js';
 import { parseTuv } from '../parsers/tuv.js';
+import { bearingAwayFrom } from '../geo.js';
 
 const GITHUB_API_URL = 'https://api.github.com/repos';
 const REPO = 'ICATMAR/data';
 const BRANCH = 'main';
 const PATH = 'observational/hf_radar/currents/L2';
+// The repository as a website (GitHub Pages): files by URL with CORS and no
+// API limit - where a station's radials (.ruv) are read from
+const PAGES_URL = 'https://icatmar.github.io/data';
+const RADIAL_CACHE_SIZE = 200;
+const RADIAL_TTL_MINUTES = 10;
 
 // .ruv (CODAR LLUV radial) files are fixed-format tables: a constant header,
 // then one ~242-byte line per radial vector. That makes the file size a
@@ -348,6 +354,69 @@ class SourceGithubHFR extends Source {
       })().catch(error => { this.totalsMaps.delete(key); throw error; }));
     }
     return this.totalsMaps.get(key);
+  }
+
+  // One station's radials at `hour` (on the hour: CODAR's are hourly), from
+  // its .ruv on the repository's website - the same shape as
+  // SourceErddapEUHFR.getRadialField(), for when the EU HFR Node has none
+  // (SCAL, or hours it hasn't published yet). null when the file isn't there.
+  // The .ruv's VELO is positive TOWARDS the antenna; the field's velocity, as
+  // the EU HFR Node's RDVA, is positive away - so it is worked out from the
+  // vector itself (VELU/VELV, cm/s) along the bearing away from the site.
+  // qc is the primary QC flag (PRIM: 1 passed every test).
+  getRadialField(stationId, hour) {
+    const key = `${stationId}|${hour.toISOString()}`;
+    this.radialFields ??= new Map();
+    if (!this.radialFields.has(key)) {
+      this.radialFields.set(key, this.fetchRadialField(stationId, hour).catch(error => {
+        this.radialFields.delete(key);
+        throw error;
+      }));
+      if (this.radialFields.size > RADIAL_CACHE_SIZE) this.radialFields.delete(this.radialFields.keys().next().value);
+    }
+    return this.radialFields.get(key);
+  }
+
+  radialUrl(stationId, hour) {
+    const [y, m, d, h] = [hour.getUTCFullYear(), hour.getUTCMonth() + 1, hour.getUTCDate(), hour.getUTCHours()].map(n => String(n).padStart(2, '0'));
+    return `${PAGES_URL}/${PATH}/${stationId}/${y}/${m}/RDLm_${stationId}_${y}_${m}_${d}_${h}00_l2b.ruv`;
+  }
+
+  async fetchRadialField(stationId, hour) {
+    let text;
+    try {
+      text = await this.fetchManager.fetch(this.radialUrl(stationId, hour), RADIAL_TTL_MINUTES).then(res => res.text());
+    } catch (error) {
+      if (error.name === 'HTTPError' && error.status === 404) return null;
+      throw error;
+    }
+    const { metadata, rows } = parseTuv(text);
+    const [siteLat, siteLon] = String(metadata['Origin'] ?? '').trim().split(/\s+/).map(Number);
+    if (!Number.isFinite(siteLat) || !Number.isFinite(siteLon)) return null;
+    const site = { lat: siteLat, lon: siteLon };
+
+    const lat = [], lon = [], velocity = [], direction = [], qc = [];
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    rows.forEach(row => {
+      const { LATD: pLat, LOND: pLon, VELU: u, VELV: v } = row;
+      if (![pLat, pLon, u, v].every(Number.isFinite)) return;
+      const away = bearingAwayFrom(site, pLat, pLon);
+      const rad = away * Math.PI / 180;
+      lat.push(pLat); lon.push(pLon); direction.push(away);
+      velocity.push((u * Math.sin(rad) + v * Math.cos(rad)) / 100);
+      qc.push(row.PRIM ?? 1);
+      if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
+      if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
+    });
+    return {
+      source: 'GitHub',
+      time: hour,
+      layout: 'polar',
+      site,
+      lat: Float32Array.from(lat), lon: Float32Array.from(lon),
+      velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),
+      dataExtent: lat.length ? [minLon, minLat, maxLon, maxLat] : [site.lon, site.lat, site.lon, site.lat],
+    };
   }
 
   // Whether the repository has the hour's totals file - a HEAD request, so

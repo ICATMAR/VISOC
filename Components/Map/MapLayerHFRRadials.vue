@@ -6,10 +6,12 @@
 
 <script>
 // The HFR dashboard's main map with Radials picked (bottom-right): each
-// station's radials at the selected hour, from the EU HFR Node, as
-// RadialParticles draws them in a station's mini map.
+// station's radials at the selected hour - from the EU HFR Node, or for
+// ICATMAR's stations from ICATMAR's GitHub when the node has none
+// (DPHFRStations.getRadials) - as RadialParticles draws them in a station's
+// mini map.
 // - ICATMAR: the stations of ICATMAR's network (Puertos del Estado's
-//   through their HFR-DeltaEbro copies; SCAL has none on the node);
+//   through their HFR-DeltaEbro copies, SCAL through GitHub);
 // - EU HFR Node: the stations in view, picked again after every pan.
 // The bottom-right toggles switch single stations off (hfrRadialHidden).
 
@@ -57,7 +59,7 @@ export default {
       const networks = this.networks ?? [];
       if (this.$gui.hfrSource !== 'EU') {
         const icatmar = networks.find(n => this.$dataService.hfrnetwork.networkCode(n) === 'HFR-ICATMAR');
-        return (icatmar?.stations ?? []).filter(s => s.id !== 'SCAL');
+        return icatmar?.stations ?? [];
       }
       const view = ol.proj.transformExtent(this.map.getView().calculateExtent(this.map.getSize()), 'EPSG:3857', 'EPSG:4326');
       return networks.flatMap(n => n.stations).filter(s => !s.notOnEUNode && this.reachesInto(s, view));
@@ -82,9 +84,10 @@ export default {
         return;
       }
       const stations = this.candidates().sort((a, b) => b.latitude - a.latitude);
-      this.$gui.hfrRadialStations = stations.map(s => ({ key: this.keyOf(s), id: s.id }));
+      this.$gui.hfrRadialStations = stations.map(s => ({ key: this.keyOf(s), id: s.id, network: s.metadata?.network ?? '' }));
+      // Off one by one, or a whole network at once ('net:<network>')
       const hidden = new Set(this.$gui.hfrRadialHidden);
-      const shown = stations.filter(s => !hidden.has(this.keyOf(s)));
+      const shown = stations.filter(s => !hidden.has(this.keyOf(s)) && !hidden.has(`net:${s.metadata?.network ?? ''}`));
       const hour = roundToHour(this.$gui.selectedTime);
       this.$gui.hfrRadialStatus = { state: 'loading', time: hour, count: 0 };
       this.particles.start();

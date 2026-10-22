@@ -22,10 +22,23 @@
          all points or only those no QC test flagged -->
     <Transition name="slideBottom-fade">
       <div class="vertical" v-if="$gui.hfrProduct == 'radials'">
-        <div class="horizontal wrap options-container">
-          <OnOffButtonWithText v-for="station in $gui.hfrRadialStations" :key="station.key"
-            :checked="!$gui.hfrRadialHidden.includes(station.key)" :text="station.id" :inSize="'8px'"
-            :title="station.key" @toggle="toggleShowRadial(station.key, $event)"></OnOffButtonWithText>
+        <!-- Under each network's code; past RADIALS_BY_NETWORK stations in
+             view, one toggle per network instead of one per station -->
+        <div class="horizontal wrap options-container" v-if="radialsByNetwork">
+          <OnOffButtonWithText v-for="group in radialGroups" :key="group.network"
+            :checked="!isNetworkHidden(group.network)" :text="`${shortNetwork(group.network)} (${group.stations.length})`" :inSize="'8px'"
+            :title="`${group.network}: ${group.stations.map(s => s.id).join(', ')}`"
+            @toggle="toggleNetwork(group.network, $event)"></OnOffButtonWithText>
+        </div>
+        <div class="vertical radial-groups" v-else>
+          <div class="radial-group" v-for="group in radialGroups" :key="group.network">
+            <span class="radial-network">{{ group.network }}</span>
+            <div class="horizontal wrap options-container">
+              <OnOffButtonWithText v-for="station in group.stations" :key="station.key"
+                :checked="!isStationHidden(station)" :text="station.id" :inSize="'8px'"
+                :title="station.key" @toggle="toggleShowRadial(station, $event)"></OnOffButtonWithText>
+            </div>
+          </div>
         </div>
         <div class="horizontal wrap options-container">
           <OnOffButtonWithText :checked="$gui.hfrRadialsValidOnly" :text="$t('Non-flagged QC points')" :inSize="'8px'"
@@ -107,6 +120,10 @@ import OnOffButtonWithText from '../../Utils/OnOffButtonWithText.vue';
 import DTColorLegend from '../DataTimeline/Shared/DTColorLegend.vue';
 import CurrentChip from '../../Map/CurrentChip.vue';
 
+// Past this many stations in view, the radials are switched on and off by
+// network rather than station by station
+const RADIALS_BY_NETWORK = 15;
+
 export default {
   props: {
   },
@@ -136,10 +153,44 @@ export default {
     toggleExternalSources(e) {
       this.$emit('toggleExternalSources');
     },
-    toggleShowRadial(key, isOn) {
-      const hidden = this.$gui.hfrRadialHidden.filter(k => k !== key);
-      this.$gui.hfrRadialHidden = isOn ? hidden : [...hidden, key];
-    }
+    // Radials switched off: station keys, and 'net:<network>' for a whole
+    // network (see GUIManager.hfrRadialHidden)
+    isNetworkHidden(network) {
+      return this.$gui.hfrRadialHidden.includes(`net:${network}`);
+    },
+    isStationHidden(station) {
+      return this.isNetworkHidden(station.network) || this.$gui.hfrRadialHidden.includes(station.key);
+    },
+    toggleShowRadial(station, isOn) {
+      let hidden = this.$gui.hfrRadialHidden.filter(k => k !== station.key);
+      // Back on in a network that was off as a whole: only this one comes back
+      if (isOn && this.isNetworkHidden(station.network)) {
+        const others = this.$gui.hfrRadialStations.filter(s => s.network === station.network && s.key !== station.key).map(s => s.key);
+        hidden = [...hidden.filter(k => k !== `net:${station.network}`), ...others];
+      }
+      this.$gui.hfrRadialHidden = isOn ? hidden : [...hidden, station.key];
+    },
+    toggleNetwork(network, isOn) {
+      const hidden = this.$gui.hfrRadialHidden.filter(k => k !== `net:${network}` && !k.startsWith(`${network}:`));
+      this.$gui.hfrRadialHidden = isOn ? hidden : [...hidden, `net:${network}`];
+    },
+    shortNetwork(network) {
+      return network.replace(/^HFR-/, '');
+    },
+  },
+  computed: {
+    // The stations in view, by network, in the order they come (north to south)
+    radialGroups() {
+      const groups = new Map();
+      this.$gui.hfrRadialStations.forEach(station => {
+        if (!groups.has(station.network)) groups.set(station.network, { network: station.network, stations: [] });
+        groups.get(station.network).stations.push(station);
+      });
+      return [...groups.values()];
+    },
+    radialsByNetwork() {
+      return this.$gui.hfrRadialStations.length > RADIALS_BY_NETWORK;
+    },
   },
   components: {
     OnOffButton,
@@ -151,6 +202,21 @@ export default {
 </script>
 
 <style scoped>
+
+/* Radial toggles under each network's code */
+.radial-groups {
+  gap: 2px;
+  padding-top: 4px;
+}
+.radial-network {
+  padding: 0 5px;
+  font-size: 0.6rem !important;
+  opacity: 0.7;
+  letter-spacing: 0.03em;
+}
+.radial-group .options-container {
+  padding-top: 2px;
+}
 
 .legend-row {
   margin: 5px 12px 0;

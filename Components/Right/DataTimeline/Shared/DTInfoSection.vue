@@ -4,11 +4,10 @@
     <!-- HFR Compare: a data source picked in the names column, described as
          its own metadata says (GUIManager.hfrSourceInfo, see DTHFRCompare) -->
     <template v-if="sourceInfo">
-      <div class="photo-col">
-        <div class="photo-fallback">
-          <img v-if="sourceInfo.icon" :src="sourceInfo.icon" class="fallback-icon" alt="">
-          <i v-else :class="sourceInfo.faIcon" class="fallback-fa"></i>
-        </div>
+      <!-- Models and other data products have no photo; a platform's shows
+           when there is one (see photoURL) -->
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical">
         <div class="info-header">
@@ -34,9 +33,8 @@
 
     <!-- HFR individual station -->
     <template v-else-if="hfrStation">
-      <div class="photo-col">
-        <div class="photo-fallback"><img :src="radarIconURL" class="fallback-icon" alt=""></div>
-        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + stationPhotoURL + '\')' }"></div>
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -116,9 +114,8 @@
 
     <!-- Buoy individual station -->
     <template v-else-if="buoyStation">
-      <div class="photo-col">
-        <div class="photo-fallback"><img :src="buoyIconURL" class="fallback-icon" alt=""></div>
-        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + buoyStationPhotoURL + '\')' }"></div>
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -192,9 +189,8 @@
 
     <!-- Drifter -->
     <template v-else-if="drifterStation">
-      <div class="photo-col">
-        <div class="photo-fallback"><img :src="drifterIconURL" class="fallback-icon" alt=""></div>
-        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + drifterStationPhotoURL + '\')' }"></div>
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -306,9 +302,27 @@ export default {
       svpIconURL: './Assets/Icons/svp.svg',
       buoys: [],
       hfrNetworks: [],
+      // Photo URL -> true once it has loaded, false if there is none
+      photoFound: {},
     }
   },
   computed: {
+    // The photo of the platform on show, if it is a platform: by its type and
+    // code under Assets/Images/platforms/ - there for ICATMAR's, Puertos del
+    // Estado's and CEFREM's buoys and stations and for the drifters. A data
+    // product (a model, a network's totals) has none.
+    photoURL() {
+      if (this.sourceInfo) return this.sourceInfo.photo;
+      if (this.hfrStation) return this.stationPhotoURL;
+      if (this.isHFRNetworkCard) return undefined;
+      if (this.buoyStation) return this.buoyStationPhotoURL;
+      if (this.drifterStation) return this.drifterStationPhotoURL;
+      return undefined;
+    },
+    // Shown only once it has loaded: no empty frame for a platform without one
+    hasPhoto() {
+      return !!this.photoURL && this.photoFound[this.photoURL] === true;
+    },
     stationPhotoURL() {
       return './Assets/Images/platforms/HFR/' + (this.hfrStation?.id ?? '') + '.jpg';
     },
@@ -348,7 +362,7 @@ export default {
       if (id === 'TOTALS') {
         const total = network.total ?? {};
         return {
-          title: 'TOTALS', subtitle: code, icon: this.radarIconURL,
+          title: 'TOTALS', subtitle: code,
           rows: [
             { label: 'Platform type', value: 'High-frequency radar network' },
             ...row('Institution', total.institution),
@@ -362,7 +376,7 @@ export default {
       if (!station) return null;
       const meta = station.metadata ?? {};
       return {
-        title: id, subtitle: code, icon: this.radarIconURL,
+        title: id, subtitle: code, photo: `./Assets/Images/platforms/HFR/${id}.jpg`,
         rows: [
           { label: 'Platform type', value: 'High-frequency radar station' },
           ...row('Institution', meta.institution),
@@ -487,7 +501,22 @@ export default {
       };
     },
   },
+  watch: {
+    photoURL: {
+      immediate: true,
+      handler(url) { this.lookForPhoto(url); },
+    },
+  },
   methods: {
+    // Whether a photo exists, asked once per URL
+    lookForPhoto(url) {
+      if (!url || url in this.photoFound) return;
+      this.photoFound = { ...this.photoFound, [url]: undefined };
+      const image = new Image();
+      image.onload = () => { this.photoFound = { ...this.photoFound, [url]: true }; };
+      image.onerror = () => { this.photoFound = { ...this.photoFound, [url]: false }; };
+      image.src = url;
+    },
     // A measurement in whatever unit the user has picked for its quantity.
     //
     // Precision comes from the MAGNITUDE, not from the unit group. The groups

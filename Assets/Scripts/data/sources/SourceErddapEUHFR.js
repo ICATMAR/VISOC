@@ -1,6 +1,7 @@
 import Source from './Source.js';
 import SourceErddap from './SourceErddap.js';
 import { readNetCDF3 } from '../parsers/netcdf3.js';
+import { destination, bearingAwayFrom } from '../geo.js';
 
 
 // Kept from the network's (the 'Total' dataset's) NC_GLOBAL attributes - shared
@@ -29,25 +30,6 @@ const GRIDDAP_ENTRY_KEYS = ['time_coverage_start', 'time_coverage_end', 'site_la
 const RADIAL_CACHE_SIZE = 300;
 const RADIAL_TTL_MINUTES = 10;
 const HALF_HOUR_MS = 30 * 60 * 1000;
-
-// The point `km` away from `site` heading `bearing` (degrees true), on a
-// sphere: [lat, lon]. What a polar grid's range and bearing come to.
-const EARTH_RADIUS_KM = 6371;
-const toRad = deg => deg * Math.PI / 180;
-const toDeg = rad => rad * 180 / Math.PI;
-function destination(site, bearing, km) {
-  const d = km / EARTH_RADIUS_KM, b = toRad(bearing), lat1 = toRad(site.lat), lon1 = toRad(site.lon);
-  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
-  const lon2 = lon1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
-  return [toDeg(lat2), toDeg(lon2)];
-}
-// Initial bearing from one point to another, degrees true
-function bearingBetween(lat1, lon1, lat2, lon2) {
-  const p1 = toRad(lat1), p2 = toRad(lat2), dl = toRad(lon2 - lon1);
-  const y = Math.sin(dl) * Math.cos(p2);
-  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
 
 function pick(metadata, keys) {
   const picked = {};
@@ -410,10 +392,9 @@ class SourceErddapEUHFR extends Source {
   //     lat, lon, velocity, direction: Float32Array (one entry per bin with
   //     data; velocity in m/s, positive away from the antenna; direction the
   //     bearing pointing away from it, degrees true),
-  //     qc: Int8Array (QCflag, 1 = good), extent: [minLon, minLat, maxLon, maxLat] }
-  // `extent` is the station's radial extent: its published coverage, or for
-  // a polar grid (which publishes none) the box of every bin with data in
-  // the hours loaded so far - so it settles rather than jumping hour to hour.
+  //     qc: Int8Array (QCflag, 1 = good), source: 'EU HFR Node',
+  //     dataExtent: the box of its bins, coverage: the station's published
+  //     radial extent [minLon, minLat, maxLon, maxLat], where it has one }
   // `network` is the station's network code; a station ICATMAR's network
   // takes in from another (Puertos del Estado's, HFR-DeltaEbro's here) is
   // found by its code.
@@ -437,20 +418,8 @@ class SourceErddapEUHFR extends Source {
     }
     const field = await this.radialFields.get(key);
     if (!field) return null;
-    return { ...field, extent: this.radialExtent(entry, field) };
-  }
-
-  // The station's radial extent (see getRadialField), widened by `field`
-  radialExtent(entry, field) {
     const c = entry.coverage;
-    if (c) return [c.minLon, c.minLat, c.maxLon, c.maxLat];
-    this.radialExtents ??= {};
-    const known = this.radialExtents[entry.dataset];
-    const [minLon, minLat, maxLon, maxLat] = field.dataExtent;
-    this.radialExtents[entry.dataset] = known
-      ? [Math.min(known[0], minLon), Math.min(known[1], minLat), Math.max(known[2], maxLon), Math.max(known[3], maxLat)]
-      : field.dataExtent;
-    return this.radialExtents[entry.dataset];
+    return { ...field, coverage: c ? [c.minLon, c.minLat, c.maxLon, c.maxLat] : undefined };
   }
 
   async fetchRadialField(entry, hour) {
@@ -501,13 +470,13 @@ class SourceErddapEUHFR extends Source {
         if (Number.isNaN(v) || v === fill) continue;
         const [pLat, pLon] = isPolar ? destination(site, axisB[b], axisA[a]) : [axisA[a], axisB[b]];
         lat.push(pLat); lon.push(pLon); velocity.push(v); qc.push(flags[a * axisB.length + b]);
-        // Away from the antenna, at the bin: the way back to the site, turned round
-        direction.push((bearingBetween(pLat, pLon, site.lat, site.lon) + 180) % 360);
+        direction.push(bearingAwayFrom(site, pLat, pLon));
         if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
         if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
       }
     }
     return {
+      source: 'EU HFR Node',
       time: new Date(times[best] * 1000),
       layout: isPolar ? 'polar' : 'grid',
       site,

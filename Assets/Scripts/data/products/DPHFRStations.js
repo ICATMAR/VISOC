@@ -76,12 +76,40 @@ class DPHFRStations extends DP {
   // station's promise - fills in whatever hours ERDDAP's result is missing
   // from GitHub (ERDDAP occasionally lags behind the actual files, and SCAL
   // has no ERDDAP dataset at all), within the repo's retention window only.
-  // One station's radials at `hour`, from the EU HFR Node only (see
-  // SourceErddapEUHFR.getRadialField): null for an hour with no map,
-  // undefined for a station the node doesn't have (SCAL)
+  // One station's radials at `hour` (see SourceErddapEUHFR.getRadialField):
+  // the EU HFR Node's first; for one of ICATMAR's stations, its .ruv on
+  // ICATMAR's GitHub when the node has no map that hour (or no dataset at all,
+  // SCAL). null for an hour with no map anywhere, undefined for a station
+  // neither source has. `extent` is added: the station's radial extent - its
+  // published coverage, or the box of every bin seen in the hours loaded so
+  // far, so a map fitted to it settles rather than jumping hour to hour.
   async getRadials(network, stationId, hour) {
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
-    return euHFRSource ? euHFRSource.getRadialField(network, stationId, hour) : undefined;
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    let field = euHFRSource
+      ? await euHFRSource.getRadialField(network, stationId, hour).catch(error => {
+        console.warn(`EU HFR Node radials of ${stationId}:`, error);
+        return null;
+      })
+      : undefined;
+    const isICATMARs = hfrIcatmarNetwork.stations.some(s => s.id === stationId);
+    if (!field && githubSource && isICATMARs) {
+      const fromGithub = await githubSource.getRadialField(stationId, hour);
+      field = fromGithub ?? (field === undefined ? null : field);
+    }
+    if (!field) return field;
+    return { ...field, extent: this.radialExtent(`${network}:${stationId}`, field) };
+  }
+
+  radialExtent(key, field) {
+    if (field.coverage) return field.coverage;
+    this.radialExtents ??= {};
+    const known = this.radialExtents[key];
+    const [minLon, minLat, maxLon, maxLat] = field.dataExtent;
+    this.radialExtents[key] = known
+      ? [Math.min(known[0], minLon), Math.min(known[1], minLat), Math.max(known[2], maxLon), Math.max(known[3], maxLat)]
+      : field.dataExtent;
+    return this.radialExtents[key];
   }
 
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {

@@ -106,7 +106,7 @@ export default {
     return {
       radarIconURL: './Assets/Icons/radar.svg',
       // The radials on the mini map: 'loading', 'ok', 'none' (no map that
-      // hour) or 'unavailable' (not on the EU HFR Node)
+      // hour) or 'unavailable' (no source has the station)
       radialState: 'loading',
       isDragging: false,
       dragStartX: 0,
@@ -158,8 +158,8 @@ export default {
       if (!this.$gui.isShortScreen) this.particles.start();
       this.loadRadials();
     },
-    // The selected station's radials at the selected hour, from the EU HFR
-    // Node, fitted into the mini map
+    // The selected station's radials at the selected hour - the EU HFR
+    // Node's, or ICATMAR's GitHub's - fitted into the mini map
     async loadRadials() {
       const station = this.station;
       if (!station || !this.particles) return;
@@ -254,7 +254,7 @@ export default {
     hour() { return new Date(this.hourMs); },
     radialMessage() {
       if (this.radialState === 'none') return 'No radials at this hour';
-      if (this.radialState === 'unavailable') return 'No radial data on the EU HFR Node';
+      if (this.radialState === 'unavailable') return 'No radial data available';
       return null;
     },
     formattedDate() {

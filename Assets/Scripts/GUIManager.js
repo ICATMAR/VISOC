@@ -96,8 +96,9 @@ class GUIManager {
   hfrRadialsValidOnly = false;
   // The stations whose radials the main map can draw - those of ICATMAR's
   // network, or with the EU HFR Node those in view (MapLayerHFRRadials) - as
-  // [{ key: '<network>:<id>', id }], and the keys of those switched off
-  // (bottom-right toggles)
+  // [{ key: '<network>:<id>', id, network }], and what is switched off
+  // (bottom-right toggles): station keys, and 'net:<network>' for a whole
+  // network
   hfrRadialStations = [];
   hfrRadialHidden = [];
   // What the radials layer is showing, for the bottom-right panel:

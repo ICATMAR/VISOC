@@ -23,7 +23,7 @@
             }"
             :style="{ background: cellColor(row, index) }"
             :title="cellTitle(row, index)"
-            @click="!row.placeholder && cellClicked(index)">
+            @click="!row.placeholder && cellClicked(row, index)">
             <template v-if="!row.placeholder && bin(row, index)?.value != undefined">
               <i v-if="bin(row, index).direction != undefined"
                 class="fa-solid fa-location-arrow cell-arrow"
@@ -189,10 +189,14 @@ export default {
         + (bin.direction != undefined ? ` · ${Math.round(bin.direction)}º` : '')
         + (bin.readings.length > 1 ? `\n${this.$t('Average of')} ${bin.readings.length} ${this.$t('readings')}` : '');
     },
-    // A cell picks the hour the map shows - the hour it ends at
-    cellClicked(index) {
+    // A cell picks the hour the map shows - the hour it ends at - and its row:
+    // a source's cell describes that source in the info panel (as its name
+    // does), the platform's brings the platform's own panel back
+    cellClicked(row, index) {
       this.$gui.selectedTime = new Date(this.cells[index] + this.$gui.timelineEffectiveIntervalMinutes * 60000);
       this.$gui.isPlatformDetailOpen = true;
+      if (row.key === 'platform') this.$gui.hfrSourceInfo = null;
+      else if (this.$gui.hfrSourceInfo?.key !== row.key) this.describe(row);
     },
     // A name clicked in the names column: that source described in the info
     // panel, or - for the platform - the platform's own panel back
@@ -213,7 +217,7 @@ export default {
         const used = provenance?.used ?? [];
         const info = {
           key, title: row.name, subtitle: key === 'ICATMAR' ? 'ICATMAR' : 'EU HFR Node',
-          icon: './Assets/Icons/radar.svg', loading: true,
+          loading: true,
           rows: this.hfrBaseRows(key, provenance, hours, window),
         };
         this.$gui.hfrSourceInfo = info;
@@ -233,7 +237,7 @@ export default {
         const source = this.$dataService.ssforecast.sources[0];
         const metadata = source?.metadata ?? {};
         this.$gui.hfrSourceInfo = {
-          key, title: row.name, subtitle: series?.label ?? source?.label, faIcon: 'fa-solid fa-cloud-sun-rain',
+          key, title: row.name, subtitle: series?.label ?? source?.label,
           rows: [
             { label: 'Model', value: [series?.model ?? source?.model, series?.resolution ?? source?.resolution].filter(Boolean).join(' · ') },
             { label: 'Institution', value: series?.institution ?? source?.institution ?? '–' },
@@ -243,7 +247,7 @@ export default {
             { label: 'Hours with data', value: `${hours} / ${window}` },
             { label: 'Dataset', value: source?.dataset ?? '–', url: source ? `${source.baseUrl}/info/${source.dataset}/index.html` : undefined },
             // What the forecast series already said isn't repeated
-            ...this.metadataRows(metadata).filter(r => !['Institution'].includes(r.label)),
+            ...this.metadataRows(metadata).filter(r => r.label !== 'Institution' && r.value !== this.formatRun(series?.run)),
           ],
         };
         return;
@@ -251,7 +255,7 @@ export default {
       // CMEMS: still to come (Phase 5)
       const ibi = key === 'cmems-ibi';
       this.$gui.hfrSourceInfo = {
-        key, title: row.name, subtitle: 'Copernicus Marine Service', faIcon: 'fa-solid fa-satellite',
+        key, title: row.name, subtitle: 'Copernicus Marine Service',
         rows: [
           { label: 'Product', value: ibi ? 'IBI_ANALYSISFORECAST_PHY_005_001' : 'MEDSEA_ANALYSISFORECAST_PHY_006_013',
             url: `https://data.marine.copernicus.eu/product/${ibi ? 'IBI_ANALYSISFORECAST_PHY_005_001' : 'MEDSEA_ANALYSISFORECAST_PHY_006_013'}/description` },
@@ -279,12 +283,18 @@ export default {
     metadataRows(metadata) {
       const rows = [];
       const add = (label, value, long) => {
-        if (value == undefined || !String(value).trim()) return;
+        // Placeholders some datasets write instead of leaving it out
+        if (value == undefined || /^(|void|none|unknown|n\/a)$/i.test(String(value).trim())) return;
         rows.push({ label, value: repairEncoding(String(value)).replace(/\s+/g, ' ').trim(), long });
       };
       add('Title', metadata.title, true);
-      add('Institution', metadata.institution);
+      // Some list one institution twice ('A, B, B')
+      add('Institution', metadata.institution && [...new Set(repairEncoding(String(metadata.institution)).split(/\s*,\s*/))].join(', '));
       add('Network', metadata.network ?? metadata.site_code);
+      add('Source', metadata.source);
+      add('Processing level', metadata.processing_level);
+      add('Time step', this.formatDuration(metadata.time_coverage_resolution));
+      add('Updated', metadata.update_interval);
       if (metadata.geospatial_lat_resolution)
         add('Resolution', `${Number(metadata.geospatial_lat_resolution).toFixed(3)}º × ${Number(metadata.geospatial_lon_resolution).toFixed(3)}º`);
       if (metadata.time_coverage_start)
@@ -292,6 +302,13 @@ export default {
       add('License', metadata.license, true);
       add('Acknowledgement', metadata.acknowledgement ?? metadata.citation, true);
       return rows;
+    },
+    // ISO 8601 durations as ERDDAP writes them: 'PT1H' -> '1 h', 'P1D' -> '1 d'
+    formatDuration(value) {
+      const match = String(value ?? '').match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
+      if (!match || !match.slice(1).some(Boolean)) return value;
+      const [, d, h, m, sec] = match;
+      return [d && `${d} d`, h && `${h} h`, m && `${m} min`, sec && `${sec} s`].filter(Boolean).join(' ');
     },
     formatCell(cell) {
       if (!cell) return '–';

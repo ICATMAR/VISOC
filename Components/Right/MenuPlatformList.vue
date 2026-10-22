@@ -230,7 +230,12 @@ export default {
       if (hours < 1) return Math.max(1, Math.floor(hours * 60)) + ' ' + this.$t('min ago');
       if (hours < 24) return Math.floor(hours) + this.$t('h ago');
       const days = Math.floor(hours / 24);
-      return days + ' ' + this.$t(days === 1 ? 'day ago' : 'days ago');
+      if (days <= 60) return days + ' ' + this.$t(days === 1 ? 'day ago' : 'days ago');
+      // Long silent stations: months past 60 days, years past 24 months
+      const months = Math.floor(days / 30.44);
+      if (months <= 24) return months + ' ' + this.$t('months ago');
+      const years = Math.floor(days / 365.25);
+      return years + ' ' + this.$t(years === 1 ? 'year ago' : 'years ago');
     },
     // What the main map shows, kept up to date while the list is open
     trackView() {
