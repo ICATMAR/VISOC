@@ -56,6 +56,21 @@ const repairEncoding = text => {
   catch { return text; }
 };
 
+// Each compared product's colour on the comparison map (DTHFRPlatformDetail)
+const COMPARE_COLORS = { platform: '#ffffff', ICATMAR: '#ff9f43', EU: '#54a0ff', model: '#1dd1a1' };
+
+// Great-circle distance, km
+const haversineKm = (lat1, lon1, lat2, lon2) => {
+  const rad = Math.PI / 180;
+  const a = Math.sin((lat2 - lat1) * rad / 2) ** 2
+    + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(a));
+};
+
+// The most hours a point's table is filled with from ICATMAR's GitHub, one
+// .tuv each - the newest (as many as SourceGithubHFR keeps in memory)
+const GITHUB_FILL_HOURS = 24;
+
 // Hourly only: a cell is one hour, and the circle arrows and the detail
 // panel show exactly what is in it
 const INTERVAL_OPTIONS = [{ label: 'Hourly', minutes: 60 }];
@@ -88,6 +103,7 @@ export default {
     this.$gui.hfrSourceInfo = null;
     this.$gui.hfrPointArrows = [];
     this.$gui.hfrPointReading = null;
+    this.$gui.hfrComparePoints = [];
   },
   methods: {
     // Every source at once; each row fills in as its own answer lands
@@ -100,6 +116,7 @@ export default {
       const end = this.$gui.timelineEndDate;
       this.series = {};
       this.provenance = {};
+      this.githubFilled = false;
       this.$gui.hfrSourceInfo = null;
       this.loading = Object.fromEntries(this.rows.filter(r => !r.placeholder).map(r => [r.key, true]));
       const done = (key, data, provenance) => {
@@ -119,7 +136,7 @@ export default {
       }
       ['ICATMAR', 'EU'].forEach(provider => {
         this.$dataService.hfrtotals.getPointSeries(provider, point.lon, point.lat, start, end)
-          .then(result => done(provider, Object.values(result.data), { cell: result.cell, used: result.used }))
+          .then(result => done(provider, Object.values(result.data), { cell: result.cell, cells: result.cells, used: result.used }))
           .catch(failed(provider));
       });
       const modelPoint = { id: `hfr:${point.lat.toFixed(4)},${point.lon.toFixed(4)}`, latitude: point.lat, longitude: point.lon };
@@ -287,9 +304,35 @@ export default {
         return `ICATMAR ERDDAP · ${source?.dataset ?? ''}`;
       }
       const used = this.provenance[row.key]?.used ?? [];
-      return [...new Set(bin.readings.map(r => r.source))]
-        .map(label => [label, used.find(u => u.source === label)?.dataset].filter(Boolean).join(' · '))
+      // A reading from GitHub names its own file
+      return [...new Set(bin.readings.map(r => [r.source, r.dataset ?? used.find(u => u.source === r.source)?.dataset].filter(Boolean).join(' · ')))]
         .join('; ');
+    },
+    // Where a row's selected hour came from, as links: the ERDDAP dataset's
+    // page, the GitHub file, the model's dataset, the buoy's source
+    originLinks(row, bin) {
+      if (!bin?.readings?.length) return [];
+      if (row.key === 'platform') {
+        const origin = this.$dataService.buoys.originOf(bin.readings[0]?.meta?.source);
+        return origin ? [origin] : [];
+      }
+      if (row.key === 'model') {
+        const source = this.$dataService.ssforecast.sources[0];
+        return source ? [{ label: "ICATMAR's ERDDAP", dataset: source.dataset, url: `${source.baseUrl}/info/${source.dataset}/index.html` }] : [];
+      }
+      const sources = this.$dataService.hfrtotals.mapSources(row.key);
+      const links = [];
+      bin.readings.forEach(reading => {
+        const dataset = reading.dataset ?? this.provenance[row.key]?.used?.find(u => u.source === reading.source)?.dataset;
+        let url = reading.url;
+        if (!url && dataset) {
+          const base = sources.find(s => s.label === reading.source)?.baseUrl;
+          if (base) url = `${base}/info/${dataset}/index.html`;
+        }
+        const label = { 'EU HFR Node': 'EU HFR Node ERDDAP', 'ICATMAR ERDDAP': "ICATMAR's ERDDAP", 'GitHub': 'ICATMAR GitHub' }[reading.source] ?? reading.source;
+        if (!links.some(l => l.label === label && l.dataset === dataset)) links.push({ label, dataset, url });
+      });
+      return links;
     },
     sourcesOf(row) {
       if (row.key === 'model')
@@ -297,12 +340,17 @@ export default {
       const notes = {
         'ICATMAR ERDDAP': this.$t("ICATMAR's ERDDAP (ICATMAR's processing)"),
         'EU HFR Node': this.$t("the EU HFR Node's ERDDAP (the node's processing)"),
+        'GitHub': this.$t("ICATMAR's GitHub for the newest hours (ICATMAR's processing)"),
       };
+      // The ERDDAPs' series, and for ICATMAR the GitHub files of the hours
+      // they don't have yet (see fillFromGithub)
       const labels = [...new Set(this.$dataService.hfrtotals.mapSources(row.key)
-        .filter(s => typeof s.getPointSeries === 'function').map(s => s.label))];
+        .filter(s => typeof s.getPointSeries === 'function' || (row.key === 'ICATMAR' && typeof s.getTotalsCell === 'function'))
+        .map(s => s.label))];
       const list = labels.map(label => notes[label] ?? label);
+      const joined = list.length > 1 ? `${list.slice(0, -1).join(', ')}${this.$t(' and ')}${list[list.length - 1]}` : list[0];
       const text = labels.length > 1
-        ? `${list.join(this.$t(' and '))} ${this.$t('are used in this data product, in that order, hour by hour. They process the radars each their own way, so their values can differ.')}`
+        ? `${joined} ${this.$t('are used in this data product, in that order, hour by hour. They process the radars each their own way, so their values can differ.')}`
         : `${list[0] ?? '–'}.`;
       return text.charAt(0).toUpperCase() + text.slice(1);
     },
@@ -377,6 +425,73 @@ export default {
         ? { sensor: first?.sensor, instrument: first?.instrument, depth: first?.depth, source: first?.source,
             readings: readings.map(r => ({ time: r.time, speed: r.speed, direction: r.direction })) }
         : null;
+      this.$gui.hfrComparePoints = this.comparePoints(index);
+    },
+    // The HFR ICATMAR row's hours its ERDDAPs don't have (the newest ones,
+    // which the map draws from GitHub), filled from ICATMAR's GitHub: the
+    // hours the manifest lists, each read from its .tuv (the files the map
+    // shares) at the cell nearest the point. Once per point, after the row's
+    // own series has answered; the newest GITHUB_FILL_HOURS at most.
+    async fillFromGithub() {
+      const point = this.$gui.hfrPoint;
+      if (!point || this.loading.ICATMAR !== false || this.githubFilled) return;
+      this.githubFilled = true;
+      const request = this.request;
+      const start = this.$gui.timelineStartDate, end = this.$gui.timelineEndDate;
+      const have = new Set((this.series.ICATMAR ?? []).map(r => roundToHour(r.time).toISOString()));
+      let hours = [];
+      try {
+        hours = await this.$dataService.hfrtotals.getGithubHours(start, end);
+      } catch (error) {
+        console.error('Compare, GitHub hours:', error);
+      }
+      const todo = hours.filter(hour => !have.has(hour)).slice(-GITHUB_FILL_HOURS);
+      const readings = [];
+      await Promise.all(todo.map(async key => {
+        try {
+          const hour = new Date(key);
+          const found = await this.$dataService.hfrtotals.getGithubCell(hour, point.lon, point.lat);
+          if (!found || found.values.EWCT == undefined || found.values.NSCT == undefined) return;
+          const u = found.values.EWCT, v = found.values.NSCT;
+          readings.push({ u, v, speed: Math.hypot(u, v), direction: (Math.atan2(u, v) * 180 / Math.PI + 360) % 360, time: hour,
+            source: 'GitHub', dataset: found.origin.dataset, url: found.origin.url, cell: found.cell });
+        } catch (error) {
+          console.error(`Compare, GitHub ${key}:`, error);
+        }
+      }));
+      if (request !== this.request || !readings.length) return;
+      this.series = { ...this.series, ICATMAR: [...(this.series.ICATMAR ?? []), ...readings] };
+      const provenance = this.provenance.ICATMAR ?? { used: [] };
+      this.provenance = { ...this.provenance, ICATMAR: {
+        ...provenance,
+        cell: provenance.cell ?? readings[0].cell,
+        used: [...(provenance.used ?? []), { source: 'GitHub', dataset: 'ICATMAR/data · L3/tuv (one file per hour)', hours: readings.length }],
+      } };
+    },
+    // Each compared product's grid point nearest the compared point, how far
+    // it is, and its value at the column - what the comparison map draws
+    comparePoints(index) {
+      const point = this.$gui.hfrPoint;
+      if (!point) return [];
+      return this.rows.filter(row => !row.placeholder).map(row => {
+        let cell, cells;
+        const bin = this.bin(row, index);
+        if (row.key === 'platform') cell = { latitude: point.lat, longitude: point.lon };
+        else if (row.key === 'model') cell = this.provenance.model?.series?.[0]?.cell;
+        // The cell the selected hour was read at - each source has its own
+        // grid - or, for an hour with no data, the row's first
+        else ({ cell, cells } = bin?.readings?.[0]?.cell ? { cell: bin.readings[0].cell } : (this.provenance[row.key] ?? {}));
+        if (!cell) return null;
+        const lat = Number(cell.latitude), lon = Number(cell.longitude);
+        return {
+          key: row.key, name: row.name, color: COMPARE_COLORS[row.key] ?? 'white', lat, lon,
+          cells: cells?.map(c => ({ lat: c.latitude, lon: c.longitude, weight: c.weight })),
+          distanceKm: haversineKm(point.lat, point.lon, lat, lon),
+          speed: bin?.value, direction: bin?.direction,
+          origin: row.key === 'platform' ? undefined : this.thisHourOrigin(row),
+          origins: this.originLinks(row, bin),
+        };
+      }).filter(Boolean);
     },
   },
   computed: {
@@ -424,13 +539,18 @@ export default {
       const key = this.$gui.hfrSourceInfo?.key;
       return this.rows.find(r => r.key === key)?.name;
     },
+    // What the circle arrows and the detail depend on: the column, and every
+    // row's readings - counted, so readings added to a row that already had
+    // some (the GitHub fill) republish them too, whatever arrived last
     selectionKey() {
-      return this.selectedIndex + '|' + this.$gui.timelineEffectiveIntervalMinutes + '|' + Object.keys(this.series).join(',');
+      return this.selectedIndex + '|' + this.$gui.timelineEffectiveIntervalMinutes + '|'
+        + Object.entries(this.series).map(([key, readings]) => `${key}:${readings?.length ?? 0}`).join(',')
+        + '|' + Object.keys(this.provenance).join(',');
     },
   },
   watch: {
     '$gui.hfrPoint'() { this.load(); },
-    selectionKey: { immediate: true, handler() { this.publishSelection(); } },
+    selectionKey: { immediate: true, handler() { this.publishSelection(); this.fillFromGithub(); } },
     // The described source's "This hour" follows the selected hour
     selectedIndex() {
       const info = this.$gui.hfrSourceInfo;

@@ -23,6 +23,52 @@ class VectorField {
     return count;
   }
 
+  // The grid point with data nearest a point, no further than one grid
+  // spacing in either direction: { lon, lat, u, v, distance } (distance in
+  // grid spacings), or null. What a map click picks: the data points are
+  // what can be compared.
+  nearestCell(lon, lat) {
+    const x = (lon - this.lonMin) / this.dLon;
+    const y = (this.latMax - lat) / this.dLat;
+    let best = null;
+    for (let row = Math.round(y) - 1; row <= Math.round(y) + 1; row++) {
+      for (let col = Math.round(x) - 1; col <= Math.round(x) + 1; col++) {
+        if (row < 0 || col < 0 || row >= this.ny || col >= this.nx) continue;
+        if (Math.abs(col - x) > 1 || Math.abs(row - y) > 1) continue;
+        const index = row * this.nx + col;
+        if (Number.isNaN(this.u[index])) continue;
+        const distance = Math.hypot(col - x, row - y);
+        if (!best || distance < best.distance)
+          best = { lon: this.lonMin + col * this.dLon, lat: this.latMax - row * this.dLat, u: this.u[index], v: this.v[index], distance };
+      }
+    }
+    return best;
+  }
+
+  // The value at a point as the particles see it: bilinear between the 4
+  // cells around it, the same rule as ol-wind's Field.interpolatePoint -
+  // null unless all 4 have data (so nothing is invented across a coverage
+  // edge), or outside the grid. Not used by the HFR dashboard (a click picks
+  // a grid point instead, see nearestCell) - kept for an interpolated view
+  // of the surface currents (SourceErddapHFRadars.getPointSeries' interpolate).
+  interpolate(lon, lat) {
+    const x = (lon - this.lonMin) / this.dLon;
+    const y = (this.latMax - lat) / this.dLat;
+    if (!(x >= 0 && y >= 0 && x <= this.nx - 1 && y <= this.ny - 1)) return null;
+    const c0 = Math.floor(x), r0 = Math.floor(y);
+    const c1 = Math.min(c0 + 1, this.nx - 1), r1 = Math.min(r0 + 1, this.ny - 1);
+    const fx = x - c0, fy = y - r0;
+    const corners = [[r0, c0, (1 - fx) * (1 - fy)], [r0, c1, fx * (1 - fy)], [r1, c0, (1 - fx) * fy], [r1, c1, fx * fy]];
+    let u = 0, v = 0;
+    for (const [row, col, weight] of corners) {
+      const index = row * this.nx + col;
+      if (Number.isNaN(this.u[index])) return null;
+      u += this.u[index] * weight;
+      v += this.v[index] * weight;
+    }
+    return { u, v };
+  }
+
   // The value of the cell nearest a point, or null outside the grid or on a
   // cell with no data. Nearest rather than interpolated: a radar cell is an
   // average over the cell, and interpolating across a coverage edge would

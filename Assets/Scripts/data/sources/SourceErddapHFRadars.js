@@ -67,6 +67,44 @@ const TIMEOUT = 60;     // seconds
 // griddap wants whole seconds - '2026-09-03T00:00:00Z'
 const stamp = date => date.toISOString().substring(0, 19) + 'Z';
 
+// The 4 grid cells around a point, on a regular grid given by its cell
+// centres' extent and counts (see grid()): their coordinates, where the
+// point falls between them (fx, fy, 0-1) and each one's bilinear weight -
+// null outside the grid. Corners are keyed '<lat side><lon side>', 0 = low.
+function cellsAround(axes, lon, lat) {
+  const { lonMin, lonMax, latMin, latMax, nx, ny } = axes;
+  const dLon = nx > 1 ? (lonMax - lonMin) / (nx - 1) : 0;
+  const dLat = ny > 1 ? (latMax - latMin) / (ny - 1) : 0;
+  if (!dLon || !dLat) return null;
+  const x = (lon - lonMin) / dLon, y = (lat - latMin) / dLat;
+  if (!(x >= 0 && y >= 0 && x <= nx - 1 && y <= ny - 1)) return null;
+  const i0 = Math.min(Math.floor(x), nx - 2), j0 = Math.min(Math.floor(y), ny - 2);
+  const fx = x - i0, fy = y - j0;
+  const lon0 = lonMin + i0 * dLon, lon1 = lon0 + dLon, lat0 = latMin + j0 * dLat, lat1 = lat0 + dLat;
+  const weights = { '00': (1 - fx) * (1 - fy), '01': fx * (1 - fy), '10': (1 - fx) * fy, '11': fx * fy };
+  const cells = Object.entries(weights).map(([key, weight]) => ({
+    latitude: key[0] === '1' ? lat1 : lat0, longitude: key[1] === '1' ? lon1 : lon0, weight,
+  }));
+  const nearest = cells.reduce((a, b) => (b.weight > a.weight ? b : a));
+  return {
+    lon0, lon1, lat0, lat1, weights, cells,
+    nearest: { latitude: nearest.latitude, longitude: nearest.longitude },
+    lonMid: (lon0 + lon1) / 2, latMid: (lat0 + lat1) / 2,
+  };
+}
+
+// Bilinear between 4 corners - null unless all 4 have a value
+function interpolateCorners(corners, { weights }) {
+  let u = 0, v = 0;
+  for (const key of ['00', '01', '10', '11']) {
+    const corner = corners[key];
+    if (!corner) return null;
+    u += corner.u * weights[key];
+    v += corner.v * weights[key];
+  }
+  return { u, v };
+}
+
 
 class SourceErddapHFRadars extends Source {
 
@@ -250,26 +288,33 @@ class SourceErddapHFRadars extends Source {
 
   // The current at one point, hour by hour over [startDate, endDate], as
   // numbers - exact, unlike the maps (which are for drawing). One griddap
-  // request per dataset for the whole window, at the grid cell nearest the
-  // point (ERDDAP snaps to it and says which). Every network covering the
-  // point is asked, the preferred one first, and an hour already filled is
-  // kept:
-  //   { cell: { latitude, longitude }, network,
+  // request per dataset for the whole window. By default the grid cell
+  // nearest the point (ERDDAP snaps to it and says which): a measured value,
+  // at a known grid point. With `interpolate`, bilinear between the 4 cells
+  // around it, only where all 4 have data (VectorField.interpolate,
+  // ol-wind's rule) - for an interpolated view of the surface currents.
+  // Every network covering the point is asked, the preferred one first, and
+  // an hour already filled is kept:
+  //   { cell: { latitude, longitude } (the cell read, or the nearest of the 4),
+  //     network, dataset,
+  //     cells: [{ latitude, longitude, weight }] (interpolate only: the 4),
   //     data: { '<ISO hour>': { u, v, speed, direction, time } } }
   // `direction` is where the water goes, clockwise from north.
-  async getPointSeries(lon, lat, startDate, endDate) {
+  async getPointSeries(lon, lat, startDate, endDate, { interpolate = false } = {}) {
     const networks = (await this.networksIn([lon, lat, lon, lat], startDate))
       .filter(n => !n.startDate || n.startDate <= endDate);
-    const result = { cell: undefined, network: undefined, dataset: undefined, data: {} };
+    const result = { cell: undefined, cells: undefined, network: undefined, dataset: undefined, data: {} };
     for (const network of networks) {
       const from = network.startDate && startDate < network.startDate ? network.startDate : startDate;
       // Up to the dataset's last time - asking past it is an error
       const to = network.endDate && endDate >= network.endDate ? 'last' : `(${stamp(endDate)})`;
-      const { dimensions } = await this.grid(network.dataset);
+      const { dimensions, axes } = await this.grid(network.dataset);
+      const around = interpolate ? cellsAround(axes, lon, lat) : null;
+      if (interpolate && !around) continue;
       const selectors = (dimensions[this.eastward] ?? ['time', 'depth', 'latitude', 'longitude']).map(dimension => {
         if (dimension === 'time') return `[(${stamp(from)}):1:${to}]`;
-        if (dimension === 'latitude') return `[(${lat})]`;
-        if (dimension === 'longitude') return `[(${lon})]`;
+        if (dimension === 'latitude') return around ? `[(${around.lat0}):1:(${around.lat1})]` : `[(${lat})]`;
+        if (dimension === 'longitude') return around ? `[(${around.lon0}):1:(${around.lon1})]` : `[(${lon})]`;
         return '[0]';
       }).join('');
       const url = `${this.baseUrl}/griddap/${network.dataset}.csv?`
@@ -284,20 +329,106 @@ class SourceErddapHFRadars extends Source {
       const lines = text.trim().split(/\r?\n/);
       const header = lines[0].split(',');
       const at = name => header.indexOf(name);
+      if (!around) {
+        // The nearest cell: one row per map
+        lines.slice(2).forEach(line => {
+          const cells = line.split(',');
+          const u = Number(cells[at(this.eastward)]);
+          const v = Number(cells[at(this.northward)]);
+          if (cells[at(this.eastward)] === 'NaN' || !isFinite(u) || !isFinite(v)) return;
+          const time = new Date(cells[at('time')]);
+          const key = hourOf(time).toISOString();
+          if (result.data[key]) return;
+          result.data[key] = { u, v, speed: Math.hypot(u, v), direction: (Math.atan2(u, v) * 180 / Math.PI + 360) % 360, time };
+          result.cell ??= { latitude: Number(cells[at('latitude')]), longitude: Number(cells[at('longitude')]) };
+          result.network ??= network.network;
+          result.dataset ??= network.dataset;
+        });
+        continue;
+      }
+      // Each map's 4 corners, told apart by being on the low or high side
+      const maps = new Map(); // time string -> { corners: { '00': {u, v}, ... } }
       lines.slice(2).forEach(line => {
         const cells = line.split(',');
+        const timeText = cells[at('time')];
+        const corner = `${Number(cells[at('latitude')]) > around.latMid ? 1 : 0}${Number(cells[at('longitude')]) > around.lonMid ? 1 : 0}`;
         const u = Number(cells[at(this.eastward)]);
         const v = Number(cells[at(this.northward)]);
-        if (cells[at(this.eastward)] === 'NaN' || !isFinite(u) || !isFinite(v)) return;
-        const time = new Date(cells[at('time')]);
+        if (!maps.has(timeText)) maps.set(timeText, {});
+        maps.get(timeText)[corner] = cells[at(this.eastward)] === 'NaN' || !isFinite(u) || !isFinite(v) ? null : { u, v };
+      });
+      let used = false;
+      maps.forEach((corners, timeText) => {
+        const value = interpolateCorners(corners, around);
+        if (!value) return;
+        const time = new Date(timeText);
         const key = hourOf(time).toISOString();
         if (result.data[key]) return;
+        const { u, v } = value;
         result.data[key] = { u, v, speed: Math.hypot(u, v), direction: (Math.atan2(u, v) * 180 / Math.PI + 360) % 360, time };
-        result.cell ??= { latitude: Number(cells[at('latitude')]), longitude: Number(cells[at('longitude')]) };
-        result.network ??= network.network;
-        result.dataset ??= network.dataset;
+        used = true;
       });
+      if (used && !result.dataset) {
+        result.cell = around.nearest;
+        result.cells = around.cells;
+        result.network = network.network;
+        result.dataset = network.dataset;
+      }
     }
+    return result;
+  }
+
+  // Everything one grid cell of a network's totals holds, hour by hour over
+  // [startDate, endDate] - the velocity and every other gridded variable
+  // (errors, GDOP, coverage, QC flags...) - for the HFR dashboard's Point
+  // view. The cell nearest (lon, lat), in the dataset of `network` (or the
+  // first covering the point). One griddap request.
+  //   { network, dataset, cell: { latitude, longitude }, eastward, northward,
+  //     variables: [{ name, attributes }], data: { <name>: { '<ISO hour>': value } } }
+  // null when no dataset covers the point.
+  async getCellSeries(network, lon, lat, startDate, endDate) {
+    const networks = (await this.networksIn([lon, lat, lon, lat], startDate))
+      .filter(n => !n.startDate || n.startDate <= endDate);
+    const chosen = networks.find(n => n.network === network) ?? networks[0];
+    if (!chosen) return null;
+    const { dimensions, attributes } = await this.grid(chosen.dataset);
+    const shape = (dimensions[this.eastward] ?? []).join(',');
+    const names = Object.keys(dimensions).filter(name => dimensions[name].length > 1 && dimensions[name].join(',') === shape);
+    const from = chosen.startDate && startDate < chosen.startDate ? chosen.startDate : startDate;
+    const to = chosen.endDate && endDate >= chosen.endDate ? 'last' : `(${stamp(endDate)})`;
+    const selectors = encodeURIComponent(dimensions[this.eastward].map(dimension => {
+      if (dimension === 'time') return `[(${stamp(from)}):1:${to}]`;
+      if (dimension === 'latitude') return `[(${lat})]`;
+      if (dimension === 'longitude') return `[(${lon})]`;
+      return '[0]';
+    }).join(''));
+    const url = `${this.baseUrl}/griddap/${chosen.dataset}.csv?${names.map(name => name + selectors).join(',')}`;
+    let text;
+    try {
+      text = await this.fetchManager.fetch(this.url(url), TIMES_TTL, TIMEOUT).then(res => res.text());
+    } catch (error) {
+      if (error.name === 'HTTPError') return null;
+      throw error;
+    }
+    const lines = text.trim().split(/\r?\n/);
+    const header = lines[0].split(',');
+    const at = name => header.indexOf(name);
+    const result = {
+      network: chosen.network, dataset: chosen.dataset, cell: undefined,
+      eastward: this.eastward, northward: this.northward,
+      variables: names.map(name => ({ name, attributes: attributes[name] ?? {} })),
+      data: Object.fromEntries(names.map(name => [name, {}])),
+    };
+    lines.slice(2).forEach(line => {
+      const cells = line.split(',');
+      const key = hourOf(new Date(cells[at('time')])).toISOString();
+      result.cell ??= { latitude: Number(cells[at('latitude')]), longitude: Number(cells[at('longitude')]) };
+      names.forEach(name => {
+        const raw = cells[at(name)];
+        const value = Number(raw);
+        if (raw !== 'NaN' && raw !== '' && Number.isFinite(value) && result.data[name][key] == undefined) result.data[name][key] = value;
+      });
+    });
     return result;
   }
 
@@ -372,11 +503,14 @@ class SourceErddapHFRadars extends Source {
         const ranges = {};
         const counts = {};
         const metadata = {}; // the dataset's NC_GLOBAL attributes (title, institution, license...)
+        const attributes = {}; // each variable's own (long_name, units, flag_meanings...)
         text.trim().split('\n').filter(line => line).forEach(line => {
           const row = JSON.parse(line);
           const name = row['Variable Name'];
           if (row['Row Type'] === 'variable')
             dimensions[name] = String(row['Value'] ?? '').split(',').map(d => d.trim()).filter(Boolean);
+          if (row['Row Type'] === 'attribute' && name !== 'NC_GLOBAL' && row['Attribute Name'])
+            (attributes[name] ??= {})[row['Attribute Name']] = row['Value'];
           if (row['Row Type'] === 'dimension')
             counts[name] = Number(/nValues=(\d+)/.exec(String(row['Value']))?.[1]);
           if (name === 'NC_GLOBAL' && row['Attribute Name']) metadata[row['Attribute Name']] = row['Value'];
@@ -388,6 +522,7 @@ class SourceErddapHFRadars extends Source {
         return {
           dimensions,
           metadata,
+          attributes,
           axes: {
             lonMin: Math.min(...ranges.longitude), lonMax: Math.max(...ranges.longitude),
             latMin: Math.min(...ranges.latitude), latMax: Math.max(...ranges.latitude),

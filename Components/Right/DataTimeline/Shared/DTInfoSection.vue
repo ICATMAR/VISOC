@@ -345,6 +345,18 @@ export default {
     hfrPlatformKind() {
       return this.$gui.selectedDashboard === 'hfr' ? this.$gui.selectedPlatform?.kind : undefined;
     },
+    // The HF radar station (or a network's TOTALS) the panel is about:
+    // { id, network } - the selected platform, or, in the HFR Point view, a
+    // radial bin's station. null for anything else (a buoy, a grid point...).
+    hfrSelection() {
+      const selection = this.$gui.selectedPlatform;
+      if (this.hfrPlatformKind === 'datapoint') {
+        const point = this.$gui.hfrDataPoint;
+        return point?.kind === 'radial' ? { id: point.station, network: point.network } : null;
+      }
+      if (this.hfrPlatformKind || !selection?.stationId) return null;
+      return { id: selection.stationId, network: selection.network };
+    },
     // A data source picked in the HFR Compare view (see GUIManager.hfrSourceInfo)
     sourceInfo() {
       if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Compare' && this.$gui.hfrSourceInfo)
@@ -354,7 +366,7 @@ export default {
     // A station or the Total of another network than ICATMAR's, as the EU HFR
     // Node describes it - the static catalogue only knows ICATMAR's
     euNetworkInfo() {
-      const { stationId: id, network: code } = this.$gui.selectedPlatform ?? {};
+      const { id, network: code } = this.hfrSelection ?? {};
       if (!this.isHFRContext || !id || !code || code === 'HFR-ICATMAR') return null;
       const network = this.hfrNetworks.find(n => this.$dataService.hfrnetwork.networkCode(n) === code);
       if (!network) return null;
@@ -391,13 +403,15 @@ export default {
       };
     },
     isHFRContext() {
-      if (this.hfrPlatformKind) return false;
+      // A buoy, drifter or compared point isn't a station; a radial bin's
+      // station is (the Point view)
+      if (this.hfrPlatformKind && !(this.hfrPlatformKind === 'datapoint' && this.hfrSelection)) return false;
       return this.$gui.selectedDashboard === 'hfr'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'hfr');
     },
     hfrStation() {
       if (!this.isHFRContext) return null;
-      const id = this.$gui.selectedPlatform?.stationId;
+      const id = this.hfrSelection?.id;
       if (!id || id === 'TOTALS') return null;
       return this.$requests.getHFRStation(id);
     },

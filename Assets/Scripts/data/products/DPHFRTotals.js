@@ -14,14 +14,34 @@ class DPHFRTotals extends DP {
   // per-station radial point counts from file sizes so far, not the Total.
   async getNumberOfValidPoints(startDate, endDate) {
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
-    if (!euHFRSource) return { id: 'TOTALS', points: {} };
-
-    try {
-      return await euHFRSource.getNumberOfValidPointsForTotal(startDate, endDate);
-    } catch (error) {
-      console.error('Error loading EU HFR Node totals data:', error);
-      return { id: 'TOTALS', points: {} };
+    let result = { id: 'TOTALS', points: {} };
+    if (euHFRSource) {
+      try {
+        result = await euHFRSource.getNumberOfValidPointsForTotal(startDate, endDate);
+      } catch (error) {
+        console.error('Error loading EU HFR Node totals data:', error);
+      }
     }
+    // The hours the EU HFR Node doesn't have, from ICATMAR's GitHub: the
+    // manifest's count of each hour's .tuv - ICATMAR's own processing, on its
+    // own grid, so a GitHub hour's count isn't the node's (it runs higher)
+    const points = { ...(result.points ?? {}) };
+    const origins = {};
+    Object.keys(points).forEach(time => { origins[time] = result.source; });
+    const github = this.sources.find(s => typeof s.totalsCounts === 'function');
+    if (github) {
+      try {
+        const counts = await github.totalsCounts(startDate, endDate ?? new Date());
+        Object.entries(counts).forEach(([time, rows]) => {
+          if (points[time] != undefined) return;
+          points[time] = rows;
+          origins[time] = github.originOf(github.totalsUrl(new Date(time)));
+        });
+      } catch (error) {
+        console.error('Error loading GitHub totals counts:', error);
+      }
+    }
+    return { ...result, id: 'TOTALS', points, origins };
   }
 
   // MAPS of the totals, for the HFR dashboard's animation, from one
@@ -33,6 +53,22 @@ class DPHFRTotals extends DP {
   // gap, then GitHub, where the newest hours land before either ERDDAP has
   // them. The field says where it came from (`source`) and whether that was a
   // fallback.
+  // The grid point with data nearest (lon, lat) at `time`, on the grid of
+  // whichever source serves that hour's map - ICATMAR's ERDDAP, the EU HFR
+  // Node or GitHub's .tuv, each with its own grid - within one grid spacing
+  // (VectorField.nearestCell): { lon, lat, network, source } or null. What a
+  // click on the map snaps to.
+  async nearestGridPoint(time, provider, lon, lat) {
+    const field = await this.getField(time, provider);
+    if (!field) return null;
+    let best;
+    (field.parts ?? [field]).forEach(part => {
+      const cell = part.nearestCell(lon, lat);
+      if (cell && (!best || cell.distance < best.distance)) best = { ...cell, network: part.label };
+    });
+    return best ? { lon: best.lon, lat: best.lat, network: best.network, source: field.source } : null;
+  }
+
   async getField(time, provider, bbox) {
     const sources = this.mapSources(provider);
     for (let i = 0; i < sources.length; i++) {
@@ -100,24 +136,55 @@ class DPHFRTotals extends DP {
   //   { cell, data: { '<ISO hour>': { u, v, speed, direction, time, source } },
   //     used: [{ source, dataset, network, cell, hours }] } - which sources
   //     filled how many of the hours, for describing the series
-  async getPointSeries(provider, lon, lat, startDate, endDate) {
+  async getPointSeries(provider, lon, lat, startDate, endDate, options) {
     const result = { cell: undefined, data: {}, used: [] };
     for (const source of this.mapSources(provider).filter(s => typeof s.getPointSeries === 'function')) {
       try {
-        const series = await source.getPointSeries(lon, lat, startDate, endDate);
+        const series = await source.getPointSeries(lon, lat, startDate, endDate, options);
         result.cell ??= series.cell;
+        result.cells ??= series.cells;
         let hours = 0;
         Object.entries(series.data).forEach(([hour, value]) => {
           if (result.data[hour]) return;
-          result.data[hour] = { ...value, source: source.label, network: series.network };
+          // Each hour says where it was read: sources grid the radars
+          // differently (ICATMAR's processing vs the EU HFR Node's)
+          result.data[hour] = { ...value, source: source.label, network: series.network, dataset: series.dataset, cell: series.cell };
           hours++;
         });
-        if (hours > 0) result.used.push({ source: source.label, dataset: series.dataset, network: series.network, cell: series.cell, hours });
+        if (hours > 0) result.used.push({ source: source.label, dataset: series.dataset, network: series.network, cell: series.cell, cells: series.cells, hours });
       } catch (error) {
         console.error(`HF radar series from ${source.label}:`, error);
       }
     }
     return result;
+  }
+
+  // One grid cell's every variable, hour by hour (see
+  // SourceErddapHFRadars.getCellSeries) - from the provider's first source
+  // that has the cell, labelled with that source
+  async getCellSeries(provider, network, lon, lat, startDate, endDate) {
+    for (const source of this.mapSources(provider).filter(s => typeof s.getCellSeries === 'function')) {
+      try {
+        const series = await source.getCellSeries(network, lon, lat, startDate, endDate);
+        if (series && Object.values(series.data).some(values => Object.keys(values).length)) return { ...series, source: source.label };
+      } catch (error) {
+        console.error(`HF radar cell from ${source.label}:`, error);
+      }
+    }
+    return null;
+  }
+
+  // The hours ICATMAR's GitHub has a totals file for, in [startDate, endDate]
+  async getGithubHours(startDate, endDate) {
+    const github = this.sources.find(s => typeof s.totalsHours === 'function');
+    return github ? github.totalsHours(startDate, endDate) : [];
+  }
+
+  // One grid cell at one hour from ICATMAR's GitHub (see
+  // SourceGithubHFR.getTotalsCell) - the hours the ERDDAPs don't have yet
+  async getGithubCell(hour, lon, lat) {
+    const github = this.sources.find(s => typeof s.getTotalsCell === 'function');
+    return github ? github.getTotalsCell(hour, lon, lat) : null;
   }
 
   // A dataset's description from the source that serves it (by its label, as

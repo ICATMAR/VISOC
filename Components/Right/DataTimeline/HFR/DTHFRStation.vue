@@ -125,6 +125,9 @@ export default {
         promises.forEach(promise => promise.then(result => {
           if (request !== this.request || result.id !== id) return;
           row.data = result.points ?? {};
+          // Where each hour's count came from (EU HFR Node, or GitHub's .ruv)
+          row.origins = result.origins ?? {};
+          row.origin = result.source;
           row.loading = false;
           this.publishValues();
         }));
@@ -231,10 +234,19 @@ export default {
       const selection = this.$gui.selectedPlatform;
       if (!selection || index < 0) return;
       const date = new Date(this.cells[index] + 3600000);
-      const origin = this.profile ? { label: 'EU HFR Node ERDDAP', dataset: this.profile.dataset,
-        url: `https://erddap.hfrnode.eu/erddap/info/${this.profile.dataset}/index.html` } : selection.origin;
-      if (selection.date?.getTime() !== date.getTime() || selection.origin?.dataset !== origin?.dataset)
-        this.$gui.selectedPlatform = { ...selection, date, origin };
+      const key = date.toISOString().replace('.000Z', 'Z');
+      // The sources of this hour's values, as the data products gave them:
+      // the count's (per hour) and the dataset the other rows came from
+      const origins = [];
+      const points = this.rows.find(row => row.kind === 'points');
+      if (points?.data[key] != undefined) origins.push(points.origins?.[key] ?? points.origin);
+      const others = this.rows.some(row => row.kind !== 'points' && this.binnedRows[row.key]?.[index] != undefined);
+      if (others && this.profile) origins.push({ label: 'EU HFR Node ERDDAP', dataset: this.profile.dataset,
+        url: `https://erddap.hfrnode.eu/erddap/info/${this.profile.dataset}/index.html` });
+      const clean = origins.filter(Boolean);
+      const same = (a, b) => a.length === b.length && a.every((o, i) => o.label === b[i]?.label && o.dataset === b[i]?.dataset);
+      if (selection.date?.getTime() !== date.getTime() || !same(clean, selection.origins ?? []))
+        this.$gui.selectedPlatform = { ...selection, date, origins: clean, origin: clean[0] };
     },
     // A row's ERDDAP metadata, for its name's hover
     metadataTitle(row) {

@@ -134,6 +134,11 @@ class GUIManager {
   isHFRPointChip(kind, id) {
     return this.isHFRPointCircleShown && this.hfrPoint.kind === kind && this.hfrPoint.id === id;
   }
+  // Where each compared product's data comes from, for the comparison map
+  // (DTHFRPlatformDetail): [{ key, name, color, lat, lon, cells, distanceKm,
+  // speed, direction, origin, title }] - the product's grid point nearest
+  // the compared point and its value at the selected hour (see DTHFRCompare)
+  hfrComparePoints = [];
   // The buoy reading behind the selected cell, for the platform detail:
   // { sensor, instrument, depth, time }
   hfrPointReading = null;
@@ -147,11 +152,54 @@ class GUIManager {
 
   // Opens the HFR bottom section on a buoy or drifter chip: Compare, on the
   // hour of the reading that was clicked, with its detail panel
-  openHFRPoint(point, time) {
+  // `dataPoint`: the same place as a data point, for the Point view (see
+  // openHFRDataPoint) - so switching between Compare and Point keeps it. A
+  // buoy or drifter gets the nearest grid point of the map on screen.
+  openHFRPoint(point, time, dataPoint) {
     this.hfrPoint = point;
+    const token = (this.hfrPointToken ?? 0) + 1;
+    this.hfrPointToken = token;
+    if (dataPoint !== undefined) this.hfrDataPoint = dataPoint;
+    else if (point.kind === 'buoy' || point.kind === 'drifter') {
+      this.hfrDataPoint = null;
+      const provider = this.hfrSource;
+      window.DataService?.hfrtotals.nearestGridPoint(time ?? new Date(this.selectedTime), provider, point.lon, point.lat)
+        .then(cell => {
+          if (cell && this.hfrPointToken === token)
+            this.hfrDataPoint = { kind: 'total', provider, network: cell.network, lon: cell.lon, lat: cell.lat };
+        })
+        .catch(() => {});
+    }
     this.hfrTab = 'Compare';
     if (time) this.selectedTime = new Date(Math.floor((time.getTime() + 1800000) / 3600000) * 3600000);
     this.selectedPlatform = { stationId: point.id, kind: point.kind, date: time };
+    this.isDataTimelineOpen = true;
+    this.isPlatformDetailOpen = true;
+    this.isMenuOpen = false;
+  }
+
+  // A data point clicked on the HFR map, for the Point view: a grid point of
+  // the totals, or a radial bin - { kind: 'total' | 'radial', lon, lat,
+  // network, provider (totals), station, axisNames, a, b, direction (radial:
+  // its grid axes and the bearing away from the antenna) }
+  hfrDataPoint = null;
+  // The Point view's values at the selected hour, and where they came from,
+  // for its detail: [{ label, value, speed, direction, title }]
+  hfrDataPointValues = [];
+  hfrDataPointOrigin = null;
+  // What a click on the HFR map opens: the Point view while it is the open
+  // timeline view, Compare otherwise
+  get hfrMapClickOpensPoint() {
+    return this.isDataTimelineOpen && this.hfrTab === 'Point';
+  }
+  // `comparePoint`: the same place for Compare (see openHFRPoint) - so
+  // switching between Point and Compare keeps it
+  openHFRDataPoint(point, time, comparePoint) {
+    this.hfrDataPoint = point;
+    if (comparePoint) { this.hfrPoint = comparePoint; this.hfrPointToken = (this.hfrPointToken ?? 0) + 1; }
+    this.hfrTab = 'Point';
+    if (time) this.selectedTime = new Date(Math.floor((time.getTime() + 1800000) / 3600000) * 3600000);
+    this.selectedPlatform = { stationId: 'datapoint', kind: 'datapoint' };
     this.isDataTimelineOpen = true;
     this.isPlatformDetailOpen = true;
     this.isMenuOpen = false;

@@ -6,7 +6,11 @@
          of their colours under it (both go on short screens) -->
     <div class="map-container radial-map-container">
       <div ref="stationMap" class="pd-map radial-map map-clickable" @click="centerMainMap" :title="$t('Click to center main map')"></div>
-      <span class="radial-message" v-if="radialMessage">{{ $t(radialMessage) }}</span>
+      <!-- While the hour's radials load, nothing of the previous hour stays -->
+      <span class="radial-message radial-loading" v-if="radialState === 'loading'">
+        <span class="spinner-border radial-spinner"></span>{{ $t('Loading radials') }}
+      </span>
+      <span class="radial-message" v-else-if="radialMessage">{{ $t(radialMessage) }}</span>
       <div class="radial-legend">
         <DTColorLegend code="HCSP" :range="$gui.rangeFor('HCSP')" :showUnit="true" :fullWidth="true"></DTColorLegend>
       </div>
@@ -65,7 +69,7 @@
       </div>
 
       <!-- Where the selected bar's count came from -->
-      <PDSourceLine v-if="sp?.date && sp.origin" :origins="[sp.origin]" :sources="countSources"
+      <PDSourceLine v-if="shownOrigins.length" :origins="shownOrigins" :sources="countSources"
         :note="sourceNote"></PDSourceLine>
 
       <!-- Switch to HFR currents dashboard -->
@@ -176,12 +180,21 @@ export default {
     async loadRadials() {
       const station = this.station;
       if (!station || !this.particles) return;
+      const network = station.metadata?.network ?? 'HFR-ICATMAR';
+      // The same station and hour as drawn: nothing to do (no flicker)
+      const key = `${network}:${station.id}|${this.hourMs}`;
+      if (key === this.radialKey && this.radialState !== 'loading') return;
+      this.radialKey = key;
       const request = (this.radialRequest ?? 0) + 1; // a newer station or hour supersedes this
       this.radialRequest = request;
+      // Another hour or station: the previous radials go at once, the
+      // spinner shows until these arrive
       this.radialState = 'loading';
+      this.radialField = null;
+      this.particles.setFields([]);
       let field;
       try {
-        field = await this.$dataService.hfrstations.getRadials(station.metadata?.network ?? 'HFR-ICATMAR', station.id, this.hour);
+        field = await this.$dataService.hfrstations.getRadials(network, station.id, this.hour);
       } catch (error) {
         console.error(`Error loading the radials of ${station.id}:`, error);
         field = null;
@@ -242,6 +255,18 @@ export default {
     },
   },
   computed: {
+    // Where what this detail shows came from, as the data products said: the
+    // selected hour's values (its count, or the Station view's rows) and the
+    // mini map's radials - each named once
+    shownOrigins() {
+      const list = [];
+      const add = origin => {
+        if (origin && !list.some(o => o.label === origin.label && o.dataset === origin.dataset)) list.push(origin);
+      };
+      if (this.sp?.date) (this.sp.origins ?? [this.sp.origin]).forEach(add);
+      if (this.radialState === 'ok') add(this.radialField?.origin);
+      return list;
+    },
     // Where this station's counts can come from: GitHub only has ICATMAR's
     countSources() {
       const network = this.$gui.selectedPlatform?.network;
@@ -382,6 +407,18 @@ export default {
 }
 .pd-value-missing {
   opacity: 0.5;
+}
+
+.radial-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.radial-spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
 }
 
 .radial-message {

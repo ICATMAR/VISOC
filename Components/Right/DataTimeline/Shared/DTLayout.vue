@@ -232,10 +232,36 @@ export default {
       }
     },
     resetScroll() {
-      // Reset scroll position so the latest time is visible
+      // On the HFR dashboard, the selected hour in the middle; elsewhere the
+      // latest time in view
+      if (this.centersOnSelected) { this.scrollToSelected(false); return; }
       this.$nextTick(() => {
         const scroller = this.$refs.tableSlidingContainer;
         if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+      });
+    },
+    // The selected time's column in the middle of the view. With
+    // `onlyIfHidden`, only when it is off screen (or at its very edge) - a
+    // click on a cell in view doesn't move the timeline under the mouse.
+    scrollToSelected(onlyIfHidden) {
+      this.$nextTick(() => {
+        const scroller = this.$refs.tableSlidingContainer;
+        const table = this.$refs.tableContainer;
+        if (!scroller || !table || !scroller.clientWidth) return;
+        const cell = table.querySelector('.dt-table td.hourCell');
+        const cellWidth = cell?.offsetWidth || this.cellWidth;
+        const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+        // The column ending at the selected hour (see the views' cells)
+        const elapsed = new Date(this.$gui.selectedTime).getTime() - this.$gui.timelineStartDate.getTime();
+        // Where the grid starts within the scrolled content (past the
+        // "days before" button), whatever element positions it
+        const gridLeft = table.getBoundingClientRect().left - scroller.getBoundingClientRect().left + scroller.scrollLeft;
+        const x = gridLeft + (elapsed / stepMs) * cellWidth - cellWidth / 2;
+        if (onlyIfHidden) {
+          const margin = cellWidth * 2;
+          if (x >= scroller.scrollLeft + margin && x <= scroller.scrollLeft + scroller.clientWidth - margin) return;
+        }
+        scroller.scrollLeft = Math.max(0, x - scroller.clientWidth / 2);
       });
     },
 
@@ -326,6 +352,10 @@ export default {
     },
     isComponentVisible() {
       return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
+    },
+    // The HFR dashboard's views open on the selected hour, and keep it in view
+    centersOnSelected() {
+      return this.$gui.selectedDashboard === 'hfr';
     }
   },
   watch: {
@@ -341,6 +371,11 @@ export default {
     // The grid relays out on a zoom, so the column width is worth taking again
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.measureCell();
+    },
+    // A selected time out of view (the time handle, a click on the map at
+    // another hour) is brought to the middle
+    '$gui.selectedTime'() {
+      if (this.centersOnSelected) this.scrollToSelected(true);
     },
     // Rows appearing or disappearing move everything below them
     variables() {

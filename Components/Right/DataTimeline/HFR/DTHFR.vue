@@ -6,6 +6,8 @@
   <!-- Station: the selected station's measures, hour by hour -->
   <DTHFRStation v-else-if="$gui.hfrTab === 'Station'"></DTHFRStation>
   <DTHFRCompare v-else-if="$gui.hfrTab === 'Compare' && $gui.hfrPoint"></DTHFRCompare>
+  <!-- Point: a data point clicked on the map, hour by hour -->
+  <DTHFRPoint v-else-if="$gui.hfrTab === 'Point'"></DTHFRPoint>
   <div v-else class="horizontal hfr-placeholder">
     <span>{{ $t(placeholder) }}</span>
   </div>
@@ -25,6 +27,7 @@
 import DTAPHFR from '../AllPlatforms/DTAPHFR.vue';
 import DTHFRCompare from './DTHFRCompare.vue';
 import DTHFRStation from './DTHFRStation.vue';
+import DTHFRPoint from './DTHFRPoint.vue';
 
 // The HFR dashboard's bottom section. About the stations: the availability
 // of a network's stations (Network) and one station's measures (Station).
@@ -60,15 +63,34 @@ export default {
       return this.networks.find(network => this.$dataService.hfrnetwork.networkCode(network) === code) ?? null;
     },
     placeholder() {
-      if (this.$gui.hfrTab === 'Compare') return 'Click a buoy or a drifter on the map to compare it with the HF radars and the models';
+      if (this.$gui.hfrTab === 'Compare') return 'Click on the map, a buoy or a drifter to compare it with the HF radars and the models';
       return 'Coming soon: click a point on the map to see the currents there';
     },
   },
   watch: {
-    // A buoy or drifter picked on the map belongs to Compare: in any other
-    // view it is no longer selected - no detail, nothing in the info panel
+    // A buoy, drifter or point picked on the map belongs to Compare, a data
+    // point to Point: in any other view it is no longer selected - no
+    // detail, nothing in the info panel
     '$gui.hfrTab'(tab) {
-      if (tab === 'Compare' || !this.$gui.selectedPlatform?.kind) return;
+      const kind = this.$gui.selectedPlatform?.kind;
+      // Between Compare and Point the same place stays selected: each view
+      // its own form of it (see GUIManager.openHFRPoint / openHFRDataPoint)
+      if (kind && tab === 'Point' && kind !== 'datapoint' && this.$gui.hfrDataPoint) {
+        this.$gui.selectedPlatform = { stationId: 'datapoint', kind: 'datapoint' };
+        return;
+      }
+      if (kind === 'datapoint' && tab === 'Compare' && this.$gui.hfrPoint) {
+        const point = this.$gui.hfrPoint;
+        this.$gui.selectedPlatform = { stationId: point.id, kind: point.kind };
+        return;
+      }
+      // Network or Station: the point is let go of altogether - on the map
+      // and in Point / Compare, which ask for a new click
+      if (tab === 'Network' || tab === 'Station') {
+        this.$gui.hfrPoint = null;
+        this.$gui.hfrDataPoint = null;
+      }
+      if (!kind || tab === (kind === 'datapoint' ? 'Point' : 'Compare')) return;
       this.$gui.selectedPlatform = null;
       this.$gui.isPlatformDetailOpen = false;
     },
@@ -77,6 +99,7 @@ export default {
     DTAPHFR,
     DTHFRCompare,
     DTHFRStation,
+    DTHFRPoint,
   }
 }
 

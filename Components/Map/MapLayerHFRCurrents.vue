@@ -56,6 +56,8 @@ export default {
       };
       this.onPointerLeave = () => { this.$gui.hfrCursor = null; };
       this.map.on('pointermove', this.onPointerMove);
+      this.onMapClick = event => this.onClick(event);
+      this.map.on('singleclick', this.onMapClick);
       this.map.getViewport().addEventListener('mouseleave', this.onPointerLeave);
       this.goToLatest();
       this.loadAvailability();
@@ -64,6 +66,7 @@ export default {
   beforeUnmount() {
     this.map?.un('moveend', this.onMoveEnd);
     this.map?.un('pointermove', this.onPointerMove);
+    this.map?.un('singleclick', this.onMapClick);
     this.map?.getViewport().removeEventListener('mouseleave', this.onPointerLeave);
     if (this.cursorFrame) cancelAnimationFrame(this.cursorFrame);
     this.$gui.hfrCursor = null;
@@ -282,18 +285,54 @@ export default {
     updateCursor(pixel) {
       if (!this.showsCurrents) { this.$gui.hfrCursor = null; return; }
       const [lon, lat] = ol.proj.toLonLat(this.map.getCoordinateFromPixel(pixel));
-      const parts = this.field?.parts ?? (this.field ? [this.field] : []);
-      let value = null, network;
-      for (const part of parts) {
-        value = part.sample(lon, lat);
-        if (value) { network = part.label; break; }
-      }
+      const { value, network } = this.cellAt(lon, lat);
       this.$gui.hfrCursor = {
         lon, lat, network,
         speed: value ? Math.hypot(value.u, value.v) : undefined,
         // where the water goes, clockwise from north
         direction: value ? (Math.atan2(value.u, value.v) / DEG + 360) % 360 : undefined,
       };
+    },
+
+    // The grid point with data nearest a point, within one grid spacing, on
+    // whichever network's grid it falls (see VectorField.nearestCell):
+    // { value: { u, v } | null, cell: { lon, lat } | undefined, network }
+    cellAt(lon, lat) {
+      const parts = this.field?.parts ?? (this.field ? [this.field] : []);
+      let best;
+      parts.forEach(part => {
+        const cell = part.nearestCell(lon, lat);
+        if (cell && (!best || cell.distance < best.cell.distance)) best = { cell, network: part.label };
+      });
+      return best ? { value: { u: best.cell.u, v: best.cell.v }, cell: best.cell, network: best.network } : { value: null };
+    },
+    // A click on the map picks the nearest HF radar grid point with data
+    // (within one grid spacing) and opens Compare there - radars, models and
+    // platforms near it; anywhere else nothing happens. Markers, chips and
+    // data points answer their own clicks.
+    async onClick(event) {
+      if (!this.showsCurrents || event.dragging) return;
+      const target = event.originalEvent?.target;
+      if (target?.closest?.('.clickable, .platform-icon-container, .point-arrows-anchor')) return;
+      // A zoomed-out network's circle isn't a data point
+      const circle = this.pointLayer && this.map.forEachFeatureAtPixel(event.pixel, feature => feature.get('kind') === 'network',
+        { layerFilter: layer => layer === this.pointLayer });
+      if (circle) return;
+      // The nearest grid point with data - in the Point view (when it is the
+      // open timeline view) its every variable, otherwise Compare there
+      // Snapped by the data product, on the grid of the source that serves
+      // this hour (see DPHFRTotals.nearestGridPoint)
+      const [clickLon, clickLat] = ol.proj.toLonLat(event.coordinate);
+      const time = new Date(this.$gui.selectedTime);
+      const cell = await this.$dataService.hfrtotals.nearestGridPoint(time, this.$gui.hfrSource, clickLon, clickLat);
+      if (!cell) return;
+      const { lon, lat, network } = cell;
+      // Both forms of the place, so Compare and Point can be switched between
+      const dataPoint = { kind: 'total', provider: this.$gui.hfrSource, network, lon, lat };
+      const name = `${Math.abs(lat).toFixed(3)}º${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(3)}º${lon >= 0 ? 'E' : 'W'}`;
+      const comparePoint = { lon, lat, kind: 'point', id: 'point', name, network };
+      if (this.$gui.hfrMapClickOpensPoint) this.$gui.openHFRDataPoint(dataPoint, time, comparePoint);
+      else this.$gui.openHFRPoint(comparePoint, time, dataPoint);
     },
 
     // GRID POINTS

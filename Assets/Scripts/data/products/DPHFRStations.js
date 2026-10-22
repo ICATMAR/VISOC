@@ -117,6 +117,29 @@ class DPHFRStations extends DP {
     return euHFRSource.getStationStatistic(profile.entry, variable, stat, startDate, endDate);
   }
 
+  // One radial bin's series (see SourceErddapEUHFR.getRadialBinSeries) -
+  // undefined for a station the EU HFR Node doesn't have (SCAL)
+  async getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate) {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    return euHFRSource?.getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate);
+  }
+
+  // The hours ICATMAR's GitHub has a station's .ruv for, in [startDate, endDate]
+  async getGithubRadialHours(stationId, startDate, endDate) {
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    if (!githubSource || !hfrIcatmarNetwork.stations.some(s => s.id === stationId)) return [];
+    return githubSource.radialHours(stationId, startDate, endDate);
+  }
+
+  // One radial bin at one hour from ICATMAR's GitHub (see
+  // SourceGithubHFR.getRadialBin) - ICATMAR's stations, the hours the EU HFR
+  // Node doesn't have
+  async getGithubRadialBin(stationId, hour, range, bearing) {
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    if (!githubSource || !hfrIcatmarNetwork.stations.some(s => s.id === stationId)) return null;
+    return githubSource.getRadialBin(stationId, hour, range, bearing);
+  }
+
   radialExtent(key, field) {
     if (field.coverage) return field.coverage;
     this.radialExtents ??= {};
@@ -145,7 +168,9 @@ class DPHFRStations extends DP {
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
     const repoDaysAvailability = 14; // github only stores the last 14 days of radial data
     const githubStart = new Date(Math.max(startDate, end - repoDaysAvailability * 86400000));
-    const hours = githubSource && githubStart <= end ? this.hourlyTimestamps(githubStart, end) : [];
+    // Never past now: there are no files from the future to ask for
+    const githubEnd = new Date(Math.min(end, Date.now()));
+    const hours = githubSource && githubStart <= githubEnd ? this.hourlyTimestamps(githubStart, githubEnd) : [];
 
     return erddapPromises.map((promise, i) => {
       const id = stationIds[i];
@@ -158,17 +183,17 @@ class DPHFRStations extends DP {
           Object.keys(points).forEach(time => { origins[time] = result.source; });
           if (!hours.some(time => points[time] == undefined)) return { id, points, origins };
 
-          // A GitHub failure shouldn't wipe out what ERDDAP already gave us -
-          // just skip filling the gaps and return ERDDAP's points as-is.
+          // The hours the EU HFR Node doesn't have, from ICATMAR's GitHub:
+          // the manifest's exact count of each hour's .ruv (see
+          // SourceGithubHFR.getNumberOfValidPointsPerStations). A failure
+          // leaves ERDDAP's points as they are.
           try {
-            const fromGithub = await githubSource.getNumberOfValidPointsPerStations([id], githubStart, end);
+            const fromGithub = await githubSource.getNumberOfValidPointsPerStations([id], githubStart, githubEnd);
             const githubPoints = fromGithub[id] ?? {};
-            const githubOrigin = { label: 'ICATMAR GitHub', dataset: `ICATMAR/data · L2/${id}`, url: `https://github.com/ICATMAR/data/tree/main/observational/hf_radar/currents/L2/${id}` };
             hours.forEach(time => {
-              if (points[time] == undefined && githubPoints[time] != undefined) {
-                points[time] = githubPoints[time];
-                origins[time] = githubOrigin;
-              }
+              if (points[time] != undefined || githubPoints[time] == undefined) return;
+              points[time] = githubPoints[time];
+              origins[time] = githubSource.originOf(githubSource.radialUrl(id, new Date(time)));
             });
           } catch (error) {
             console.error(`Error loading GitHub HFR station data for ${id}:`, error);

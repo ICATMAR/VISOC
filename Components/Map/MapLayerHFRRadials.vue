@@ -22,6 +22,14 @@ const roundToHour = time => new Date(Math.floor((new Date(time).getTime() + 1800
 const ASSUMED_REACH_KM = 100;
 // Requests at a time
 const PARALLEL = 4;
+// How close to a drawn bin a click has to be to pick it: at least this, up
+// to one bin spacing on screen, never more than the second
+const CLICK_RADIUS_PX = 8;
+const MAX_CLICK_RADIUS_PX = 40;
+// A radial range cell, roughly (CODAR SeaSondes at 13.5 MHz: 1.66 km)
+const BIN_SPACING_M = 1700;
+// Bins closer than this on screen aren't drawn as dots
+const BIN_DOT_MIN_SPACING_PX = 3;
 
 export default {
   name: "MapLayerHFRRadials",
@@ -33,8 +41,13 @@ export default {
         maxSpeed: this.$gui.rangeFor('HCSP')[1],
         lineWidth: 2,
       });
-      this.onMoveEnd = () => { if (this.$gui.hfrSource === 'EU') this.update(); };
+      this.onMoveEnd = () => {
+        if (this.$gui.hfrSource === 'EU') this.update();
+        else this.updateBinDots(); // the dots depend on the zoom
+      };
       this.map.on('moveend', this.onMoveEnd);
+      this.onMapClick = event => this.onClick(event);
+      this.map.on('singleclick', this.onMapClick);
       try {
         this.networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
       } catch (error) {
@@ -46,11 +59,94 @@ export default {
   },
   beforeUnmount() {
     this.map?.un('moveend', this.onMoveEnd);
+    this.map?.un('singleclick', this.onMapClick);
     this.particles?.destroy();
+    if (this.dotLayer) this.map?.removeLayer(this.dotLayer);
     this.$gui.hfrRadialStations = [];
     this.$gui.hfrRadialStatus = { state: 'loading' };
   },
   methods: {
+    // A click picks the nearest drawn radial bin - within one bin spacing on
+    // screen, never less than CLICK_RADIUS_PX - and, in the Point view (when
+    // it is the open timeline view), shows its every variable; otherwise
+    // Compare opens at the bin. Nowhere near a bin, nothing.
+    onClick(event) {
+      if (!this.shows || event.dragging) return;
+      const target = event.originalEvent?.target;
+      if (target?.closest?.('.clickable, .platform-icon-container, .point-arrows-anchor')) return;
+      const showFlagged = !this.$gui.hfrRadialsValidOnly;
+      const radius = Math.max(CLICK_RADIUS_PX, Math.min(this.binSpacingPx(), MAX_CLICK_RADIUS_PX));
+      let best;
+      (this.drawnFields ?? []).forEach(field => {
+        for (let i = 0; i < field.lat.length; i++) {
+          if (!showFlagged && field.qc[i] !== 1) continue;
+          const pixel = this.map.getPixelFromCoordinate(ol.proj.fromLonLat([field.lon[i], field.lat[i]]));
+          const d = Math.hypot(pixel[0] - event.pixel[0], pixel[1] - event.pixel[1]);
+          if (d <= radius && (!best || d < best.d)) best = { d, field, i };
+        }
+      });
+      if (!best) return;
+      const { field, i } = best;
+      const time = new Date(this.$gui.selectedTime);
+      const lon = field.lon[i], lat = field.lat[i];
+      // Both forms of the place, so Compare and Point can be switched between
+      const dataPoint = {
+        kind: 'radial', network: field.network, station: field.station, site: field.site,
+        lon, lat, axisNames: field.axisNames, a: field.ax[i], b: field.bx[i], direction: field.direction[i],
+      };
+      const name = `${Math.abs(lat).toFixed(3)}º${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(3)}º${lon >= 0 ? 'E' : 'W'}`;
+      const comparePoint = { lon, lat, kind: 'point', id: 'point', name, network: field.network };
+      if (this.$gui.hfrMapClickOpensPoint) this.$gui.openHFRDataPoint(dataPoint, time, comparePoint);
+      else this.$gui.openHFRPoint(comparePoint, time, dataPoint);
+    },
+    // How far apart radial bins are on screen: a range cell (~1.7 km) at the
+    // map's scale here
+    binSpacingPx() {
+      const view = this.map.getView();
+      const center = ol.proj.toLonLat(view.getCenter());
+      const metresPerPixel = view.getResolution() * Math.cos(center[1] * Math.PI / 180);
+      return BIN_SPACING_M / metresPerPixel;
+    },
+    // The animation runs while radials are shown and the particle animation
+    // is on (bottom-right) - off, the canvas is cleared
+    updateAnimation() {
+      if (this.shows && this.$gui.hfrShowParticles) this.particles.start();
+      else { this.particles.stop(); this.particles.clear(); }
+    },
+    // Each drawn bin as a dot (bottom-right "data points"), as the totals'
+    // grid points are drawn - only while bins are BIN_DOT_MIN_SPACING_PX
+    // apart on screen or more: closer, the dots would only be noise
+    updateBinDots() {
+      const show = this.shows && this.$gui.hfrShowGridPoints && this.binSpacingPx() >= BIN_DOT_MIN_SPACING_PX;
+      if (!show) {
+        this.dotLayer?.getSource().clear();
+        return;
+      }
+      if (!this.dotLayer) {
+        this.dotLayer = new ol.layer.Vector({ source: new ol.source.Vector(), zIndex: 50 });
+        this.map.addLayer(this.dotLayer);
+      }
+      this.dotStyle ??= new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 1.8,
+          fill: new ol.style.Fill({ color: 'rgba(255, 255, 255, 0.85)' }),
+          stroke: new ol.style.Stroke({ color: 'rgba(0, 0, 0, 0.5)', width: 0.5 }),
+        }),
+      });
+      const showFlagged = !this.$gui.hfrRadialsValidOnly;
+      const features = [];
+      (this.drawnFields ?? []).forEach(field => {
+        for (let i = 0; i < field.lat.length; i++) {
+          if (!showFlagged && field.qc[i] !== 1) continue;
+          const feature = new ol.Feature(new ol.geom.Point(ol.proj.fromLonLat([field.lon[i], field.lat[i]])));
+          feature.setStyle(this.dotStyle);
+          features.push(feature);
+        }
+      });
+      const source = this.dotLayer.getSource();
+      source.clear();
+      source.addFeatures(features);
+    },
     keyOf(station) {
       return `${station.metadata?.network ?? ''}:${station.id}`;
     },
@@ -81,6 +177,8 @@ export default {
       if (!this.shows) {
         this.particles.stop();
         this.particles.setFields([]);
+        this.drawnFields = [];
+        this.updateBinDots();
         return;
       }
       const stations = this.candidates().sort((a, b) => b.latitude - a.latitude);
@@ -90,13 +188,14 @@ export default {
       const shown = stations.filter(s => !hidden.has(this.keyOf(s)) && !hidden.has(`net:${s.metadata?.network ?? ''}`));
       const hour = roundToHour(this.$gui.selectedTime);
       this.$gui.hfrRadialStatus = { state: 'loading', time: hour, count: 0 };
-      this.particles.start();
+      this.updateAnimation();
 
       const fields = [];
       const draw = () => {
         if (request !== this.request) return;
         this.particles.setFields(fields, { showFlagged: !this.$gui.hfrRadialsValidOnly });
         this.drawnFields = fields;
+        this.updateBinDots();
       };
       draw(); // clears what the previous hour or view drew
       const queue = [...shown];
@@ -104,8 +203,10 @@ export default {
         while (queue.length && request === this.request) {
           const station = queue.shift();
           try {
-            const field = await this.$dataService.hfrstations.getRadials(station.metadata?.network ?? 'HFR-ICATMAR', station.id, hour);
-            if (field) { fields.push(field); draw(); }
+            const network = station.metadata?.network ?? 'HFR-ICATMAR';
+            const field = await this.$dataService.hfrstations.getRadials(network, station.id, hour);
+            // Which station it is, for a click on one of its bins
+            if (field) { fields.push({ ...field, station: station.id, network }); draw(); }
           } catch (error) {
             console.error(`Error loading the radials of ${station.id}:`, error);
           }
@@ -128,7 +229,10 @@ export default {
     '$gui.hfrRadialsValidOnly'(validOnly) {
       const showFlagged = !validOnly;
       this.particles?.setFields(this.drawnFields ?? [], { showFlagged });
+      this.updateBinDots();
     },
+    '$gui.hfrShowParticles'() { if (this.particles) this.updateAnimation(); },
+    '$gui.hfrShowGridPoints'() { if (this.map) this.updateBinDots(); },
   },
 }
 </script>

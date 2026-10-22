@@ -38,6 +38,7 @@ window.zoomToShowCoast = zoomToShowCoast;
 
 import RadialParticles from './Assets/Scripts/RadialParticles.js';
 import { scrollFade } from './Assets/Scripts/scrollFade.js';
+import { dragScroll } from './Assets/Scripts/dragScroll.js';
 window.RadialParticles = RadialParticles;
 
 // Globals
@@ -141,6 +142,7 @@ i18n.global.mergeLocaleMessage('es', es);
 i18n.global.mergeLocaleMessage('fr', fr);
 app.use(i18n);
 app.directive('scroll-fade', scrollFade);
+app.directive('drag-scroll', dragScroll);
 
 // Global properties
 app.config.globalProperties.$gui = window.GUIManager;

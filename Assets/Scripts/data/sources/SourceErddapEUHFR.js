@@ -542,7 +542,7 @@ class SourceErddapEUHFR extends Source {
     const field = await this.radialFields.get(key);
     if (!field) return null;
     const c = entry.coverage;
-    return { ...field, coverage: c ? [c.minLon, c.minLat, c.maxLon, c.maxLat] : undefined };
+    return { ...field, origin: this.originOf(entry.dataset), coverage: c ? [c.minLon, c.minLat, c.maxLon, c.maxLat] : undefined };
   }
 
   async fetchRadialField(entry, hour) {
@@ -585,7 +585,7 @@ class SourceErddapEUHFR extends Source {
     const fill = rdva.attributes['_FillValue'];
 
     const site = entry.site;
-    const lat = [], lon = [], velocity = [], direction = [], qc = [];
+    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [];
     let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
     for (let a = 0; a < axisA.length; a++) {
       for (let b = 0; b < axisB.length; b++) {
@@ -593,6 +593,7 @@ class SourceErddapEUHFR extends Source {
         if (Number.isNaN(v) || v === fill) continue;
         const [pLat, pLon] = isPolar ? destination(site, axisB[b], axisA[a]) : [axisA[a], axisB[b]];
         lat.push(pLat); lon.push(pLon); velocity.push(v); qc.push(flags[a * axisB.length + b]);
+        ax.push(axisA[a]); bx.push(axisB[b]);
         direction.push(bearingAwayFrom(site, pLat, pLon));
         if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
         if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
@@ -602,10 +603,72 @@ class SourceErddapEUHFR extends Source {
       source: 'EU HFR Node',
       time: new Date(times[best] * 1000),
       layout: isPolar ? 'polar' : 'grid',
+      // Each bin by its grid axes, to ask for its series (getRadialBinSeries):
+      // RNGE (km) / BEAR (deg), or latitude / longitude
+      axisNames: [dimA, dimB], ax: Float32Array.from(ax), bx: Float32Array.from(bx),
       site,
       lat: Float32Array.from(lat), lon: Float32Array.from(lon),
       velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),
       dataExtent: lat.length ? [minLon, minLat, maxLon, maxLat] : [site.lon, site.lat, site.lon, site.lat],
+    };
+  }
+
+  // One radial bin's every variable, hour by hour over [startDate, endDate] -
+  // RDVA and its quality measures and QC flags - for the HFR dashboard's
+  // Point view. The bin is given by the station's grid axes (`axisNames`:
+  // RNGE/BEAR, or latitude/longitude) and its values on them. From the
+  // station's griddap dataset (its _table copy can't be read per bin); one
+  // request. An hour is the map closest to it within ±30 min, as the maps.
+  //   { source, dataset, velocity: 'RDVA', variables: [{ name, attributes }],
+  //     data: { <name>: { '<ISO hour>': value } } } - or undefined when the
+  //   node has no dataset for the station (SCAL)
+  async getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate) {
+    const known = await this.stationEntry(network, stationId);
+    if (!known) return undefined;
+    const entry = known.isGriddap ? known : await this.griddapEntry(known.dataset.replace(/_table$/, ''));
+    this.variableInfo ??= {};
+    this.variableInfo[entry.dataset] ??= (async () => {
+      const infoUrl = `${this.baseUrl}/info/${entry.dataset}/index.jsonlKVP`;
+      const text = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
+      return this.parseERDDAPMetadata(text).variables;
+    })().catch(error => { delete this.variableInfo[entry.dataset]; throw error; });
+    const info = await this.variableInfo[entry.dataset];
+    const skip = new Set([...STATION_VIEW_SKIP.filter(name => name !== 'RDVA'), ...axisNames]);
+    const names = Object.keys(info).filter(name => !skip.has(name) && !name.startsWith('SDN_') && NUMERIC_TYPES.includes(info[name].dataType));
+
+    const end = endDate ?? new Date();
+    const from = entry.startDate && entry.startDate > startDate ? entry.startDate : startDate;
+    const to = entry.endDate && entry.endDate < end ? `(${entry.endDate.toISOString()})` : `(${end.toISOString()})`;
+    if (entry.endDate && from > entry.endDate) return { source: 'EU HFR Node ERDDAP', dataset: entry.dataset, velocity: 'RDVA', variables: [], data: {} };
+    const selectors = encodeURIComponent(`[(${from.toISOString()}):1:${to}][0][(${a})][(${b})]`);
+    const url = `${this.baseUrl}/griddap/${entry.dataset}.csv?${names.map(name => name + selectors).join(',')}`;
+    const text = await this.fetchManager.fetch(url, 1).then(res => res.text()).catch(err => {
+      if (err.name === 'HTTPError') return '';
+      throw err;
+    });
+    const lines = text.trim().split(/\r?\n/);
+    const header = (lines[0] ?? '').split(',');
+    const at = name => header.indexOf(name);
+    const data = Object.fromEntries(names.map(name => [name, {}]));
+    const closeness = {}; // hour -> how far its kept map is from it
+    lines.slice(2).forEach(line => {
+      const cells = line.split(',');
+      const time = new Date(cells[at('time')]).getTime();
+      const hour = Math.floor((time + HALF_HOUR_MS) / 3600000) * 3600000;
+      const key = new Date(hour).toISOString();
+      const off = Math.abs(time - hour);
+      if (closeness[key] != undefined && closeness[key] <= off) return;
+      closeness[key] = off;
+      names.forEach(name => {
+        const raw = cells[at(name)];
+        const value = Number(raw);
+        if (raw !== 'NaN' && raw !== '' && Number.isFinite(value)) data[name][key] = value;
+        else delete data[name][key];
+      });
+    });
+    return {
+      source: 'EU HFR Node ERDDAP', dataset: entry.dataset, velocity: 'RDVA',
+      variables: names.map(name => ({ name, attributes: info[name] })), data,
     };
   }
 

@@ -159,6 +159,7 @@ export default {
         stationId: 'TOTALS',
         value: this.totalsValue(cellIndex, subIndex),
         origin: this.totals.hourlyOrigin[cellIndex * this.barsPerCell + subIndex],
+        origins: undefined,
         date,
         ...this.selectionDetails(),
       };
@@ -172,6 +173,7 @@ export default {
         stationId: station.name,
         value: this.getHourlyValue(station, cellIndex, subIndex),
         origin: station.hourlyOrigin[cellIndex * this.barsPerCell + subIndex],
+        origins: undefined,
         date,
         ...this.selectionDetails(),
       };
@@ -200,8 +202,8 @@ export default {
       this.selectedBar = { stationName: id, cellIndex: bar.cellIndex, subIndex: bar.subIndex };
       const value = this.getHourlyValue(entry, bar.cellIndex, bar.subIndex);
       const origin = entry.hourlyOrigin[bar.cellIndex * this.barsPerCell + bar.subIndex];
-      if (selection.date?.getTime() !== bar.date.getTime() || selection.value !== value || selection.origin !== origin)
-        this.$gui.selectedPlatform = { ...selection, value, origin, date: bar.date };
+      if (selection.date?.getTime() !== bar.date.getTime() || selection.value !== value || selection.origin !== origin || selection.origins)
+        this.$gui.selectedPlatform = { ...selection, value, origin, origins: undefined, date: bar.date };
     },
     isBarSelected(stationName, cellIndex, subIndex) {
       return this.selectedBar?.stationName === stationName

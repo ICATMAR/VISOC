@@ -1,5 +1,6 @@
 <template>
   <DTHFRPlatformDetail v-if="isHFRPlatformView"></DTHFRPlatformDetail>
+  <DTHFRDataPointDetail v-else-if="isHFRDataPointView"></DTHFRDataPointDetail>
   <DTAPHFRTotalsPlatformDetail v-else-if="isTotalsView"></DTAPHFRTotalsPlatformDetail>
   <DTAPHFRPlatformDetail v-else-if="isHFRView"></DTAPHFRPlatformDetail>
   <DTAPBuoysPlatformDetail v-else-if="isBuoysView"></DTAPBuoysPlatformDetail>
@@ -15,6 +16,7 @@ import DTAPHFRTotalsPlatformDetail from './AllPlatforms/PlatformDetails/DTAPHFRT
 import DTAPBuoysPlatformDetail from './AllPlatforms/PlatformDetails/DTAPBuoysPlatformDetail.vue';
 import DTAPDriftersPlatformDetail from './AllPlatforms/PlatformDetails/DTAPDriftersPlatformDetail.vue';
 import DTHFRPlatformDetail from './HFR/DTHFRPlatformDetail.vue';
+import DTHFRDataPointDetail from './HFR/DTHFRDataPointDetail.vue';
 
 export default {
   name: "DTPlatformDetail",
@@ -25,10 +27,15 @@ export default {
       return dashboardId => this.$gui.selectedDashboard === dashboardId
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === dashboardId);
     },
-    // A buoy or drifter chip clicked on the HFR dashboard (GUIManager.openHFRPoint)
+    // A point compared on the HFR dashboard (GUIManager.openHFRPoint) - a
+    // buoy or drifter chip, or a click on the map: the comparison map
     isHFRPlatformView() {
       const kind = this.$gui.selectedPlatform?.kind;
-      return this.$gui.selectedDashboard === 'hfr' && (kind === 'buoy' || kind === 'drifter') && this.$gui.hfrPoint != null;
+      return this.$gui.selectedDashboard === 'hfr' && ['buoy', 'drifter', 'point'].includes(kind) && this.$gui.hfrPoint != null;
+    },
+    // A data point clicked on the HFR map (GUIManager.openHFRDataPoint)
+    isHFRDataPointView() {
+      return this.$gui.selectedDashboard === 'hfr' && this.$gui.selectedPlatform?.kind === 'datapoint' && this.$gui.hfrDataPoint != null;
     },
     isTotalsView() {
       return this.isViewOf('hfr') && this.$gui.selectedPlatform?.stationId === 'TOTALS';
@@ -51,6 +58,7 @@ export default {
     DTAPBuoysPlatformDetail,
     DTAPDriftersPlatformDetail,
     DTHFRPlatformDetail,
+    DTHFRDataPointDetail,
   }
 }
 

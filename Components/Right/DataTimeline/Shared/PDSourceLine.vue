@@ -2,10 +2,14 @@
   <!-- Where the selected value came from - for traceability: sources process
        the same data each their own way. Hover: every source this data
        product draws on for the platform. -->
-  <component :is="url ? 'a' : 'span'" class="pd-source" v-if="origins.length"
-    :href="url" :target="url && '_blank'" :rel="url && 'noopener'" :title="title">
-    {{ $t('Source') }}: {{ origins.map(o => o.label).join(', ') }}
-  </component>
+  <div class="pd-source" v-if="grouped.length" :title="title">
+    <span>{{ $t(grouped.length > 1 ? 'Sources' : 'Source') }}: </span>
+    <span class="pd-source-item" v-for="(origin, index) in grouped" :key="index">
+      <a v-if="origin.url" class="pd-source-link" :href="origin.url" target="_blank" rel="noopener"
+        :title="origin.datasets.join('\n') || origin.url">{{ origin.label }}</a>
+      <span v-else :title="origin.datasets.join('\n')">{{ origin.label }}</span>
+    </span>
+  </div>
 </template>
 
 
@@ -23,10 +27,19 @@ export default {
     note: { type: String, default: '' },
   },
   computed: {
-    // A link to the first origin, where it has an address
-    url() { return this.origins[0]?.url; },
+    // One entry per source (server), however many of its datasets or files
+    // are behind the values: { label, url (the first's), datasets }
+    grouped() {
+      const groups = [];
+      this.origins.filter(Boolean).forEach(origin => {
+        let group = groups.find(g => g.label === origin.label);
+        if (!group) groups.push(group = { label: origin.label, url: origin.url, datasets: [] });
+        if (origin.dataset && !group.datasets.includes(origin.dataset)) group.datasets.push(origin.dataset);
+      });
+      return groups;
+    },
     title() {
-      const lines = this.origins.map(o => `${this.$t('This value')}: ${o.label}${o.dataset ? ` · ${o.dataset}` : ''}`);
+      const lines = this.origins.filter(Boolean).map(o => `${this.$t('This value')}: ${o.label}${o.dataset ? ` · ${o.dataset}` : ''}`);
       if (this.sources.length) lines.push(`${this.$t('Sources')}: ${this.sources.join(', ')}`);
       if (this.note) lines.push(this.note);
       return lines.join('\n');

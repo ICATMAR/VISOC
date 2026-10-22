@@ -1,6 +1,6 @@
 <template>
-  <!-- Animation (of the currents) -->
- <div class="horizontal wrap options-container" v-if="$gui.hfrProduct === 'currents'">
+  <!-- Animation and data points - of the currents or of the radials -->
+ <div class="horizontal wrap options-container">
     <OnOffButtonWithText :checked="$gui.hfrShowParticles" :text="$t('particle animation')" :inSize="'8px'"
       @toggle="$gui.hfrShowParticles = $event"></OnOffButtonWithText>
     <OnOffButtonWithText :checked="$gui.hfrShowGridPoints" :text="$t('data points')" :inSize="'8px'"
