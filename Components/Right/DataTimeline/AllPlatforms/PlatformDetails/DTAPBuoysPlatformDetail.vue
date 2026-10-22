@@ -43,7 +43,7 @@
            A variable with no legend or no range gets undefined back and keeps
            the stylesheet's green (.pd-value-item in platformDetails.css). -->
       <div class="pd-values-wrapper" v-if="sp?.date">
-        <div class="pd-values-scroll" ref="valuesScroll"
+        <div class="pd-values-scroll" v-scroll-fade ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
           <template v-if="anyData">

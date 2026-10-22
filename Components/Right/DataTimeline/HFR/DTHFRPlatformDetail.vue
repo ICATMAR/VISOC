@@ -30,7 +30,7 @@
            speed (unit clickable, app-wide) and direction - coloured on the
            current-speed legend, as the buoys' detail panel draws them -->
       <div class="pd-values-wrapper">
-        <div class="pd-values-scroll">
+        <div class="pd-values-scroll" v-scroll-fade>
           <template v-if="readings.length">
             <div class="pd-value-item" v-for="reading in readings" :key="reading.time.getTime()"
               :style="{ background: $gui.colorFor('HCSP', reading.speed) }"

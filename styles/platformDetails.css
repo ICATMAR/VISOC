@@ -171,6 +171,25 @@
 }
 .pd-values-scroll.is-dragging { cursor: grabbing; }
 
+/* More chips than fit: the edge they are hidden behind fades out (the
+   chips themselves, so it works over any background without recolouring
+   them). Which edges: v-scroll-fade (Assets/Scripts/scrollFade.js). */
+.pd-values-scroll {
+  --fade: 18px;
+}
+.pd-values-scroll.can-scroll-right {
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - var(--fade)), transparent);
+}
+.pd-values-scroll.can-scroll-left {
+  -webkit-mask-image: linear-gradient(to left, black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to left, black calc(100% - var(--fade)), transparent);
+}
+.pd-values-scroll.can-scroll-left.can-scroll-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
+}
+
 .pd-value-item {
   display: flex;
   flex-direction: column;

@@ -33,7 +33,7 @@
       </div>
 
       <div class="pd-values-wrapper" v-if="sp?.date">
-        <div class="pd-values-scroll" ref="valuesScroll"
+        <div class="pd-values-scroll" v-scroll-fade ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
           <template v-if="sp.value">
