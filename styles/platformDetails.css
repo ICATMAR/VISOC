@@ -218,7 +218,6 @@
 /* Where the selected value came from - at the bottom, above the switch
    button when there is one */
 .pd-source {
-  margin-top: auto;
   font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.6);
   text-decoration: none;
@@ -234,17 +233,21 @@
   margin-top: 4px;
 }
 
+/* "Switch to dashboard [icon]" on the card's top-right corner - the icon
+   over the corner itself, mirroring the close button on the top-left */
 .pd-switch-btn {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  z-index: 10;
   display: flex;
-  flex-direction: row;
+  flex-direction: row-reverse;
   align-items: center;
-  margin-top: auto;    /* stick to bottom of pd-info */
-  margin-bottom: 10px;
+  margin: 0;
   padding: 0;
   background: none;
   border: none;
   cursor: pointer;
-  align-self: flex-start;
   gap: 0;
 }
 
@@ -271,14 +274,15 @@
   background: var(--blue);
   color: white;
   text-shadow: none;
-  border-radius: 0 8px 8px 0;
-  padding: 0 10px 0 12px;
+  border-radius: 8px 0 0 8px;
+  padding: 0 12px 0 10px;
   font-size: 0.7rem;
   height: 24px;          /* 4px less than the 28px circle */
   display: flex;
   align-items: center;
-  margin-left: -6px;     /* slide under the circle */
+  margin-right: -6px;    /* slide under the circle */
   white-space: nowrap;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 }
 
 /* ---- Media column (right) – circular image / gif ---- */
@@ -367,9 +371,18 @@
   padding-bottom: 0;
 }
 
+/* In the strip: back in line, at its end, icon first */
 .pd-compact .pd-switch-btn {
+  position: static;
+  flex-direction: row;
   margin: 0;
   align-self: center;
+}
+.pd-compact .pd-switch-btn-label {
+  border-radius: 0 8px 8px 0;
+  padding: 0 10px 0 12px;
+  margin-right: 0;
+  margin-left: -6px;
 }
 
 /* The strip is closed with the timeline's own button, below it */
