@@ -48,6 +48,9 @@
         </div>
       </div>
 
+      <!-- Where the selected cell's readings came from -->
+      <PDSourceLine v-if="readings.length" :origins="origins" :sources="sources" :note="sourceNote"></PDSourceLine>
+
       <!-- Switch to the platform's own dashboard, on the same day -->
       <button class="pd-switch-btn clickable" v-if="point.kind === 'buoy'" @click="switchToDashboard">
         <div class="pd-switch-btn-circle">
@@ -61,9 +64,12 @@
 
 
 <script>
+import PDSourceLine from '../Shared/PDSourceLine.vue';
+
 export default {
   name: "DTHFRPlatformDetail",
   mixins: [window.pdFocusMixin],
+  components: { PDSourceLine },
   methods: {
     format(speed) {
       const { unit, decimals, toDisplay } = this.$gui.unitFor('HCSP');
@@ -101,6 +107,21 @@ export default {
     },
   },
   computed: {
+    // Buoys: the source behind the cell's readings, and every source of the
+    // buoy. Drifters are still simulated (RequestsManager / DriftersMockData).
+    origins() {
+      if (this.point?.kind === 'drifter') return [{ label: this.$t('Simulated data') }];
+      const origin = this.$dataService.buoys.originOf(this.reading?.source);
+      return origin ? [origin] : [];
+    },
+    sources() {
+      return this.point?.kind === 'buoy' ? this.$dataService.buoys.sourcesOf(this.point.id) : [];
+    },
+    sourceNote() {
+      return this.point?.kind === 'drifter'
+        ? this.$t('Simulated trajectories: the drifters timeline does not read the drifter sources yet.')
+        : this.$t('For each variable the first source with data for the hour is used; sources can process the same measurements differently.');
+    },
     point() { return this.$gui.hfrPoint; },
     reading() { return this.$gui.hfrPointReading; },
     // The readings behind the selected cell (its average is what the timeline

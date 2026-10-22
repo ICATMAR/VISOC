@@ -137,6 +137,9 @@
         </div>
       </div>
 
+      <PDSourceLine v-if="sp?.date" :origins="origins" :sources="$dataService.buoys.sourcesOf(sp.stationId)"
+        :note="$t('For each variable the first source with data for the hour is used; sources can process the same measurements differently.')"></PDSourceLine>
+
       <!-- Switch to Buoys dashboard -->
       <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'buoys'" @click="$gui.selectedDashboard = 'buoys'">
         <div class="pd-switch-btn-circle">
@@ -156,6 +159,7 @@
 
 <script>
 import MapCircleArrows from '../../MapCircleArrows.vue';
+import PDSourceLine from '../../Shared/PDSourceLine.vue';
 
 export default {
   name: "DTAPBuoysPlatformDetail",
@@ -317,6 +321,11 @@ export default {
     },
   },
   computed: {
+    // Where the selected cell's values came from: every source behind them
+    origins() {
+      const srcs = new Set(Object.values(this.sp?.from ?? {}).flat().map(f => f?.source).filter(Boolean));
+      return [...srcs].map(src => this.$dataService.buoys.originOf(src));
+    },
     station() {
       if (!this.$gui.selectedPlatform?.stationId) return null;
       return this.buoys.find(b => b.id === this.$gui.selectedPlatform.stationId) ?? null;
@@ -396,7 +405,7 @@ export default {
       this.map.getView().animate({ center: coords, zoom: this.miniMapZoom, duration: 300 });
     }
   },
-  components: { MapCircleArrows }
+  components: { MapCircleArrows, PDSourceLine }
 }
 </script>
 

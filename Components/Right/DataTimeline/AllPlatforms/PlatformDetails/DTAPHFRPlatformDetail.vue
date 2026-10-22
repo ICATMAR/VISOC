@@ -56,6 +56,10 @@
         </div>
       </div>
 
+      <!-- Where the selected bar's count came from -->
+      <PDSourceLine v-if="sp?.date && sp.origin" :origins="[sp.origin]" :sources="countSources"
+        :note="sourceNote"></PDSourceLine>
+
       <!-- Switch to HFR currents dashboard -->
       <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="$gui.selectedDashboard = 'hfr'">
         <div class="pd-switch-btn-circle">
@@ -70,6 +74,7 @@
 
 <script>
 import DTColorLegend from '../../Shared/DTColorLegend.vue';
+import PDSourceLine from '../../Shared/PDSourceLine.vue';
 
 // The hour a time belongs to on the map: 9:30 up to (not including) 10:30 is 10:00
 const roundToHour = time => new Date(Math.floor((new Date(time).getTime() + 1800000) / 3600000) * 3600000);
@@ -229,6 +234,15 @@ export default {
     },
   },
   computed: {
+    // Where this station's counts can come from: GitHub only has ICATMAR's
+    countSources() {
+      const network = this.$gui.selectedPlatform?.network;
+      return !network || network === 'HFR-ICATMAR' ? ['EU HFR Node ERDDAP', 'ICATMAR GitHub'] : ['EU HFR Node ERDDAP'];
+    },
+    // How the counts' sources are combined, for the source line's hover
+    sourceNote() {
+      return this.$t("ICATMAR's stations: the EU HFR Node's counts, with ICATMAR's GitHub for the hours the node hasn't published yet. Other networks: the EU HFR Node's.");
+    },
     // See pdFocusMixin
     mainMapFocusKey() { return this.station?.id; },
     station() {
@@ -325,7 +339,7 @@ export default {
       else this.$nextTick(() => { this.map?.updateSize(); this.particles?.start(); });
     },
   },
-  components: { DTColorLegend },
+  components: { DTColorLegend, PDSourceLine },
 }
 </script>
 

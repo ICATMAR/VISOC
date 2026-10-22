@@ -136,21 +136,29 @@ class DPHFRStations extends DP {
       return promise
         .then(async result => {
           const points = result?.points ?? {};
-          if (!hours.some(time => points[time] == undefined)) return { id, points };
+          // Where each hour's count came from: the EU HFR Node's, unless
+          // GitHub filled it in below
+          const origins = {};
+          Object.keys(points).forEach(time => { origins[time] = result.source; });
+          if (!hours.some(time => points[time] == undefined)) return { id, points, origins };
 
           // A GitHub failure shouldn't wipe out what ERDDAP already gave us -
           // just skip filling the gaps and return ERDDAP's points as-is.
           try {
             const fromGithub = await githubSource.getNumberOfValidPointsPerStations([id], githubStart, end);
             const githubPoints = fromGithub[id] ?? {};
+            const githubOrigin = { label: 'ICATMAR GitHub', dataset: `ICATMAR/data · L2/${id}`, url: `https://github.com/ICATMAR/data/tree/main/observational/hf_radar/currents/L2/${id}` };
             hours.forEach(time => {
-              if (points[time] == undefined && githubPoints[time] != undefined) points[time] = githubPoints[time];
+              if (points[time] == undefined && githubPoints[time] != undefined) {
+                points[time] = githubPoints[time];
+                origins[time] = githubOrigin;
+              }
             });
           } catch (error) {
             console.error(`Error loading GitHub HFR station data for ${id}:`, error);
           }
 
-          return { id, points };
+          return { id, points, origins };
         })
         .catch(error => {
           console.error(`Error loading number of valid points for station ${id}:`, error);

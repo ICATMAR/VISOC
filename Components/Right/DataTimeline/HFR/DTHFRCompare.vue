@@ -218,7 +218,7 @@ export default {
         const info = {
           key, title: row.name, subtitle: key === 'ICATMAR' ? 'ICATMAR' : 'EU HFR Node',
           loading: true,
-          rows: this.hfrBaseRows(key, provenance, hours, window),
+          rows: [...this.originRows(row), ...this.hfrBaseRows(key, provenance, hours, window)],
         };
         this.$gui.hfrSourceInfo = info;
         const described = await Promise.all(used.map(entry =>
@@ -226,7 +226,8 @@ export default {
         if (this.$gui.hfrSourceInfo?.key !== key) return; // another source was picked meanwhile
         const metadata = described[0] ?? {};
         this.$gui.hfrSourceInfo = { ...info, loading: false, rows: [
-          ...info.rows,
+          // "This hour" as it is now - the hour may have moved meanwhile
+          ...info.rows.map(r => r.id === 'thisHour' ? { ...r, value: this.thisHourOrigin(row) } : r),
           ...used.map((entry, i) => ({ label: 'Dataset', value: `${entry.dataset} (${entry.source}, ${entry.hours} h)`, url: described[i]?.infoUrl })),
           ...this.metadataRows(metadata),
         ] };
@@ -239,6 +240,7 @@ export default {
         this.$gui.hfrSourceInfo = {
           key, title: row.name, subtitle: series?.label ?? source?.label,
           rows: [
+            ...this.originRows(row),
             { label: 'Model', value: [series?.model ?? source?.model, series?.resolution ?? source?.resolution].filter(Boolean).join(' · ') },
             { label: 'Institution', value: series?.institution ?? source?.institution ?? '–' },
             { label: 'Depth', value: this.$t('Surface (the model\'s top layer)') },
@@ -257,6 +259,7 @@ export default {
       this.$gui.hfrSourceInfo = {
         key, title: row.name, subtitle: 'Copernicus Marine Service',
         rows: [
+          { label: 'Sources', value: this.$t('Copernicus Marine Service (to come)'), long: true },
           { label: 'Product', value: ibi ? 'IBI_ANALYSISFORECAST_PHY_005_001' : 'MEDSEA_ANALYSISFORECAST_PHY_006_013',
             url: `https://data.marine.copernicus.eu/product/${ibi ? 'IBI_ANALYSISFORECAST_PHY_005_001' : 'MEDSEA_ANALYSISFORECAST_PHY_006_013'}/description` },
           { label: 'Institution', value: 'Copernicus Marine Service (Mercator Ocean International)' },
@@ -265,6 +268,43 @@ export default {
           { label: 'Status', value: this.$t('Coming soon') },
         ],
       };
+    },
+    // Where a source's data comes from, first in its panel: the selected
+    // hour's origin, and every origin the row draws on - ICATMAR's ERDDAP and
+    // the EU HFR Node process the same radars each their own way, so the
+    // values differ, and it matters which one an hour is from
+    originRows(row) {
+      return [
+        { id: 'thisHour', label: 'This hour', value: this.thisHourOrigin(row) },
+        { label: 'Sources', value: this.sourcesOf(row), long: true },
+      ];
+    },
+    thisHourOrigin(row) {
+      const bin = this.bin(row, this.selectedIndex);
+      if (!bin?.readings.length) return this.$t('No data');
+      if (row.key === 'model') {
+        const source = this.$dataService.ssforecast.sources[0];
+        return `ICATMAR ERDDAP · ${source?.dataset ?? ''}`;
+      }
+      const used = this.provenance[row.key]?.used ?? [];
+      return [...new Set(bin.readings.map(r => r.source))]
+        .map(label => [label, used.find(u => u.source === label)?.dataset].filter(Boolean).join(' · '))
+        .join('; ');
+    },
+    sourcesOf(row) {
+      if (row.key === 'model')
+        return this.$t('ICATMAR ERDDAP: the ROMS forecast run by ICATMAR');
+      const notes = {
+        'ICATMAR ERDDAP': this.$t("ICATMAR's ERDDAP (ICATMAR's processing)"),
+        'EU HFR Node': this.$t("the EU HFR Node's ERDDAP (the node's processing)"),
+      };
+      const labels = [...new Set(this.$dataService.hfrtotals.mapSources(row.key)
+        .filter(s => typeof s.getPointSeries === 'function').map(s => s.label))];
+      const list = labels.map(label => notes[label] ?? label);
+      const text = labels.length > 1
+        ? `${list.join(this.$t(' and '))} ${this.$t('are used in this data product, in that order, hour by hour. They process the radars each their own way, so their values can differ.')}`
+        : `${list[0] ?? '–'}.`;
+      return text.charAt(0).toUpperCase() + text.slice(1);
     },
     // What every HF radar row says before its datasets' metadata arrives
     hfrBaseRows(key, provenance, hours, window) {
@@ -391,6 +431,13 @@ export default {
   watch: {
     '$gui.hfrPoint'() { this.load(); },
     selectionKey: { immediate: true, handler() { this.publishSelection(); } },
+    // The described source's "This hour" follows the selected hour
+    selectedIndex() {
+      const info = this.$gui.hfrSourceInfo;
+      const row = info && this.rows.find(r => r.key === info.key);
+      if (!row || row.placeholder) return;
+      this.$gui.hfrSourceInfo = { ...info, rows: info.rows.map(r => r.id === 'thisHour' ? { ...r, value: this.thisHourOrigin(row) } : r) };
+    },
   },
   components: {
     DTLayout,

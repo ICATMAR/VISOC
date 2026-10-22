@@ -9,6 +9,8 @@ class DataProduct {
     this.sources = catalogueDP.sources.map(src => {
       const source = new src.Class({ fetchManager, ...src });
       source.institution = src.institution;
+      // How the app names the source to the user (a source may set its own)
+      source.label ??= src.label;
       // Standardizing raw names/units into standard codes is the product's
       // job, not the source's (see Source.js), so the catalogue's mapping is
       // carried here rather than inside the source.
@@ -18,6 +20,14 @@ class DataProduct {
     });
 
     console.log(`${this.constructor.name}: sources loaded`, this.sources);
+  }
+
+  // Where a value came from, as the user is told: { label, url }, from what
+  // the value records about its source (the source's `src`)
+  originOf(src) {
+    if (!src) return undefined;
+    const source = this.sources.find(s => s.src === src);
+    return { label: source?.label ?? src, url: source?.src ?? src };
   }
 
   // What the catalogue says about one of a source's raw variables:

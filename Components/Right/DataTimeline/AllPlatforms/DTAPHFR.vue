@@ -69,7 +69,8 @@ const ICATMAR_STATIONS = ['CNET', 'CREU', 'BEGU', 'TOSS', 'AREN', 'PBCN', 'GNST'
   // Puertos del Estado's (GitHub, or their HFR-DeltaEbro copies on the EU HFR Node)
   'SALO', 'ALFA', 'VINA'];
 
-const emptyRow = name => ({ name, hourlyData: [], maxValue: 0 });
+// hourlyOrigin: where each bar's count came from ({ label, dataset, url })
+const emptyRow = name => ({ name, hourlyData: [], hourlyOrigin: [], maxValue: 0 });
 
 export default {
   name: "DTAPHFR",
@@ -121,7 +122,7 @@ export default {
           this.$gui.timelineStartDate, this.$gui.timelineEndDate);
 
       const startMs = this.$gui.timelineStartDate.getTime();
-      promises.forEach(promise => promise.then(({ id, points }) => {
+      promises.forEach(promise => promise.then(({ id, points, origins, source }) => {
         if (request !== this.request) return;
         const entry = id === 'TOTALS' ? this.totals : this.stations.find(s => s.name === id);
         if (!entry) return;
@@ -134,6 +135,9 @@ export default {
           const hourIndex = Math.ceil((new Date(timeStr).getTime() - startMs) / (1000 * 3600)) - 1;
           if (hourIndex < 0) return;
           entry.hourlyData[hourIndex] = count;
+          // Per hour where sources mix (a station's GitHub-filled hours), or
+          // one for the whole row
+          entry.hourlyOrigin[hourIndex] = origins?.[timeStr] ?? source;
           if (count > entry.maxValue) entry.maxValue = count;
         });
         // The selected bar's count has arrived
@@ -154,6 +158,7 @@ export default {
       this.$gui.selectedPlatform = {
         stationId: 'TOTALS',
         value: this.totalsValue(cellIndex, subIndex),
+        origin: this.totals.hourlyOrigin[cellIndex * this.barsPerCell + subIndex],
         date,
         ...this.selectionDetails(),
       };
@@ -166,6 +171,7 @@ export default {
       this.$gui.selectedPlatform = {
         stationId: station.name,
         value: this.getHourlyValue(station, cellIndex, subIndex),
+        origin: station.hourlyOrigin[cellIndex * this.barsPerCell + subIndex],
         date,
         ...this.selectionDetails(),
       };
@@ -193,8 +199,9 @@ export default {
       if (!bar) { this.selectedBar = null; return; }
       this.selectedBar = { stationName: id, cellIndex: bar.cellIndex, subIndex: bar.subIndex };
       const value = this.getHourlyValue(entry, bar.cellIndex, bar.subIndex);
-      if (selection.date?.getTime() !== bar.date.getTime() || selection.value !== value)
-        this.$gui.selectedPlatform = { ...selection, value, date: bar.date };
+      const origin = entry.hourlyOrigin[bar.cellIndex * this.barsPerCell + bar.subIndex];
+      if (selection.date?.getTime() !== bar.date.getTime() || selection.value !== value || selection.origin !== origin)
+        this.$gui.selectedPlatform = { ...selection, value, origin, date: bar.date };
     },
     isBarSelected(stationName, cellIndex, subIndex) {
       return this.selectedBar?.stationName === stationName

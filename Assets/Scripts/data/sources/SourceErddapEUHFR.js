@@ -342,7 +342,12 @@ class SourceErddapEUHFR extends Source {
     const points = station.isGriddap
       ? await this.fetchGriddapValidPointsCount(station, startDate, endDate)
       : await this.fetchValidPointsCount(station, 'RDVA', startDate, endDate);
-    return { id, points };
+    return { id, points, source: this.originOf(station.dataset) };
+  }
+
+  // Where a count came from, for the platform detail to say
+  originOf(dataset) {
+    return { label: 'EU HFR Node ERDDAP', dataset, url: `${this.baseUrl}/info/${dataset}/index.html` };
   }
 
   // A station of ICATMAR's network that the node publishes under another
@@ -501,7 +506,7 @@ class SourceErddapEUHFR extends Source {
         const points = entry.isGriddap
           ? await this.fetchGriddapValidPointsCount(entry, startDate, endDate)
           : await this.fetchValidPointsCount(entry, 'RDVA', startDate, endDate);
-        return { id, points };
+        return { id, points, source: this.originOf(entry.dataset) };
       } catch (error) {
         console.warn(`EU HFR Node: no valid points for ${network} ${id}:`, error);
         return { id, points: undefined };
@@ -577,7 +582,7 @@ class SourceErddapEUHFR extends Source {
     await this.loadTotal();
     if (!this.total) return { id: 'TOTALS', points: undefined };
     const points = await this.fetchValidPointsCount(this.total, 'EWCT', startDate, endDate);
-    return { id: 'TOTALS', points };
+    return { id: 'TOTALS', points, source: this.originOf(this.total.dataset) };
   }
 
 }

@@ -67,6 +67,9 @@
         </div>
       </div>
 
+      <PDSourceLine v-if="sp?.date" :origins="[{ label: $t('Simulated data') }]"
+        :note="$t('Simulated trajectories: the drifters timeline does not read the drifter sources yet.')"></PDSourceLine>
+
       <!-- Switch to Drifters dashboard -->
       <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'drifters'" @click="$gui.selectedDashboard = 'drifters'">
         <div class="pd-switch-btn-circle">
@@ -86,6 +89,7 @@
 
 <script>
 import MapCircleArrows from '../../MapCircleArrows.vue';
+import PDSourceLine from '../../Shared/PDSourceLine.vue';
 
 export default {
   name: "DTAPDriftersPlatformDetail",
@@ -340,7 +344,7 @@ export default {
       }
     }
   },
-  components: { MapCircleArrows }
+  components: { MapCircleArrows, PDSourceLine }
 }
 </script>
 

@@ -296,6 +296,7 @@ const dataProducts = [
       {
         Class: SourceErddapBuoys,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
+        label: "ICATMAR's ERDDAP",
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
         mapping: {
@@ -307,6 +308,7 @@ const dataProducts = [
       {
         Class: SourceErddapBuoys,
         src: 'https://hebe.icm.csic.es/erddap/index.html',
+        label: "ICM-CSIC's ERDDAP (hebe)",
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
         mapping: {
@@ -318,6 +320,7 @@ const dataProducts = [
       {
         Class: SourceMSMAPI,
         src: 'https://api.icatmar.cat/MSM_fast_api/',
+        label: "ICATMAR's MSM API",
         institution: 'ICATMAR',
         // The API already names most parameters by their standard code, so
         // what this mapping is really for is the scaling: they arrive as
@@ -371,6 +374,7 @@ const dataProducts = [
       {
         Class: SourceGithubSOMO,
         src: 'https://github.com/ICATMAR/data/',
+        label: "ICATMAR's GitHub (SOMO logger files)",
         institution: 'ICATMAR',
         // Raw CR1000X logger columns. No unit transforms: the logger writes
         // physical units already (°C, hPa, m/s, S/m, dbar, PSU).
@@ -405,6 +409,7 @@ const dataProducts = [
       {
         Class: SourcePuertosBuoys,
         src: 'https://portus.puertos.es/',
+        label: 'Puertos del Estado (PORTUS)',
         institution: 'Puertos del Estado',
         mapping: {
           Hm0: {code: 'VHM0'},

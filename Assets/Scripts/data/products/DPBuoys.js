@@ -251,6 +251,12 @@ class DPBuoys extends DP {
   // SOMO repository's declared table (see each source). Undefined where the
   // source doesn't say, which is a fine answer: the sensor id still
   // identifies it, the instrument only names it more precisely.
+  // The sources that serve a buoy's measurements, by name, in the order they
+  // are asked (the first with data for an hour wins, per variable)
+  sourcesOf(buoyId) {
+    return (this.providers?.get(buoyId) ?? []).filter(source => source.servesData).map(source => source.label ?? source.src);
+  }
+
   sensorInstrument(source, buoyId, sensorId) {
     return source.getBuoy?.(buoyId)?.sensors?.find(sensor => sensor.id === sensorId)?.instrument;
   }

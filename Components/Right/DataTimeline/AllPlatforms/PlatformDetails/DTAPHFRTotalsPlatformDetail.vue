@@ -50,6 +50,10 @@
         </div>
       </div>
 
+      <!-- Where the selected bar's count came from -->
+      <PDSourceLine v-if="sp?.date && sp.origin" :origins="[sp.origin]" :sources="['EU HFR Node ERDDAP']"
+        :note="sourceNote"></PDSourceLine>
+
       <!-- Switch to HFR currents dashboard -->
       <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="$gui.selectedDashboard = 'hfr'">
         <div class="pd-switch-btn-circle">
@@ -63,9 +67,12 @@
 
 
 <script>
+import PDSourceLine from '../../Shared/PDSourceLine.vue';
+
 export default {
   name: "DTAPHFRTotalsPlatformDetail",
   mixins: [window.pdFocusMixin],
+  components: { PDSourceLine },
   created() {
     this.map = undefined;
     this.stationOverlays = [];
@@ -158,6 +165,10 @@ export default {
     },
   },
   computed: {
+    // How the counts' sources are combined, for the source line's hover
+    sourceNote() {
+      return this.$t("The valid points of ICATMAR's network totals, as the EU HFR Node counts them.");
+    },
     // See pdFocusMixin - the network as a whole, so once per opening and
     // network (once its stations are known)
     mainMapFocusKey() { return this.stationPositions.length ? `TOTALS:${this.otherNetworkCode ?? 'HFR-ICATMAR'}` : null; },
