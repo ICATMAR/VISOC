@@ -3,6 +3,8 @@
   <!-- Network: the availability of a network's stations, as All platforms
        draws ICATMAR's -->
   <DTAPHFR v-if="$gui.hfrTab === 'Network'" :network="euNetwork"></DTAPHFR>
+  <!-- Station: the selected station's measures, hour by hour -->
+  <DTHFRStation v-else-if="$gui.hfrTab === 'Station'"></DTHFRStation>
   <DTHFRCompare v-else-if="$gui.hfrTab === 'Compare' && $gui.hfrPoint"></DTHFRCompare>
   <div v-else class="horizontal hfr-placeholder">
     <span>{{ $t(placeholder) }}</span>
@@ -22,6 +24,7 @@
 <script>
 import DTAPHFR from '../AllPlatforms/DTAPHFR.vue';
 import DTHFRCompare from './DTHFRCompare.vue';
+import DTHFRStation from './DTHFRStation.vue';
 
 // The HFR dashboard's bottom section. About the stations: the availability
 // of a network's stations (Network) and one station's measures (Station).
@@ -57,7 +60,6 @@ export default {
       return this.networks.find(network => this.$dataService.hfrnetwork.networkCode(network) === code) ?? null;
     },
     placeholder() {
-      if (this.$gui.hfrTab === 'Station') return 'Coming soon: the selected station\'s measures, hour by hour';
       if (this.$gui.hfrTab === 'Compare') return 'Click a buoy or a drifter on the map to compare it with the HF radars and the models';
       return 'Coming soon: click a point on the map to see the currents there';
     },
@@ -74,6 +76,7 @@ export default {
   components: {
     DTAPHFR,
     DTHFRCompare,
+    DTHFRStation,
   }
 }
 

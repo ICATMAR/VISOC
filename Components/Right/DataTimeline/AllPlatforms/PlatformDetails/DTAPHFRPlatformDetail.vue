@@ -46,7 +46,15 @@
         <div class="pd-values-scroll" v-scroll-fade ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
-          <template v-if="sp.value">
+          <!-- The HFR Station view: every row's value at the hour -->
+          <template v-if="stationValues.length">
+            <div class="pd-value-item" v-for="item in stationValues" :key="item.label" :title="item.title"
+              :class="{ 'pd-value-missing': item.missing }">
+              <span class="pd-value-label">{{ item.label }}</span>
+              <span class="pd-value-number">{{ item.value }}</span>
+            </div>
+          </template>
+          <template v-else-if="sp.value">
             <div class="pd-value-item">
               <span class="pd-value-label">{{ $t('Valid points') }}</span>
               <span class="pd-value-number">{{ sp.value }}</span>
@@ -262,6 +270,10 @@ export default {
       return `${Math.abs(latitude).toFixed(2)}° ${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(2)}° ${longitude < 0 ? 'W' : 'E'}`;
     },
     sp() { return this.$gui.selectedPlatform; },
+    // On the HFR dashboard's Station view, its rows at the selected hour
+    stationValues() {
+      return this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Station' ? this.$gui.hfrStationValues : [];
+    },
     // The selected time's hour, as a timestamp (a Date would change identity
     // on every tick of the handle)
     hourMs() { return roundToHour(this.$gui.selectedTime).getTime(); },
@@ -368,6 +380,10 @@ export default {
   padding: 0 4px;
   background: rgba(0, 0, 0, 0.35);
 }
+.pd-value-missing {
+  opacity: 0.5;
+}
+
 .radial-message {
   position: absolute;
   left: 0;

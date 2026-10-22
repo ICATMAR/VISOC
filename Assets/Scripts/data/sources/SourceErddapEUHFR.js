@@ -21,6 +21,12 @@ const repairEncoding = text => {
   try { return decodeURIComponent(escape(text)); } catch { return text; }
 };
 
+// Variables the Station view leaves out: coordinates, the velocity itself
+// and its direction/components, distances, and per-record QC
+const STATION_VIEW_SKIP = ['time', 'depth', 'latitude', 'longitude', 'RNGE', 'BEAR', 'crs', 'RDVA', 'DRVA',
+  'EWCT', 'NSCT', 'XDST', 'YDST', 'TIME_QC', 'POSITION_QC', 'DEPTH_QC'];
+const NUMERIC_TYPES = ['double', 'float', 'int', 'short', 'byte', 'long'];
+
 // What griddapEntry() reads off a dataset's info
 const GRIDDAP_ENTRY_KEYS = ['time_coverage_start', 'time_coverage_end', 'site_lat', 'site_lon',
   'geospatial_lat_min', 'geospatial_lat_max', 'geospatial_lon_min', 'geospatial_lon_max'];
@@ -251,6 +257,118 @@ class SourceErddapEUHFR extends Source {
 
       return { total, stations: stations.filter(s => s && !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
     }));
+  }
+
+  // A station's dataset on the node, as an entry ({ dataset, startDate,
+  // endDate, ... }): ICATMAR's _table, another network's griddap, or the
+  // copy a station of ICATMAR's network has under another network
+  // (Puertos del Estado's, HFR-DeltaEbro's). undefined when it has none.
+  async stationEntry(network, stationId) {
+    await this.loadingPromise;
+    const code = network.replace(/^HFR-/, '');
+    return this.stations[`${code}-${stationId}`]
+      ?? (code === 'ICATMAR' ? this.stations[stationId] : undefined)
+      ?? await this.otherNetworkStation(stationId);
+  }
+
+  // What a station's dataset holds, for the Station view: its variables as
+  // [{ name, kind: 'qc' | 'value', attributes }] - the QC flags, and the
+  // numeric measures beside the velocity. Coordinates, the velocity and its
+  // direction, and the per-record QC (time, position, depth) are left out. A
+  // griddap dataset only offers its QCflag: anything else would mean
+  // downloading every bin's value (see getStationStatistic).
+  async getStationVariables(entry) {
+    this.variableInfo ??= {};
+    this.variableInfo[entry.dataset] ??= (async () => {
+      const infoUrl = `${this.baseUrl}/info/${entry.dataset}/index.jsonlKVP`;
+      const text = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
+      return this.parseERDDAPMetadata(text).variables;
+    })().catch(error => { delete this.variableInfo[entry.dataset]; throw error; });
+    const variables = await this.variableInfo[entry.dataset];
+    const isTable = entry.dataset.endsWith('_table');
+    return Object.entries(variables)
+      .filter(([name, attributes]) => {
+        if (STATION_VIEW_SKIP.includes(name) || name.startsWith('SDN_')) return false;
+        if (!isTable) return name === 'QCflag';
+        return NUMERIC_TYPES.includes(attributes.dataType);
+      })
+      .map(([name, attributes]) => ({ name, kind: name === 'QCflag' || name.endsWith('_QC') ? 'qc' : 'value', attributes }));
+  }
+
+  // One measure of a station, hour by hour, over [startDate, endDate]:
+  // - stat 'flags' (a QC variable): { '<time>': { <flag value>: count } } -
+  //   from orderByCount on a _table, or from the griddap QCflag the point
+  //   counts already read;
+  // - 'mean': { '<time>': value } - every value variable's mean comes in ONE
+  //   orderByMean query, kept for the others;
+  // - 'min' / 'max': { '<time>': value } - orderByMinMax, one query per
+  //   variable, both kept.
+  async getStationStatistic(entry, variable, stat, startDate, endDate) {
+    const end = endDate ?? new Date();
+    const from = entry.startDate && entry.startDate > startDate ? entry.startDate : startDate;
+    const to = entry.endDate && entry.endDate < end ? entry.endDate : end;
+    if (from > to) return {};
+
+    if (!entry.dataset.endsWith('_table')) {
+      await this.fetchGriddapValidPointsCount(entry, startDate, endDate);
+      return stat === 'flags' && variable === 'QCflag' ? { ...entry.flagCounts } : {};
+    }
+
+    const range = `&time>=${from.toISOString()}&time<=${to.toISOString()}`;
+    this.statistics ??= new Map();
+    const cached = (key, load) => {
+      if (!this.statistics.has(key)) this.statistics.set(key, load().catch(error => { this.statistics.delete(key); throw error; }));
+      return this.statistics.get(key);
+    };
+
+    if (stat === 'flags') {
+      return cached(`${entry.dataset}|flags|${variable}${range}`, async () => {
+        const rows = await this.fetchTableRows(entry.dataset, `time,${variable},RDVA${range}&RDVA!=NaN&orderByCount("time,${variable}")`);
+        const counts = {};
+        rows.forEach(([time, flag, count]) => {
+          (counts[time] ??= {})[Number(flag)] = Number(count);
+        });
+        return counts;
+      });
+    }
+    if (stat === 'mean') {
+      const all = await cached(`${entry.dataset}|mean${range}`, async () => {
+        const names = (await this.getStationVariables(entry)).filter(v => v.kind === 'value').map(v => v.name);
+        const rows = await this.fetchTableRows(entry.dataset, `time,${names.join(',')}${range}&orderByMean("time")`);
+        const means = Object.fromEntries(names.map(name => [name, {}]));
+        rows.forEach(([time, ...values]) => names.forEach((name, i) => {
+          const value = Number(values[i]);
+          if (values[i] !== 'NaN' && Number.isFinite(value)) means[name][time] = value;
+        }));
+        return means;
+      });
+      return all[variable] ?? {};
+    }
+    const both = await cached(`${entry.dataset}|minmax|${variable}${range}`, async () => {
+      const rows = await this.fetchTableRows(entry.dataset, `time,${variable}${range}&${variable}!=NaN&orderByMinMax("time,${variable}")`);
+      // Each hour: its minimum's row, then its maximum's
+      const min = {}, max = {};
+      rows.forEach(([time, value]) => {
+        if (min[time] == undefined) min[time] = Number(value);
+        else max[time] = Number(value);
+      });
+      Object.keys(min).forEach(time => { if (max[time] == undefined) max[time] = min[time]; });
+      return { min, max };
+    });
+    return both[stat] ?? {};
+  }
+
+  // A tabledap query's rows as arrays of strings, past the two header rows
+  // (names, units). No rows (ERDDAP answers 404) is an empty answer.
+  async fetchTableRows(dataset, query) {
+    const url = `${this.baseUrl}/tabledap/${dataset}.csv?${query}`;
+    const text = await this.fetchManager.fetch(SourceErddap.proxied(url), 1)
+      .then(res => res.text())
+      .catch(err => {
+        if (err.name === 'HTTPError' && err.status === 404) return '';
+        throw err;
+      });
+    return text.trim().split('\n').slice(2).filter(Boolean).map(line => line.split(','));
   }
 
   async fetchMetadata(dataset, keys) {
@@ -548,11 +666,18 @@ class SourceErddapEUHFR extends Source {
       const fill = file.variables['QCflag'].attributes['_FillValue'];
       const times = file.variables['time'].read(); // seconds since 1970
       const perTime = values.length / times.length;
+      if (!entry.flagCounts) entry.flagCounts = {};
       times.forEach((seconds, k) => {
         let count = 0;
-        for (let i = k * perTime; i < (k + 1) * perTime; i++) if (values[i] !== fill && !Number.isNaN(values[i])) count++;
+        const flags = {}; // QCflag value -> how many radials carry it
+        for (let i = k * perTime; i < (k + 1) * perTime; i++) {
+          if (values[i] === fill || Number.isNaN(values[i])) continue;
+          count++;
+          flags[values[i]] = (flags[values[i]] ?? 0) + 1;
+        }
         // Keyed as the _table counts are: '2026-10-21T01:00:00Z'
-        if (count > 0) entry.validPoints[new Date(seconds * 1000).toISOString().replace('.000Z', 'Z')] = count;
+        const time = new Date(seconds * 1000).toISOString().replace('.000Z', 'Z');
+        if (count > 0) { entry.validPoints[time] = count; entry.flagCounts[time] = flags; }
       });
     }
 

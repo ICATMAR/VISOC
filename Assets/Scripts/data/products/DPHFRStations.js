@@ -101,6 +101,22 @@ class DPHFRStations extends DP {
     return { ...field, extent: this.radialExtent(`${network}:${stationId}`, field) };
   }
 
+  // The Station view's rows for one station: { dataset, variables } (see
+  // SourceErddapEUHFR.getStationVariables), or undefined for a station the
+  // EU HFR Node doesn't have (SCAL)
+  async getStationProfile(network, stationId) {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    const entry = await euHFRSource?.stationEntry(network, stationId);
+    if (!entry) return undefined;
+    return { entry, dataset: entry.dataset, variables: await euHFRSource.getStationVariables(entry) };
+  }
+
+  // One row of the Station view (see SourceErddapEUHFR.getStationStatistic)
+  getStationStatistic(profile, variable, stat, startDate, endDate) {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    return euHFRSource.getStationStatistic(profile.entry, variable, stat, startDate, endDate);
+  }
+
   radialExtent(key, field) {
     if (field.coverage) return field.coverage;
     this.radialExtents ??= {};

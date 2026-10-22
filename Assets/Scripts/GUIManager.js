@@ -118,6 +118,9 @@ class GUIManager {
   // availability of the network's stations - or 'Station'), or about hfrPoint
   // ('Point' or 'Compare')
   hfrTab = 'Network';
+  // The Station view's values at the selected hour, for the station's detail:
+  // [{ label, value, title }] (see DTHFRStation)
+  hfrStationValues = [];
   // What the Compare view has at the selected time, for the circle arrows on
   // the map (MapOverlayPoint): [{ name, code, speed, direction, tag }]
   hfrPointArrows = [];
