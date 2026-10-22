@@ -125,6 +125,9 @@ export default {
       // The radials on the mini map: 'loading', 'ok', 'none' (no map that
       // hour) or 'unavailable' (no source has the station)
       radialState: 'loading',
+      // The radials drawn on the mini map (SourceErddapEUHFR.getRadialField's;
+      // kept raw - big typed arrays, read whole), for the source line
+      radialField: null,
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
@@ -201,7 +204,7 @@ export default {
       }
       if (request !== this.radialRequest) return;
       this.radialState = field ? 'ok' : field === null ? 'none' : 'unavailable';
-      this.radialField = field ?? null;
+      this.radialField = field ? Vue.markRaw(field) : null;
       this.particles.setFields(field ? [field] : [], { showFlagged: !this.$gui.hfrRadialsValidOnly });
       if (field) this.fitRadials(field.extent);
     },

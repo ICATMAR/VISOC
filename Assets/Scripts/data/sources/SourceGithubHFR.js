@@ -627,14 +627,14 @@ class SourceGithubHFR extends Source {
     return times.length ? new Date(Math.max(...times)) : undefined;
   }
 
-  // Which hours have a totals file, from `after` (exclusive) and `startDate`
-  // on, from the manifest (none without it - no probing). A file's points
-  // aren't comparable to the ERDDAPs' counts, so every hour found counts as
-  // a full one: [{ network, hours: { '<ISO hour>': 1 } }]
-  async getAvailability(bbox, startDate, after) {
+  // Which hours have a totals file from `startDate` on, from the manifest
+  // (none without it - no probing). A file's points aren't comparable to the
+  // ERDDAPs' counts, so every hour found counts as a full one:
+  // [{ network, hours: { '<ISO hour>': 1 } }]
+  async getAvailability(bbox, startDate) {
     const manifest = await this.loadManifest();
     const found = {};
-    const from = Math.max(startDate.getTime(), (after?.getTime() ?? -Infinity) + 3600000);
+    const from = startDate.getTime();
     const now = Date.now();
     manifest?.totals.forEach((rows, key) => {
       const t = new Date(key).getTime();

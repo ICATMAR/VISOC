@@ -89,21 +89,19 @@ class DPHFRTotals extends DP {
   // Which hours have maps, one row per network, from `startDate` on:
   // [{ network, hours: { '<ISO hour>': fraction } }] - a fraction of that
   // network's fullest map in the range, since sources count points their own
-  // way. Every source of the provider is asked; an hour comes from the first
-  // that has it, the same order getField() uses, so the timeline shows what
-  // the map would.
+  // way. Every source of the provider is asked for the WHOLE range - not only
+  // past the hours the ones before it have: an ERDDAP can have gaps (the EU
+  // HFR Node missing hours it has the next ones of) that GitHub fills, as the
+  // map does - and an hour comes from the first that has it, the same order
+  // getField() uses, so the timeline shows what the map would.
   async getAvailability(provider, bbox, startDate) {
     const byNetwork = new Map();
-    for (const source of this.mapSources(provider)) {
-      // Where the sources so far end - GitHub only has to be asked past it
-      const known = [...byNetwork.values()].flatMap(row => Object.keys(row.hours));
-      const after = known.length ? new Date(known.sort().pop()) : undefined;
-      let rows = [];
-      try {
-        rows = await source.getAvailability(bbox, startDate, after);
-      } catch (error) {
+    const answers = await Promise.all(this.mapSources(provider).map(source =>
+      source.getAvailability(bbox, startDate).catch(error => {
         console.error(`HF radar availability from ${source.label}:`, error);
-      }
+        return [];
+      })));
+    for (const rows of answers) {
       rows.forEach(row => {
         const max = Math.max(0, ...Object.values(row.hours));
         if (max === 0) return;

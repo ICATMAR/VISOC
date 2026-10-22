@@ -539,6 +539,11 @@ export default {
       const key = this.$gui.hfrSourceInfo?.key;
       return this.rows.find(r => r.key === key)?.name;
     },
+    // How many readings the row described in the info panel has
+    describedRowReadings() {
+      const key = this.$gui.hfrSourceInfo?.key;
+      return key ? `${key}:${this.series[key]?.length ?? 0}:${Object.keys(this.provenance[key] ?? {}).length}` : null;
+    },
     // What the circle arrows and the detail depend on: the column, and every
     // row's readings - counted, so readings added to a row that already had
     // some (the GitHub fill) republish them too, whatever arrived last
@@ -551,6 +556,14 @@ export default {
   watch: {
     '$gui.hfrPoint'() { this.load(); },
     selectionKey: { immediate: true, handler() { this.publishSelection(); this.fillFromGithub(); } },
+    // The source described in the info panel, built from its row's data when
+    // it was clicked: built again when that row's readings change (its
+    // series arriving, the GitHub fill) - datasets, hours, sources, this hour
+    describedRowReadings() {
+      const info = this.$gui.hfrSourceInfo;
+      const row = info && this.rows.find(r => r.key === info.key);
+      if (row && !row.placeholder) this.describe(row);
+    },
     // The described source's "This hour" follows the selected hour
     selectedIndex() {
       const info = this.$gui.hfrSourceInfo;
