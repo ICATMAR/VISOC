@@ -215,7 +215,9 @@ class DPHFRNetwork extends DP {
     const code = this.networkCode(network);
     if (!euHFRSource || !code) return [];
     const stationIds = network.stations.filter(s => !s.notOnEUNode).map(s => s.id);
-    return euHFRSource.getNumberOfValidPointsForNetwork(code, stationIds, startDate, endDate);
+    // [TOTALS, ...stationIds], each station's shown loading on the map
+    return euHFRSource.getNumberOfValidPointsForNetwork(code, stationIds, startDate, endDate)
+      .map((promise, i) => i === 0 ? promise : stationsProduct.trackLoading(code, stationIds[i - 1], promise));
   }
 
   // One station: live winning, but for the static fields (see

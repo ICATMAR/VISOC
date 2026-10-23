@@ -3,8 +3,6 @@
   <!-- Network: the availability of a network's stations, as All platforms
        draws ICATMAR's -->
   <DTAPHFR v-if="$gui.hfrTab === 'Network'" :network="euNetwork"></DTAPHFR>
-  <!-- Station: the selected station's measures, hour by hour -->
-  <DTHFRStation v-else-if="$gui.hfrTab === 'Station'"></DTHFRStation>
   <DTHFRCompare v-else-if="$gui.hfrTab === 'Compare' && $gui.hfrPoint"></DTHFRCompare>
   <!-- Point: a data point clicked on the map, hour by hour -->
   <DTHFRPoint v-else-if="$gui.hfrTab === 'Point'"></DTHFRPoint>
@@ -26,11 +24,10 @@
 <script>
 import DTAPHFR from '../AllPlatforms/DTAPHFR.vue';
 import DTHFRCompare from './DTHFRCompare.vue';
-import DTHFRStation from './DTHFRStation.vue';
 import DTHFRPoint from './DTHFRPoint.vue';
 
 // The HFR dashboard's bottom section. About the stations: the availability
-// of a network's stations (Network) and one station's measures (Station).
+// of a network's stations (Network).
 // About a place (GUIManager.hfrPoint): what the radars measured there (Point)
 // and how the radars, the platforms and the models compare (Compare).
 export default {
@@ -40,7 +37,7 @@ export default {
   },
   data() {
     return {
-      tabGroups: [['Network', 'Station'], ['Point', 'Compare']],
+      tabGroups: [['Network'], ['Point', 'Compare']],
       networks: [], // getAllNetworks()' groups, once loaded
     }
   },
@@ -84,9 +81,9 @@ export default {
         this.$gui.selectedPlatform = { stationId: point.id, kind: point.kind };
         return;
       }
-      // Network or Station: the point is let go of altogether - on the map
+      // Network: the point is let go of altogether - on the map
       // and in Point / Compare, which ask for a new click
-      if (tab === 'Network' || tab === 'Station') {
+      if (tab === 'Network') {
         this.$gui.hfrPoint = null;
         this.$gui.hfrDataPoint = null;
       }
@@ -98,7 +95,6 @@ export default {
   components: {
     DTAPHFR,
     DTHFRCompare,
-    DTHFRStation,
     DTHFRPoint,
   }
 }

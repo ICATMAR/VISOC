@@ -69,6 +69,25 @@ class DPHFRTotals extends DP {
     return best ? { lon: best.lon, lat: best.lat, network: best.network, source: field.source } : null;
   }
 
+  // One network's grid points with data at `time`, as the source labelled
+  // `sourceLabel` has them (the source a series read that hour from - each
+  // grids the radars its own way), or else the source serving that hour's
+  // map: [{ lon, lat }], [] when there is no map. Only the networks around
+  // (lon, lat) are asked for. What the Point view's detail draws its grid from.
+  async getGridPoints(time, provider, network, lon, lat, sourceLabel) {
+    const bbox = [lon - 0.05, lat - 0.05, lon + 0.05, lat + 0.05];
+    const source = sourceLabel && this.mapSources(provider).find(s => s.label === sourceLabel);
+    let field = null;
+    try {
+      field = source ? await source.getField(time, bbox) : await this.getField(time, provider, bbox);
+    } catch (error) {
+      console.error(`HF radar grid from ${sourceLabel ?? provider}:`, error);
+    }
+    if (!field) return [];
+    const parts = field.parts ?? [field];
+    return (parts.find(part => part.label === network) ?? parts[0]).cellsWithData();
+  }
+
   async getField(time, provider, bbox) {
     const sources = this.mapSources(provider);
     for (let i = 0; i < sources.length; i++) {
@@ -183,6 +202,13 @@ class DPHFRTotals extends DP {
   async getGithubCell(hour, lon, lat) {
     const github = this.sources.find(s => typeof s.getTotalsCell === 'function');
     return github ? github.getTotalsCell(hour, lon, lat) : null;
+  }
+
+  // The header of ICATMAR's totals .tuv on GitHub for an hour - the file the
+  // hour's values were read from, already in memory - or null
+  async getGithubFileHeader(hour) {
+    const github = this.sources.find(s => typeof s.totalsFile === 'function');
+    return github ? (await github.totalsFile(hour))?.metadata ?? null : null;
   }
 
   // A dataset's description from the source that serves it (by its label, as

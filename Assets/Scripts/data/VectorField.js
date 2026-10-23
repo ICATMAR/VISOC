@@ -23,6 +23,16 @@ class VectorField {
     return count;
   }
 
+  // Every grid point with data: [{ lon, lat }]
+  cellsWithData() {
+    const cells = [];
+    for (let row = 0; row < this.ny; row++)
+      for (let col = 0; col < this.nx; col++)
+        if (!Number.isNaN(this.u[row * this.nx + col]))
+          cells.push({ lon: this.lonMin + col * this.dLon, lat: this.latMax - row * this.dLat });
+    return cells;
+  }
+
   // The grid point with data nearest a point, no further than one grid
   // spacing in either direction: { lon, lat, u, v, distance } (distance in
   // grid spacings), or null. What a map click picks: the data points are

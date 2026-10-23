@@ -39,6 +39,12 @@ export default {
       }
       this.loadStations();
     });
+    // Any view asking for a station's data shows on its marker
+    this.onStationsLoading = () => { this.loadingVersion++; };
+    this.$dataService.hfrstations.loadingEvents.addEventListener('loading', this.onStationsLoading);
+  },
+  beforeUnmount() {
+    this.$dataService.hfrstations.loadingEvents.removeEventListener('loading', this.onStationsLoading);
   },
   data (){
     return {
@@ -48,6 +54,9 @@ export default {
       // Until the live fetch answers, a station with no coverage end is still
       // loading, not inactive
       isLiveLoaded: false,
+      // Bumped whenever a station's requests start or end (see
+      // DPHFRStations.trackLoading), so the markers re-read it
+      loadingVersion: 0,
     }
   },
   methods: {
@@ -108,9 +117,11 @@ export default {
         this.map.addOverlay(olOverlay);
       }
     },
-    // Based on how stale time_coverage_end is: <3h active, up to 1 day
-    // delayed, up to 30 days inactive, older than that offline.
+    // Loading while any of its data is being requested; otherwise based on
+    // how stale time_coverage_end is: <3h active, up to 1 day delayed, up to
+    // 30 days inactive, older than that offline.
     stationStatus(station) {
+      if (this.loadingVersion >= 0 && this.$dataService.hfrstations.isStationLoading(station.metadata?.network, station.id)) return 'loading';
       const endStr = station.metadata?.time_coverage_end;
       if (!endStr) return this.isLiveLoaded ? 'inactive' : 'loading';
 

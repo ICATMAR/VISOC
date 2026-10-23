@@ -36,6 +36,10 @@ import { createDetailMapLayers, zoomToShowCoast } from './Assets/Scripts/mapLaye
 window.createDetailMapLayers = createDetailMapLayers;
 window.zoomToShowCoast = zoomToShowCoast;
 
+// How the HFR dashboard describes a data source in the info panel
+import * as hfrSourceInfo from './Assets/Scripts/hfrSourceInfo.js';
+window.hfrSourceInfo = hfrSourceInfo;
+
 import RadialParticles from './Assets/Scripts/RadialParticles.js';
 import { scrollFade } from './Assets/Scripts/scrollFade.js';
 import { dragScroll } from './Assets/Scripts/dragScroll.js';

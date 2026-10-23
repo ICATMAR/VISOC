@@ -46,16 +46,6 @@ import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 // the same rule the maps and the chips use
 const roundToHour = time => new Date(Math.floor((time.getTime() + 1800 * 1000) / 3600000) * 3600000);
 
-// Text that was UTF-8, read as Latin-1 and saved again ("DirecciÃ³" for
-// "Direcció" - the EU HFR Node's metadata has it): re-read as UTF-8. escape()
-// gives the Latin-1 bytes back and decodeURIComponent reads them as UTF-8; on
-// text that was right to begin with ("Política"), that is not valid UTF-8 and
-// throws, so it is kept as it was.
-const repairEncoding = text => {
-  try { return /[\u00c0-\u00ff][\u0080-\u00bf]/.test(text) ? decodeURIComponent(escape(text)) : text; }
-  catch { return text; }
-};
-
 // Each compared product's colour on the comparison map (DTHFRPlatformDetail)
 const COMPARE_COLORS = { platform: '#ffffff', ICATMAR: '#ff9f43', EU: '#54a0ff', model: '#1dd1a1' };
 
@@ -367,36 +357,10 @@ export default {
         { label: 'Hours with data', value: `${hours} / ${window}` },
       ];
     },
-    // The parts of an ERDDAP dataset's NC_GLOBAL worth showing
+    // The parts of an ERDDAP dataset's NC_GLOBAL worth showing (see
+    // hfrSourceInfo.js)
     metadataRows(metadata) {
-      const rows = [];
-      const add = (label, value, long) => {
-        // Placeholders some datasets write instead of leaving it out
-        if (value == undefined || /^(|void|none|unknown|n\/a)$/i.test(String(value).trim())) return;
-        rows.push({ label, value: repairEncoding(String(value)).replace(/\s+/g, ' ').trim(), long });
-      };
-      add('Title', metadata.title, true);
-      // Some list one institution twice ('A, B, B')
-      add('Institution', metadata.institution && [...new Set(repairEncoding(String(metadata.institution)).split(/\s*,\s*/))].join(', '));
-      add('Network', metadata.network ?? metadata.site_code);
-      add('Source', metadata.source);
-      add('Processing level', metadata.processing_level);
-      add('Time step', this.formatDuration(metadata.time_coverage_resolution));
-      add('Updated', metadata.update_interval);
-      if (metadata.geospatial_lat_resolution)
-        add('Resolution', `${Number(metadata.geospatial_lat_resolution).toFixed(3)}º × ${Number(metadata.geospatial_lon_resolution).toFixed(3)}º`);
-      if (metadata.time_coverage_start)
-        add('Coverage', `${String(metadata.time_coverage_start).substring(0, 10)} – ${String(metadata.time_coverage_end ?? '').substring(0, 10)}`);
-      add('License', metadata.license, true);
-      add('Acknowledgement', metadata.acknowledgement ?? metadata.citation, true);
-      return rows;
-    },
-    // ISO 8601 durations as ERDDAP writes them: 'PT1H' -> '1 h', 'P1D' -> '1 d'
-    formatDuration(value) {
-      const match = String(value ?? '').match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
-      if (!match || !match.slice(1).some(Boolean)) return value;
-      const [, d, h, m, sec] = match;
-      return [d && `${d} d`, h && `${h} h`, m && `${m} min`, sec && `${sec} s`].filter(Boolean).join(' ');
+      return window.hfrSourceInfo.metadataRows(metadata);
     },
     formatCell(cell) {
       if (!cell) return '–';

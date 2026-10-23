@@ -115,12 +115,9 @@ class GUIManager {
   // { lon, lat, kind: 'buoy' | 'drifter' | 'point', id, name }
   hfrPoint = null;
   // Which view the bottom section shows: about the stations ('Network' - the
-  // availability of the network's stations - or 'Station'), or about hfrPoint
-  // ('Point' or 'Compare')
+  // availability of the network's stations), or about hfrPoint ('Point' or
+  // 'Compare')
   hfrTab = 'Network';
-  // The Station view's values at the selected hour, for the station's detail:
-  // [{ label, value, title }] (see DTHFRStation)
-  hfrStationValues = [];
   // What the Compare view has at the selected time, for the circle arrows on
   // the map (MapOverlayPoint): [{ name, code, speed, direction, tag }]
   hfrPointArrows = [];
@@ -183,6 +180,13 @@ class GUIManager {
   // network, provider (totals), station, axisNames, a, b, direction (radial:
   // its grid axes and the bearing away from the antenna) }
   hfrDataPoint = null;
+  // Whether the Point view shows its whole technical table (every measure
+  // and QC flag of the data point), not only the sea water velocity - kept
+  // from one data point to the next
+  hfrPointShowTechnical = false;
+  // The Point view's selected hour's source, described in the info panel -
+  // the same shape as hfrSourceInfo (see DTHFRPoint.describeSource)
+  hfrDataPointSourceInfo = null;
   // The Point view's values at the selected hour, and where they came from,
   // for its detail: [{ label, value, speed, direction, title }]
   hfrDataPointValues = [];

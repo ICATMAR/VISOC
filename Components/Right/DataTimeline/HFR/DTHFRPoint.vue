@@ -1,12 +1,14 @@
 <template>
   <!-- One data point of the HF radars, hour by hour: a grid point of the
        totals (velocity, its errors, GDOP, QC...) or one radial bin of a
-       station (RDVA, its quality measures, QC). The rows are what the
-       dataset holds; a name tells its ERDDAP metadata on hover. -->
+       station (RDVA, its quality measures, QC). The sea water velocity only,
+       until the technical table is asked for: then every row the dataset
+       holds; a name tells its ERDDAP metadata on hover. -->
   <DTLayout v-if="point" :variables="rowVariables" :interval-options="intervalOptions">
     <template #grid>
       <DTTimelineGrid v-slot="{ cells }">
-        <tr v-for="row in rows" :key="row.key">
+        <template v-for="(row, rowIndex) in shownRows" :key="row.key">
+        <tr>
           <template v-for="(cell, index) in cells" :key="index">
             <!-- The velocity: coloured on the current-speed legend, its arrow -->
             <td v-if="row.kind === 'velocity'" class="value-cell clickable"
@@ -34,6 +36,20 @@
             </td>
           </template>
         </tr>
+        <!-- Under the sea water velocity: the technical table's toggle, kept
+             in the middle of the visible timeline however it is dragged (a
+             sticky box as wide as the timeline's view; see visibleWidth) -->
+        <tr v-if="rowIndex === 0 && hasTechnical" class="toggle-row">
+          <td :colspan="cells.length">
+            <div class="toggle-sticky" :style="{ width: visibleWidth ? visibleWidth + 'px' : '100%' }">
+              <button class="technical-toggle clickable" @click="$gui.hfrPointShowTechnical = !$gui.hfrPointShowTechnical">
+                <i class="fa-solid" :class="$gui.hfrPointShowTechnical ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                {{ $t($gui.hfrPointShowTechnical ? 'Hide technical table' : 'Show technical table') }}
+              </button>
+            </div>
+          </td>
+        </tr>
+        </template>
       </DTTimelineGrid>
     </template>
   </DTLayout>
@@ -71,19 +87,36 @@ export default {
       series: null,   // the data point's series (see the top)
       loading: false,
       missing: false, // no series where this data point comes from
+      visibleWidth: 0, // the timeline's visible width, px (see watchTimelineWidth)
     }
   },
   mounted() {
     this.previousInterval = this.$gui.timelineIntervalMinutes;
     this.$gui.timelineIntervalMinutes = 60;
     this.load();
+    this.watchTimelineWidth();
+  },
+  updated() {
+    this.watchTimelineWidth();
   },
   beforeUnmount() {
+    this.timelineObserver?.disconnect();
     this.$gui.timelineIntervalMinutes = this.previousInterval;
     this.$gui.hfrDataPointValues = [];
     this.$gui.hfrDataPointOrigin = null;
+    this.$gui.hfrDataPointSourceInfo = null;
   },
   methods: {
+    // The width of the timeline's view, kept up to date: what the toggle's
+    // sticky box spans, so the button sits in its middle
+    watchTimelineWidth() {
+      const scroller = this.$el?.querySelector?.('.table-scroll-container');
+      if (!scroller || scroller === this.timelineScroller) return;
+      this.timelineObserver?.disconnect();
+      this.timelineScroller = scroller;
+      this.timelineObserver = new ResizeObserver(() => { this.visibleWidth = scroller.clientWidth; });
+      this.timelineObserver.observe(scroller);
+    },
     async load() {
       const request = (this.request ?? 0) + 1;
       this.request = request;
@@ -252,7 +285,7 @@ export default {
     // The selected hour's values and their source, for the detail
     publish() {
       const index = this.selectedIndex;
-      this.$gui.hfrDataPointValues = !this.series || index < 0 ? [] : this.rows.map(row => {
+      this.$gui.hfrDataPointValues = !this.series || index < 0 ? [] : this.shownRows.map(row => {
         const value = this.binned[row.key]?.[index];
         return {
           label: row.name, value: this.format(row, value), missing: value == undefined, title: this.metadataTitle(row),
@@ -267,10 +300,14 @@ export default {
       const fromGithub = key && s?.origins?.[key];
       // An hour with no value anywhere has no source to name
       const hasValue = index >= 0 && this.rows.some(row => this.binned[row.key]?.[index] != undefined);
-      const origin = !hasValue ? null : fromGithub ? { ...fromGithub } : s?.dataset ? {
-        label: s.source === 'EU HFR Node' ? 'EU HFR Node ERDDAP' : s.source, dataset: s.dataset, cell: s.cell,
+      // `source`: the data source's own label, for the detail's grid (see
+      // DPHFRTotals.getGridPoints)
+      const origin = !hasValue ? null : fromGithub ? { ...fromGithub, source: 'GitHub' } : s?.dataset ? {
+        label: s.source === 'EU HFR Node' ? 'EU HFR Node ERDDAP' : s.source, source: s.source, dataset: s.dataset, cell: s.cell,
         url: `${s.source === 'ICATMAR ERDDAP' ? 'https://erddap.icatmar.cat' : 'https://erddap.hfrnode.eu'}/erddap/info/${s.dataset}/index.html`,
       } : null;
+      // The dataset or file itself, before the cell is written into it below
+      if (origin) origin.datasetId = origin.dataset;
       // Where on its grid: sources grid the radars differently, so an hour
       // may be read at a cell next to the clicked one
       if (origin?.cell && this.point) {
@@ -278,6 +315,82 @@ export default {
         origin.dataset = `${origin.dataset} · ${this.$t('cell')} ${Number(origin.cell.latitude).toFixed(4)}º N, ${Number(origin.cell.longitude).toFixed(4)}º E (${km < 0.05 ? '0' : km.toFixed(1)} km)`;
       }
       this.$gui.hfrDataPointOrigin = origin;
+      this.describeSource(origin, key);
+    },
+    // The selected hour's source, described in the info panel
+    // (GUIManager.hfrDataPointSourceInfo): ICATMAR's GitHub file - with what
+    // its header says - or the ERDDAP dataset - with its metadata. Sources
+    // process the same radars each their own way, so it matters which one
+    // the hour's values are from. Redone only when the source changes.
+    async describeSource(origin, hourKey) {
+      const p = this.point;
+      if (!origin || !p) {
+        this.describedKey = null;
+        this.$gui.hfrDataPointSourceInfo = null;
+        return;
+      }
+      const fromGithub = origin.source === 'GitHub';
+      const isRadial = p.kind === 'radial';
+      // A GitHub hour is its own file; an ERDDAP dataset is the same for every hour
+      const id = `${this.pointKey}|${origin.source}|${origin.datasetId}|${fromGithub ? hourKey : ''}`;
+      if (id === this.describedKey) {
+        // Same source: only "This hour" follows the hour
+        const info = this.$gui.hfrDataPointSourceInfo;
+        if (info) this.$gui.hfrDataPointSourceInfo = { ...info, rows: info.rows.map(r => r.id === 'thisHour' ? this.thisHourRow(origin) : r) };
+        return;
+      }
+      this.describedKey = id;
+      const network = String(p.network ?? '').replace(/^HFR-/, '');
+      const cell = origin.cell ? `${Number(origin.cell.latitude).toFixed(4)}º N, ${Number(origin.cell.longitude).toFixed(4)}º E` : `${p.lat.toFixed(4)}º N, ${p.lon.toFixed(4)}º E`;
+      const base = {
+        key: id,
+        title: fromGithub ? 'ICATMAR GitHub' : origin.label,
+        subtitle: network ? `${this.$t('Network')} ${network}` : undefined,
+        rows: [
+          this.thisHourRow(origin),
+          { label: 'Processing', value: this.$t(fromGithub || origin.source === 'ICATMAR ERDDAP'
+            ? "ICATMAR's own processing of its radars"
+            : "The EU HFR Node's processing of the network's radars"), long: true },
+          isRadial
+            ? { label: 'Radial bin', value: `${p.station}${p.axisNames?.[0] === 'RNGE' ? ` · ${p.a.toFixed(1)} km · ${Math.round(p.b)}º` : ''} · ${p.lat.toFixed(4)}º N, ${p.lon.toFixed(4)}º E` }
+            : { label: 'Grid cell used', value: cell },
+          // An HF radar sees the current in the top layer the radar's Bragg
+          // waves move with - about λ/8π: 0.9 m for ICATMAR's 13.5 MHz SeaSondes
+          { label: 'Depth', value: network === 'ICATMAR'
+            ? this.$t('Top ~0.9 m of the water column (13.5 MHz SeaSonde, λ/8π)')
+            : this.$t('Top ~1 m of the water column (depends on the radar frequency)') },
+        ],
+      };
+      this.$gui.hfrDataPointSourceInfo = { ...base, loading: true };
+      let more = [];
+      try {
+        if (fromGithub) {
+          const hour = new Date(hourKey);
+          const header = isRadial
+            ? await this.$dataService.hfrstations.getGithubRadialHeader(p.station, hour)
+            : await this.$dataService.hfrtotals.getGithubFileHeader(hour);
+          more = [
+            { label: 'Repository', value: 'ICATMAR/data', url: 'https://github.com/ICATMAR/data' },
+            ...window.hfrSourceInfo.fileHeaderRows(header ?? {}),
+          ];
+        } else {
+          const metadata = isRadial
+            ? await this.$dataService.hfrstations.getDatasetMetadata(p.network, p.station, origin.datasetId)
+            : await this.$dataService.hfrtotals.getDatasetMetadata(p.provider, origin.source, origin.datasetId);
+          more = [
+            { label: 'Dataset', value: origin.datasetId, url: metadata?.infoUrl ?? origin.url },
+            ...window.hfrSourceInfo.metadataRows(metadata ?? {}),
+          ];
+        }
+      } catch (error) {
+        console.error('Point view, source description:', error);
+      }
+      if (this.describedKey !== id) return; // another source meanwhile
+      this.$gui.hfrDataPointSourceInfo = { ...base, rows: [...base.rows, ...more], loading: false };
+    },
+    // "This hour": the file or dataset the selected hour's values came from
+    thisHourRow(origin) {
+      return { id: 'thisHour', label: 'This hour', value: origin.datasetId ?? origin.label, url: origin.url };
     },
   },
   computed: {
@@ -306,6 +419,14 @@ export default {
       vars.filter(v => !skip.has(v.name) && !isQC(v.name)).forEach(v => rows.push({ key: v.name, name: v.name, kind: 'value', attributes: v.attributes }));
       vars.filter(v => !skip.has(v.name) && isQC(v.name)).forEach(v => rows.push({ key: v.name, name: v.name, kind: 'qc', attributes: v.attributes }));
       return rows;
+    },
+    // Whether there is more than the velocity, for the technical table
+    hasTechnical() {
+      return this.rows.length > 1;
+    },
+    // The sea water velocity, or with the technical table every row
+    shownRows() {
+      return this.$gui.hfrPointShowTechnical ? this.rows : this.rows.filter(row => row.kind === 'velocity');
     },
     // Each row's values by column: the hour ENDING at the column's right tick
     binned() {
@@ -347,12 +468,15 @@ export default {
     rowVariables() {
       if (!this.rows.length)
         return [{ name: this.loading ? this.$t('Loading') : this.missing ? this.$t('No series for this data point') : '', loading: this.loading }];
-      return this.rows.map(row => ({
+      const names = this.shownRows.map(row => ({
         name: row.name, title: this.metadataTitle(row),
         // A speed's unit switches app-wide on a click, as every unit
         unit: row.kind === 'qc' ? '' : this.unitOf(row),
         code: row.kind === 'velocity' || this.isSpeed(row) || this.isSpeedSquared(row) ? 'HCSP' : undefined,
       }));
+      // The toggle's row, level with it in the grid
+      if (this.hasTechnical) names.splice(1, 0, { name: '', unit: '' });
+      return names;
     },
     pointKey() {
       const p = this.point;
@@ -362,6 +486,7 @@ export default {
   watch: {
     pointKey() { this.load(); },
     selectedIndex() { this.publish(); },
+    '$gui.hfrPointShowTechnical'() { this.publish(); },
   },
   components: { DTLayout, DTTimelineGrid },
 }
@@ -369,7 +494,9 @@ export default {
 
 
 <style scoped>
+/* No padding: a row as tall as its name (23px), so names and rows stay level */
 .value-cell {
+  padding: 0;
   text-align: center;
   white-space: nowrap;
   height: 22px;
@@ -389,6 +516,7 @@ export default {
 }
 
 .flag-cell {
+  padding: 0;
   text-align: center;
   height: 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
@@ -407,6 +535,37 @@ export default {
 .flag-suspect { background: #ffc107; color: #333; }
 .flag-bad     { background: #e53935; }
 .flag-other   { background: #9e9e9e; }
+
+/* The technical table's toggle, a row as tall as a name */
+.toggle-row td {
+  padding: 0;
+  height: 23px;
+}
+/* As wide as the timeline's view and stuck to its left edge: the button in
+   its middle stays in the middle of what is visible. Never wider than the
+   row (a short timeline) */
+.toggle-sticky {
+  position: sticky;
+  left: 0;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.technical-toggle {
+  white-space: nowrap;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.35);
+  color: #123;
+  text-shadow: none;
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+.technical-toggle:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
 
 .point-placeholder {
   width: 100vw;

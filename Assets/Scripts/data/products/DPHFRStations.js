@@ -10,6 +10,41 @@ import hfrIcatmarNetwork from '../../../../Data/hfr/hfr-icatmar.js'
 
 class DPHFRStations extends DP {
 
+  constructor(...args) {
+    super(...args);
+    // The stations with a request in flight ('HFR-<NETWORK>:<STATION>' →
+    // how many), and a 'loading' event on every change - so the map can show
+    // a station loading whenever any view asks for its data
+    this.loadingCounts = new Map();
+    this.loadingEvents = new EventTarget();
+  }
+
+  loadingKey(network, stationId) {
+    return `HFR-${String(network ?? 'ICATMAR').replace(/^HFR-/, '')}:${stationId}`;
+  }
+
+  isStationLoading(network, stationId) {
+    return this.loadingCounts.has(this.loadingKey(network, stationId));
+  }
+
+  // Counts `promise` as a request for one station's data until it settles;
+  // returns it as it is
+  trackLoading(network, stationId, promise) {
+    promise = Promise.resolve(promise);
+    const key = this.loadingKey(network, stationId);
+    const changed = () => this.loadingEvents.dispatchEvent(new Event('loading'));
+    this.loadingCounts.set(key, (this.loadingCounts.get(key) ?? 0) + 1);
+    changed();
+    const settle = () => {
+      const left = this.loadingCounts.get(key) - 1;
+      if (left > 0) this.loadingCounts.set(key, left);
+      else this.loadingCounts.delete(key);
+      changed();
+    };
+    promise.then(settle, settle);
+    return promise;
+  }
+
 
   // Get stations from static file
   getICATMARHFRStations() {
@@ -83,7 +118,11 @@ class DPHFRStations extends DP {
   // neither source has. `extent` is added: the station's radial extent - its
   // published coverage, or the box of every bin seen in the hours loaded so
   // far, so a map fitted to it settles rather than jumping hour to hour.
-  async getRadials(network, stationId, hour) {
+  getRadials(network, stationId, hour) {
+    return this.trackLoading(network, stationId, this.loadRadials(network, stationId, hour));
+  }
+
+  async loadRadials(network, stationId, hour) {
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
     let field = euHFRSource
@@ -101,34 +140,19 @@ class DPHFRStations extends DP {
     return { ...field, extent: this.radialExtent(`${network}:${stationId}`, field) };
   }
 
-  // The Station view's rows for one station: { dataset, variables } (see
-  // SourceErddapEUHFR.getStationVariables), or undefined for a station the
-  // EU HFR Node doesn't have (SCAL)
-  async getStationProfile(network, stationId) {
-    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
-    const entry = await euHFRSource?.stationEntry(network, stationId);
-    if (!entry) return undefined;
-    return { entry, dataset: entry.dataset, variables: await euHFRSource.getStationVariables(entry) };
-  }
-
-  // One row of the Station view (see SourceErddapEUHFR.getStationStatistic)
-  getStationStatistic(profile, variable, stat, startDate, endDate) {
-    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
-    return euHFRSource.getStationStatistic(profile.entry, variable, stat, startDate, endDate);
-  }
-
   // One radial bin's series (see SourceErddapEUHFR.getRadialBinSeries) -
   // undefined for a station the EU HFR Node doesn't have (SCAL)
   async getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate) {
     const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
-    return euHFRSource?.getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate);
+    if (!euHFRSource) return undefined;
+    return this.trackLoading(network, stationId, euHFRSource.getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate));
   }
 
   // The hours ICATMAR's GitHub has a station's .ruv for, in [startDate, endDate]
   async getGithubRadialHours(stationId, startDate, endDate) {
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
     if (!githubSource || !hfrIcatmarNetwork.stations.some(s => s.id === stationId)) return [];
-    return githubSource.radialHours(stationId, startDate, endDate);
+    return this.trackLoading('ICATMAR', stationId, Promise.resolve(githubSource.radialHours(stationId, startDate, endDate)));
   }
 
   // One radial bin at one hour from ICATMAR's GitHub (see
@@ -137,7 +161,23 @@ class DPHFRStations extends DP {
   async getGithubRadialBin(stationId, hour, range, bearing) {
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
     if (!githubSource || !hfrIcatmarNetwork.stations.some(s => s.id === stationId)) return null;
-    return githubSource.getRadialBin(stationId, hour, range, bearing);
+    return this.trackLoading('ICATMAR', stationId, githubSource.getRadialBin(stationId, hour, range, bearing));
+  }
+
+  // A station dataset's metadata on the EU HFR Node (see
+  // SourceErddapEUHFR.getDatasetMetadata)
+  getDatasetMetadata(network, stationId, dataset) {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    if (!euHFRSource) return Promise.resolve({});
+    return this.trackLoading(network, stationId, euHFRSource.getDatasetMetadata(dataset));
+  }
+
+  // The header of a station's .ruv on ICATMAR's GitHub for an hour - the
+  // file the hour's values were read from, already in memory - or null
+  async getGithubRadialHeader(stationId, hour) {
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    if (!githubSource) return null;
+    return (await githubSource.radialFile(stationId, hour))?.metadata ?? null;
   }
 
   radialExtent(key, field) {
@@ -174,7 +214,7 @@ class DPHFRStations extends DP {
 
     return erddapPromises.map((promise, i) => {
       const id = stationIds[i];
-      return promise
+      return this.trackLoading('ICATMAR', id, promise
         .then(async result => {
           const points = result?.points ?? {};
           // Where each hour's count came from: the EU HFR Node's, unless
@@ -204,7 +244,7 @@ class DPHFRStations extends DP {
         .catch(error => {
           console.error(`Error loading number of valid points for station ${id}:`, error);
           return { id, points: {} };
-        });
+        }));
     });
   }
 

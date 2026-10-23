@@ -34,12 +34,10 @@
           <!-- A row that names its variable (`code`) switches that quantity's
                unit app-wide on a click (GUIManager.cycleUnit), and is
                underlined only where there is another unit to go to -->
-          <!-- A row can take the click itself instead (`onUnitClick`: the
-               Station view cycles a row's statistic there) -->
           <span v-for="v in variables" :key="v.name" class="clickable unit-cell"
-            :class="{ 'unit-switchable': v.onUnitClick || !v.code || $gui.isUnitSwitchable(v.code) }"
-            :title="v.unitTitle ?? (v.code && $gui.isUnitSwitchable(v.code) ? $t('Click to change units') : '')"
-            @click.stop="v.onUnitClick ? v.onUnitClick() : (v.code && $gui.cycleUnit(v.code))">{{ v.unit }}</span>
+            :class="{ 'unit-switchable': !v.code || $gui.isUnitSwitchable(v.code) }"
+            :title="v.code && $gui.isUnitSwitchable(v.code) ? $t('Click to change units') : ''"
+            @click.stop="v.code && $gui.cycleUnit(v.code)">{{ v.unit }}</span>
         </div>
       </div>
     </div>

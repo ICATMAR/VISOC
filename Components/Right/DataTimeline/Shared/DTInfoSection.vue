@@ -2,7 +2,8 @@
   <div class="info-section horizontal">
 
     <!-- HFR Compare: a data source picked in the names column, described as
-         its own metadata says (GUIManager.hfrSourceInfo, see DTHFRCompare) -->
+         its own metadata says (GUIManager.hfrSourceInfo, see DTHFRCompare);
+         HFR Point: the selected hour's source (see DTHFRPoint) -->
     <template v-if="sourceInfo">
       <!-- Models and other data products have no photo; a platform's shows
            when there is one (see photoURL) -->
@@ -357,10 +358,14 @@ export default {
       if (this.hfrPlatformKind || !selection?.stationId) return null;
       return { id: selection.stationId, network: selection.network };
     },
-    // A data source picked in the HFR Compare view (see GUIManager.hfrSourceInfo)
+    // A data source picked in the HFR Compare view (see GUIManager.hfrSourceInfo),
+    // or the source of the HFR Point view's selected hour
+    // (GUIManager.hfrDataPointSourceInfo)
     sourceInfo() {
       if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Compare' && this.$gui.hfrSourceInfo)
         return this.$gui.hfrSourceInfo;
+      if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Point' && this.$gui.hfrDataPointSourceInfo)
+        return this.$gui.hfrDataPointSourceInfo;
       return this.euNetworkInfo;
     },
     // A station or the Total of another network than ICATMAR's, as the EU HFR
