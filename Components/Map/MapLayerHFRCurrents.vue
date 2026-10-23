@@ -72,6 +72,7 @@ export default {
     this.$gui.hfrCursor = null;
     this.removeParticles();
     if (this.pointLayer) this.map?.removeLayer(this.pointLayer);
+    if (this.clickSpinner) this.map?.removeOverlay(this.clickSpinner);
     this.$gui.hfrFieldStatus = { state: 'loading' };
     this.$gui.hfrAvailability = [];
   },
@@ -124,6 +125,9 @@ export default {
       const request = (this.request ?? 0) + 1;
       this.request = request;
       this.$gui.hfrFieldStatus = { state: 'loading', time };
+      // Until it is in, a click doesn't take its grid point from the map on
+      // screen (see onClick)
+      this.fieldOf = null;
       // Only the selected hour's map, never another hour's in its place
       let field = null;
       try {
@@ -134,8 +138,14 @@ export default {
       // A newer request (the handle moved on) wins
       if (request !== this.request) return;
       this.field = field;
+      // Which hour and provider it is the map of, for a click (see onClick)
+      this.fieldOf = { hour: time.getTime(), provider: source };
+      // Always where the map is from: the source, and its dataset or file
+      // where it is one (a map of several networks has one per network) -
+      // with its page, which the status links to
       this.$gui.hfrFieldStatus = field
-        ? { state: 'ok', time: field.time, label: field.isFallback ? `${field.label} (${this.$t('from')} ${field.source})` : field.label }
+        ? { state: 'ok', time: field.time, url: field.url,
+          label: `${field.label} (${this.$t('from')} ${field.source}${field.dataset ? ` · ${field.dataset}` : ''})` }
         : { state: 'none', time };
       this.updateParticles();
       this.updateGridPoints();
@@ -323,7 +333,27 @@ export default {
       // DPHFRTotals.nearestGridPoint)
       const [clickLon, clickLat] = ol.proj.toLonLat(event.coordinate);
       const time = new Date(this.$gui.selectedTime);
-      const cell = await this.$dataService.hfrtotals.nearestGridPoint(time, this.$gui.hfrSource, clickLon, clickLat);
+      const click = (this.clickToken ?? 0) + 1;
+      this.clickToken = click;
+      let cell = null;
+      if (this.field && this.fieldOf?.hour === this.selectedHour().getTime() && this.fieldOf.provider === this.$gui.hfrSource) {
+        // The map on screen is this hour's: its grid point, no request (and
+        // no earlier click's spinner left)
+        this.hideClickSpinner();
+        const found = this.cellAt(clickLon, clickLat);
+        cell = found.cell ? { lon: found.cell.lon, lat: found.cell.lat, network: found.network } : null;
+      } else {
+        // Asked of the sources instead (the map is still loading): a spinner
+        // where it was clicked meanwhile - a newer click takes it over
+        this.showClickSpinner(event.coordinate);
+        try {
+          cell = await this.$dataService.hfrtotals.nearestGridPoint(time, this.$gui.hfrSource, clickLon, clickLat);
+        } catch (error) {
+          console.error('HF radar grid point at the click:', error);
+        }
+        if (click !== this.clickToken) return;
+        this.hideClickSpinner();
+      }
       if (!cell) return;
       // Both forms of the place, so Compare and Point can be switched between:
       // the Point view is about that grid point, its every variable; Compare
@@ -336,6 +366,20 @@ export default {
       const comparePoint = { lon: clickLon, lat: clickLat, kind: 'point', id: 'point', name, network: cell.network };
       if (this.$gui.hfrMapClickOpensPoint) this.$gui.openHFRDataPoint(dataPoint, time, comparePoint);
       else this.$gui.openHFRPoint(comparePoint, time, dataPoint);
+    },
+    // The click's spinner (see onClick): one overlay, moved to each click
+    showClickSpinner(coordinate) {
+      if (!this.clickSpinner) {
+        const element = document.createElement('div');
+        element.className = 'map-click-spinner';
+        element.innerHTML = '<span class="spinner-border"></span>';
+        this.clickSpinner = new ol.Overlay({ element, positioning: 'center-center', stopEvent: false });
+        this.map.addOverlay(this.clickSpinner);
+      }
+      this.clickSpinner.setPosition(coordinate);
+    },
+    hideClickSpinner() {
+      this.clickSpinner?.setPosition(undefined);
     },
 
     // GRID POINTS

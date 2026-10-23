@@ -3,6 +3,8 @@
        itself on it (MapCircleArrows is laid out around its parent's middle). -->
   <div class="point-arrows-anchor" ref="anchor">
     <MapCircleArrows v-if="isShown" :items="items" />
+    <!-- While the bottom section is loading the place's data -->
+    <div v-if="isLoading" class="map-click-spinner point-spinner"><span class="spinner-border"></span></div>
   </div>
 </template>
 
@@ -54,6 +56,12 @@ export default {
     isShown() {
       return this.radialPoint ? this.items.length > 0 : this.$gui.isHFRPointCircleShown;
     },
+    // The bottom section still loading the place's data (Compare's rows, the
+    // Point view's series)
+    isLoading() {
+      const g = this.$gui;
+      return g.selectedDashboard === 'hfr' && g.isDataTimelineOpen && this.place != null && g.hfrPointLoading;
+    },
   },
   watch: {
     place() { this.updatePosition(); },
@@ -68,6 +76,14 @@ export default {
   position: relative;
   width: 0;
   height: 0;
+}
+
+/* Centred on the place, over the circle's centre (styles/mapOverlays.css) */
+.point-spinner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
 }
 
 /* The circle must not block dragging the map; only the units stay clickable */

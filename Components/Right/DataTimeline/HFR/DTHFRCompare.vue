@@ -94,6 +94,7 @@ export default {
     this.$gui.hfrPointArrows = [];
     this.$gui.hfrPointReading = null;
     this.$gui.hfrComparePoints = [];
+    this.$gui.hfrPointLoading = false;
   },
   methods: {
     // Every source at once; each row fills in as its own answer lands
@@ -331,6 +332,7 @@ export default {
         'ICATMAR ERDDAP': this.$t("ICATMAR's ERDDAP (ICATMAR's processing)"),
         'EU HFR Node': this.$t("the EU HFR Node's ERDDAP (the node's processing)"),
         'GitHub': this.$t("ICATMAR's GitHub for the newest hours (ICATMAR's processing)"),
+        'Static files': this.$t("the app's own files, when every other source fails"),
       };
       // The ERDDAPs' series, and for ICATMAR the GitHub files of the hours
       // they don't have yet (see fillFromGithub)
@@ -519,6 +521,8 @@ export default {
   },
   watch: {
     '$gui.hfrPoint'() { this.load(); },
+    // A spinner at the place on the map while any of its rows is on its way
+    loading: { immediate: true, handler(loading) { this.$gui.hfrPointLoading = Object.values(loading).some(Boolean); } },
     selectionKey: { immediate: true, handler() { this.publishSelection(); this.fillFromGithub(); } },
     // The source described in the info panel, built from its row's data when
     // it was clicked: built again when that row's readings change (its

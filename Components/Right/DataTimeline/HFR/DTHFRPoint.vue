@@ -105,6 +105,7 @@ export default {
     this.$gui.hfrDataPointValues = [];
     this.$gui.hfrDataPointOrigin = null;
     this.$gui.hfrDataPointSourceInfo = null;
+    this.$gui.hfrPointLoading = false;
   },
   methods: {
     // The width of the timeline's view, kept up to date: what the toggle's
@@ -181,9 +182,13 @@ export default {
       } catch (error) {
         console.error('Point view, GitHub hours:', error);
       }
-      const todo = hours.filter(key => s.data[velocityName]?.[key] == undefined).slice(-(p.kind === 'radial' ? GITHUB_FILL_RADIAL_HOURS : GITHUB_FILL_HOURS));
-      // The files' velocity components go under whatever this series calls them
-      const rename = { EWCT: s.eastward, NSCT: s.northward };
+      // The hours no ERDDAP has - or only the static files, which come after
+      // GitHub (see the catalogue's order)
+      const fromStatic = key => s.origins?.[key]?.source === 'Static files';
+      const todo = hours.filter(key => s.data[velocityName]?.[key] == undefined || fromStatic(key)).slice(-(p.kind === 'radial' ? GITHUB_FILL_RADIAL_HOURS : GITHUB_FILL_HOURS));
+      // The files' values go under whatever this series calls the same
+      // quantity (EWCT is ICATMAR's ERDDAP's u)
+      const nameOf = name => p.kind === 'radial' ? name : this.$dataService.hfrtotals.seriesName(s, name);
       await Promise.all(todo.map(async key => {
         let found;
         try {
@@ -195,11 +200,13 @@ export default {
           console.error(`Point view, GitHub ${key}:`, error);
         }
         if (!found || request !== this.request || this.series !== s) return;
+        // A static file's hour: nothing of it left
+        if (fromStatic(key)) Object.values(s.data).forEach(values => { delete values[key]; });
         Object.entries(found.values).forEach(([name, value]) => {
-          const target = rename[name] ?? name;
+          const target = nameOf(name);
           if (s.data[target]) s.data[target][key] = value;
         });
-        (s.origins ??= {})[key] = { ...found.origin, cell: found.cell };
+        (s.origins ??= {})[key] = { ...found.origin, source: 'GitHub', cell: found.cell };
       }));
       if (request === this.request) this.publish();
     },
@@ -293,17 +300,19 @@ export default {
           flag: row.kind === 'qc' ? value : undefined,
         };
       });
-      // Where the selected hour came from: the GitHub file it was filled from,
-      // or the series' ERDDAP dataset
+      // Where the selected hour came from: its own origin (sources fill the
+      // series hour by hour - ICATMAR's ERDDAP, the EU HFR Node, GitHub, the
+      // static files), or the series' ERDDAP dataset
       const s = this.series;
       const key = index >= 0 && index < this.cells.length ? new Date(this.cells[index] + 3600000).toISOString() : null;
-      const fromGithub = key && s?.origins?.[key];
+      const hourOrigin = key && s?.origins?.[key];
       // An hour with no value anywhere has no source to name
       const hasValue = index >= 0 && this.rows.some(row => this.binned[row.key]?.[index] != undefined);
       // `source`: the data source's own label, for the detail's grid (see
       // DPHFRTotals.getGridPoints)
-      const origin = !hasValue ? null : fromGithub ? { ...fromGithub, source: 'GitHub' } : s?.dataset ? {
-        label: s.source === 'EU HFR Node' ? 'EU HFR Node ERDDAP' : s.source, source: s.source, dataset: s.dataset, cell: s.cell,
+      const ownLabel = source => source === 'EU HFR Node' ? 'EU HFR Node ERDDAP' : source;
+      const origin = !hasValue ? null : hourOrigin ? { ...hourOrigin, label: hourOrigin.source === 'EU HFR Node' ? ownLabel(hourOrigin.source) : hourOrigin.label } : s?.dataset ? {
+        label: ownLabel(s.source), source: s.source, dataset: s.dataset, cell: s.cell,
         url: `${s.source === 'ICATMAR ERDDAP' ? 'https://erddap.icatmar.cat' : 'https://erddap.hfrnode.eu'}/erddap/info/${s.dataset}/index.html`,
       } : null;
       // The dataset or file itself, before the cell is written into it below
@@ -332,7 +341,7 @@ export default {
       const fromGithub = origin.source === 'GitHub';
       const isRadial = p.kind === 'radial';
       // A GitHub hour is its own file; an ERDDAP dataset is the same for every hour
-      const id = `${this.pointKey}|${origin.source}|${origin.datasetId}|${fromGithub ? hourKey : ''}`;
+      const id = `${this.pointKey}|${origin.source}|${origin.datasetId}|${fromGithub || origin.source === 'Static files' ? hourKey : ''}`;
       if (id === this.describedKey) {
         // Same source: only "This hour" follows the hour
         const info = this.$gui.hfrDataPointSourceInfo;
@@ -348,7 +357,7 @@ export default {
         subtitle: network ? `${this.$t('Network')} ${network}` : undefined,
         rows: [
           this.thisHourRow(origin),
-          { label: 'Processing', value: this.$t(fromGithub || origin.source === 'ICATMAR ERDDAP'
+          { label: 'Processing', value: this.$t(origin.source !== 'EU HFR Node'
             ? "ICATMAR's own processing of its radars"
             : "The EU HFR Node's processing of the network's radars"), long: true },
           isRadial
@@ -485,6 +494,8 @@ export default {
   },
   watch: {
     pointKey() { this.load(); },
+    // A spinner at the place on the map while its series is on its way
+    loading: { immediate: true, handler(loading) { this.$gui.hfrPointLoading = loading; } },
     selectedIndex() { this.publish(); },
     '$gui.hfrPointShowTechnical'() { this.publish(); },
   },

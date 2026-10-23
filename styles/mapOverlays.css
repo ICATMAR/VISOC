@@ -92,3 +92,25 @@
   border-radius: 50%;
   animation: .75s linear infinite spinner-border;
 }
+
+/* Where the map was clicked on the HFR dashboard, while the grid point there
+   is looked up (MapLayerHFRCurrents.showClickSpinner): a spinner on a white
+   disc, readable over the particles and any basemap */
+.map-click-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  /* background: rgba(255, 255, 255, 0.9); */
+  /* box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); */
+  pointer-events: none;
+}
+
+.map-click-spinner .spinner-border {
+  width: 12px;
+  height: 12px;
+  border-width: 2.5px;
+  color: white;
+}

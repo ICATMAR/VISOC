@@ -120,30 +120,43 @@ const dataProducts = [
     Class: DPHFRTotals,
     description: "Surface currents from the ICATMAR's high-frequency radar network (combined stations)",
     type: 'near-real-time',
+    // In order of preference: for ICATMAR's network an hour (of the map, a
+    // point's series, the Point view, the network timeline's TOTALS count)
+    // comes from the first of these that has it - ICATMAR's ERDDAP (recent,
+    // then historic), the EU HFR Node, ICATMAR's GitHub, and the static files
+    // when every external service fails. See DPHFRTotals.
     sources: [
-      // Recent
+      // ICATMAR's ERDDAP, recent: a rolling window of the last ~2 weeks, up
+      // to the latest hour ICATMAR has processed
       {
-        Class: SourceErddap,
+        Class: SourceErddapHFRadars,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
-        dataset: 'HF_radar_L3B_recent',
+        provider: 'ICATMAR',
+        label: 'ICATMAR ERDDAP',
+        datasets: ['HF_radar_L3B_recent'],
+        network: 'ICATMAR',
+        eastward: 'u',
+        northward: 'v',
+        countVariable: 'qcflag',
         institution: 'ICATMAR',
-        mapping: {
-          u: {code: 'EWCT'},
-          v: {code: 'NSCT'},
-        }
       },
-      // Historical
+      // ICATMAR's ERDDAP, historic: one dataset per processing version (v1
+      // 2023-04 to 2026-03, v2 to 2026-09); a new version is picked up on its
+      // own, the newest preferred where they overlap
       {
-        Class: SourceErddap,
+        Class: SourceErddapHFRadars,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
-        dataset: 'HF_Radar_L3B_Historic',
+        provider: 'ICATMAR',
+        label: 'ICATMAR ERDDAP',
+        datasetPattern: '^HF_Radar_L3B_Historic_v\\d+$',
+        network: 'ICATMAR',
+        eastward: 'u',
+        northward: 'v',
+        countVariable: 'qcflag',
         institution: 'ICATMAR',
-        mapping: {
-          u: {code: 'EWCT'},
-          v: {code: 'NSCT'},
-        }
       },
-      // EU HFR Node
+      // EU HFR Node: the count of the network's Total (its _table), for the
+      // network timeline - not a map source
       {
         Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
@@ -152,24 +165,7 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
         ],
       },
-      // Maps (for the HFR dashboard's animation), by provider - see
-      // DPHFRTotals.getField. ICATMAR: its own ERDDAP first, then the EU HFR
-      // Node's copy of its network, then GitHub (further down) for the newest
-      // hours.
-      {
-        Class: SourceErddapHFRadars,
-        src: 'https://erddap.icatmar.cat/erddap/index.html',
-        provider: 'ICATMAR',
-        label: 'ICATMAR ERDDAP',
-        // One dataset per processing version (v1 2023-03/2026, v2 to 09/2026,
-        // v3 since - the live one); a new version is picked up on its own
-        datasetPattern: '^HF_Radar_L3B_Historic_v\\d+$',
-        network: 'ICATMAR',
-        eastward: 'u',
-        northward: 'v',
-        countVariable: 'qcflag',
-        institution: 'ICATMAR',
-      },
+      // EU HFR Node: its copy of ICATMAR's network, gridded
       {
         Class: SourceErddapHFRadars,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
@@ -192,7 +188,7 @@ const dataProducts = [
         useProxy: false,
         institution: 'EU HFR Node',
       },
-      // Github - also the newest hours of ICATMAR's totals maps
+      // Github - the newest hours, before either ERDDAP has them
       {
         Class: SourceGithubHFR,
         institution: 'ICATMAR',
@@ -200,9 +196,12 @@ const dataProducts = [
         provider: 'ICATMAR',
         label: 'GitHub',
       },
-      // Static file
+      // Static files - the last resort, so the dashboard still shows
+      // something (these hours) when every external service fails
       {
         Class: SourceFileHFRTotals,
+        provider: 'ICATMAR',
+        label: 'Static files',
         paths: [
           './Data/hfr/totals/TOTL_CATS_2026_07_25_0900.tuv',
           './Data/hfr/totals/TOTL_CATS_2026_07_25_1000.tuv',

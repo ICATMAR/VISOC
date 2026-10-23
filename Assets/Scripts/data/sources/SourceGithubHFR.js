@@ -1,6 +1,6 @@
 import Source from './Source.js';
 import VectorField from '../VectorField.js';
-import { parseTuv } from '../parsers/tuv.js';
+import { parseTuv, tuvPoints, tuvCell } from '../parsers/tuv.js';
 import { bearingAwayFrom } from '../geo.js';
 
 const GITHUB_API_URL = 'https://api.github.com/repos';
@@ -108,10 +108,10 @@ const TOTALS_TTL = 60;     // minutes - a published hour doesn't change
 // purpose is finding out how fresh each station's data currently is.
 const TREE_TTL_MINUTES = 10;
 
-// .ruv / .tuv columns that are the EU HFR Node's variables under another
-// name or unit: what the Point view merges them into (cm/s -> m/s). Columns
-// only the files have are left out (the Point view follows ERDDAP's
-// variables).
+// .ruv columns that are the EU HFR Node's variables under another name or
+// unit: what the Point view merges them into (cm/s -> m/s). Columns only the
+// files have are left out (the Point view follows ERDDAP's variables). The
+// .tuv's are in parsers/tuv.js (TUV_TO_STANDARD).
 const RUV_TO_STANDARD = {
   ESPC: { name: 'ESPC', scale: 0.01 }, ETMP: { name: 'ETMP', scale: 0.01 },
   // The .ruv's velocities are positive TOWARDS the antenna; the EU HFR Node
@@ -120,11 +120,6 @@ const RUV_TO_STANDARD = {
   MAXV: { name: 'MAXV', scale: -0.01 }, MINV: { name: 'MINV', scale: -0.01 },
   ERSC: { name: 'ERSC' }, ERTC: { name: 'ERTC' }, SPRC: { name: 'SPRC' },
   PRIM: { name: 'QCflag' },
-};
-const TUV_TO_STANDARD = {
-  VELU: { name: 'EWCT', scale: 0.01 }, VELV: { name: 'NSCT', scale: 0.01 },
-  UQAL: { name: 'EWCS', scale: 0.01 }, VQAL: { name: 'NSCS', scale: 0.01 },
-  CQAL: { name: 'CCOV', scale: 0.0001 }, GDOP: { name: 'GDOP' },
 };
 
 function pad(n) {
@@ -427,11 +422,10 @@ class SourceGithubHFR extends Source {
       this.totalsMaps.set(key, (async () => {
         const file = await this.totalsFile(hour);
         if (!file) return null;
-        const { rows } = file;
-        const points = rows
-          .filter(row => (row.VFLG ?? 0) === 0 && Number.isFinite(row.VELU) && Number.isFinite(row.VELV))
-          .map(row => ({ lon: row.LOND, lat: row.LATD, u: row.VELU / 100, v: row.VELV / 100 }));
-        return VectorField.fromPoints(points, hour, 'ICATMAR');
+        const field = VectorField.fromPoints(tuvPoints(file.rows), hour, 'ICATMAR');
+        // Which file it is from, and where
+        if (field) Object.assign(field, { dataset: this.originOf(this.totalsUrl(hour)).dataset, url: this.totalsUrl(hour) });
+        return field;
       })().catch(error => { this.totalsMaps.delete(key); throw error; }));
       if (this.totalsMaps.size > TOTALS_MAP_CACHE_SIZE) this.totalsMaps.delete(this.totalsMaps.keys().next().value);
     }
@@ -515,18 +509,8 @@ class SourceGithubHFR extends Source {
   async getTotalsCell(hour, lon, lat) {
     const file = await this.totalsFile(hour);
     if (!file) return null;
-    let best, bestD = Infinity;
-    file.rows.forEach(row => {
-      const d = Math.hypot((row.LOND - lon) * Math.cos(lat * Math.PI / 180), row.LATD - lat);
-      if (d < bestD) { bestD = d; best = row; }
-    });
-    // Half a 3 km cell, in degrees
-    if (!best || bestD > 0.015) return null;
-    const values = {};
-    Object.entries(TUV_TO_STANDARD).forEach(([column, { name, scale }]) => {
-      if (Number.isFinite(best[column])) values[name] = best[column] * (scale ?? 1);
-    });
-    return { values, cell: { latitude: best.LATD, longitude: best.LOND }, origin: this.originOf(this.totalsUrl(hour)) };
+    const found = tuvCell(file.rows, lon, lat);
+    return found ? { ...found, origin: this.originOf(this.totalsUrl(hour)) } : null;
   }
 
   // ICATMAR's totals .tuv for an hour, parsed - shared by the maps and the

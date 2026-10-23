@@ -52,6 +52,9 @@ const hourOf = time => new Date(Math.floor((time.getTime() + HALF_HOUR_MS) / 360
 // After a failed load(), how long before it is tried again - not on every
 // call, which would keep a rate-limited server (HTTP 429) limiting
 const RETRY_AFTER_MS = 60 * 1000;
+// When the server's dataset list doesn't have the source's datasets (see
+// loadDatasets), how long before it is read again
+const MISSING_RECHECK_MS = 10 * 60 * 1000;
 
 // Availability counts: every COUNT_STRIDE-th cell in each direction, which is
 // plenty to tell a full map from a thin one at a quarter of the download.
@@ -142,10 +145,15 @@ class SourceErddapHFRadars extends Source {
 
   // load(), again if it failed - but no sooner than RETRY_AFTER_MS after the
   // failure (a server down for a moment shouldn't leave the source empty for
-  // the rest of the session, nor be asked again on every call)
+  // the rest of the session, nor be asked again on every call) - or if the
+  // server's dataset list didn't have this source's datasets, MISSING_RECHECK_MS
+  // after reading it
   ready() {
-    if (this.failedAt && Date.now() - this.failedAt > RETRY_AFTER_MS) {
+    const retry = this.failedAt && Date.now() - this.failedAt > RETRY_AFTER_MS;
+    const recheck = this.missingAt && Date.now() - this.missingAt > MISSING_RECHECK_MS;
+    if (retry || recheck) {
       this.failedAt = undefined;
+      this.missingAt = undefined;
       this.loadingPromise = this.load();
     }
     return this.loadingPromise;
@@ -169,7 +177,20 @@ class SourceErddapHFRadars extends Source {
     const found = allDatasets.filter(d => this.datasetPattern
       ? this.datasetPattern.test(d['datasetID'])
       : this.datasets.includes(d['datasetID']));
-    if (found.length === 0) throw new Error(`No HF radar totals found on ${this.src}`);
+    if (found.length === 0) {
+      // Not on the server for now - ERDDAP unloads a dataset while it can't
+      // load it (ICATMAR's recent one does, at times). Not an error: the
+      // source has no data, so every call answers "nothing" without asking
+      // anything, and the list is read again in MISSING_RECHECK_MS
+      if (!this.isMissing) console.warn(`HF radar totals ${this.datasets ?? this.datasetPattern} not on ${this.src} for now`);
+      this.isMissing = true;
+      this.missingAt = Date.now();
+      this.networks = [];
+      this.startDate = this.endDate = undefined;
+      return;
+    }
+    if (this.isMissing) console.info(`HF radar totals back on ${this.src}`);
+    this.isMissing = false;
 
     this.networks = found.map(d => ({
       dataset: d['datasetID'],
@@ -186,13 +207,30 @@ class SourceErddapHFRadars extends Source {
   }
 
   // The networks in `bbox` ([minLon, minLat, maxLon, maxLat], what is in
-  // view) with data since `since`, the preferred one first
+  // view) with data since `since`, the preferred one first - and where a
+  // network has several datasets (ICATMAR's processing versions), its newest
+  // first: the one an hour is read from where versions overlap
   async networksIn(bbox, since) {
     await this.ready();
+    const end = n => n.endDate?.getTime() ?? Infinity;
     return this.networks
       .filter(n => !bbox || !n.bbox.every(Number.isFinite) || intersects(n.bbox, bbox))
       .filter(n => !since || !n.endDate || n.endDate >= since)
-      .sort((a, b) => (b.network === this.preferNetwork) - (a.network === this.preferNetwork));
+      .sort((a, b) => ((b.network === this.preferNetwork) - (a.network === this.preferNetwork))
+        || (end(b) === end(a) ? 0 : end(b) > end(a) ? 1 : -1));
+  }
+
+  // networksIn's entries grouped by network, each group in networksIn's
+  // order: [[dataset entries of one network], ...]
+  static byNetwork(networks) {
+    const groups = new Map();
+    networks.forEach(n => groups.set(n.network, [...(groups.get(n.network) ?? []), n]));
+    return [...groups.values()];
+  }
+
+  // Where a value read from one of this source's datasets came from
+  originOf(dataset) {
+    return { label: this.label, source: this.label, dataset, url: `${this.baseUrl}/info/${dataset}/index.html` };
   }
 
   // The time of the newest map of any network in `bbox`
@@ -203,20 +241,106 @@ class SourceErddapHFRadars extends Source {
 
   // The map for the hour `time`, or null if no network has one. Every network
   // in `bbox` with a map in that hour (see inHour) is merged into one field; a
-  // network without one is left out, never shown at another time.
+  // network without one is left out, never shown at another time. A network
+  // with several datasets (versions) gives the first of them with a map for
+  // the hour - two versions are never merged.
   async getField(time, bbox) {
     const networks = await this.networksIn(bbox, new Date(time.getTime() - HALF_HOUR_MS));
 
-    const fields = await Promise.all(networks.map(n => this.mapAt(n, time).catch(error => {
-      console.error(`HF radar currents from ${n.dataset}:`, error);
+    const fields = await Promise.all(SourceErddapHFRadars.byNetwork(networks).map(async versions => {
+      for (const n of versions) {
+        try {
+          const field = await this.mapAt(n, time);
+          if (field) return field;
+        } catch (error) {
+          console.error(`HF radar currents from ${n.dataset}:`, error);
+        }
+      }
       return null;
-    })));
+    }));
     const found = fields.filter(Boolean);
     const merged = VectorField.merge(found);
     // The networks it was made from, each on its own grid - where the data
     // points really are (the merged grid is only for the animation)
     if (merged) merged.parts = found;
+    // A map of several networks (datasets) links to the server itself
+    if (merged && found.length > 1) merged.url = this.src;
     return merged;
+  }
+
+  // The grid point with data nearest (lon, lat) on the hour's map, no further
+  // than one grid spacing in either direction (VectorField.nearestCell's
+  // rule) - asked of ERDDAP for just the cells around the point, one small
+  // .csv per network (a dataset of each, as getField picks it), rather than
+  // read from whole maps:
+  //   { lon, lat, network, distance (in km, see VectorField.distanceKm) }
+  // null when the hour has a map but no data near the point, undefined when
+  // no network has a map for the hour (so another source's is asked).
+  async nearestGridPoint(time, lon, lat) {
+    const bbox = [lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1];
+    const networks = await this.networksIn(bbox, new Date(time.getTime() - HALF_HOUR_MS));
+    let hasMap = false;
+    let best = null;
+    await Promise.all(SourceErddapHFRadars.byNetwork(networks).map(async versions => {
+      for (const n of versions) {
+        let cells;
+        try {
+          cells = await this.cellsAround(n, time, lon, lat);
+        } catch (error) {
+          console.error(`HF radar grid points from ${n.dataset}:`, error);
+          continue;
+        }
+        if (cells === undefined) continue; // no map for the hour in this version
+        hasMap = true;
+        cells.forEach(cell => { if (!best || cell.distance < best.distance) best = cell; });
+        return;
+      }
+    }));
+    return best ?? (hasMap ? null : undefined);
+  }
+
+  // A network's cells with data within one grid spacing of (lon, lat) on its
+  // map of the hour `time` (see mapAt): [{ lon, lat, network, distance }] -
+  // undefined when it has no map for the hour
+  async cellsAround(network, time, lon, lat) {
+    const times = (await this.timesAround(network, time)).filter(t => inHour(t, time));
+    if (times.length === 0) return undefined;
+    const best = times.reduce((a, b) => Math.abs(b - time) < Math.abs(a - time) ? b : a);
+    const { dimensions, axes } = await this.grid(network.dataset);
+    const dLon = (axes.lonMax - axes.lonMin) / (axes.nx - 1);
+    const dLat = (axes.latMax - axes.latMin) / (axes.ny - 1);
+    // One spacing either way, within the grid - asking outside it is an error
+    const lon0 = Math.max(lon - dLon, axes.lonMin), lon1 = Math.min(lon + dLon, axes.lonMax);
+    const lat0 = Math.max(lat - dLat, axes.latMin), lat1 = Math.min(lat + dLat, axes.latMax);
+    if (lon0 > lon1 || lat0 > lat1) return [];
+    const selectors = encodeURIComponent((dimensions[this.eastward] ?? ['time', 'depth', 'latitude', 'longitude']).map(dimension => {
+      if (dimension === 'time') return `[(${stamp(best)})]`;
+      if (dimension === 'latitude') return `[(${lat0}):1:(${lat1})]`;
+      if (dimension === 'longitude') return `[(${lon0}):1:(${lon1})]`;
+      return '[0]';
+    }).join(''));
+    const url = `${this.baseUrl}/griddap/${network.dataset}.csv?${this.eastward}${selectors}`;
+    let text;
+    try {
+      // A published map doesn't change
+      text = await this.fetchManager.fetch(this.url(url), IMAGE_TTL, TIMEOUT).then(res => res.text());
+    } catch (error) {
+      if (error.name === 'HTTPError') return [];
+      throw error;
+    }
+    const lines = text.trim().split(/\r?\n/);
+    const header = lines[0].split(',');
+    const at = name => header.indexOf(name);
+    const cells = [];
+    lines.slice(2).forEach(line => {
+      const row = line.split(',');
+      const value = Number(row[at(this.eastward)]);
+      if (row[at(this.eastward)] === 'NaN' || !Number.isFinite(value)) return;
+      const cellLon = Number(row[at('longitude')]), cellLat = Number(row[at('latitude')]);
+      if (Math.abs(cellLon - lon) > dLon || Math.abs(cellLat - lat) > dLat) return;
+      cells.push({ lon: cellLon, lat: cellLat, network: network.network, distance: VectorField.distanceKm(lon, lat, cellLon, cellLat) });
+    });
+    return cells;
   }
 
   // A network's map for the hour `time` - the one closest to it within the
@@ -272,7 +396,14 @@ class SourceErddapHFRadars extends Source {
       this.fetchImageData(this.imageUrl(network.dataset, this.eastward, time, dimensions, axes)),
       this.fetchImageData(this.imageUrl(network.dataset, this.northward, time, dimensions, axes)),
     ]);
-    return VectorField.fromGrayImages(east, north, axes, RANGE, time, network.network);
+    const field = VectorField.fromGrayImages(east, north, axes, RANGE, time, network.network);
+    // Which dataset it is from (one network's - a merge of several has none),
+    // and its page
+    if (field) {
+      field.dataset = network.dataset;
+      field.url = this.originOf(network.dataset).url;
+    }
+    return field;
   }
 
   url(url) {
@@ -382,53 +513,73 @@ class SourceErddapHFRadars extends Source {
   // [startDate, endDate] - the velocity and every other gridded variable
   // (errors, GDOP, coverage, QC flags...) - for the HFR dashboard's Point
   // view. The cell nearest (lon, lat), in the dataset of `network` (or the
-  // first covering the point). One griddap request.
+  // first covering the point). One griddap request per dataset of the network
+  // in the window - its versions, the newest first, an hour coming from the
+  // first that has it (see networksIn).
   //   { network, dataset, cell: { latitude, longitude }, eastward, northward,
-  //     variables: [{ name, attributes }], data: { <name>: { '<ISO hour>': value } } }
+  //     variables: [{ name, attributes }], data: { <name>: { '<ISO hour>': value } },
+  //     origins: { '<ISO hour>': { label, source, dataset, url, cell } } }
+  // `dataset` and `cell` are the first dataset's; `origins` says each hour's.
   // null when no dataset covers the point.
   async getCellSeries(network, lon, lat, startDate, endDate) {
     const networks = (await this.networksIn([lon, lat, lon, lat], startDate))
       .filter(n => !n.startDate || n.startDate <= endDate);
-    const chosen = networks.find(n => n.network === network) ?? networks[0];
-    if (!chosen) return null;
-    const { dimensions, attributes } = await this.grid(chosen.dataset);
-    const shape = (dimensions[this.eastward] ?? []).join(',');
-    const names = Object.keys(dimensions).filter(name => dimensions[name].length > 1 && dimensions[name].join(',') === shape);
-    const from = chosen.startDate && startDate < chosen.startDate ? chosen.startDate : startDate;
-    const to = chosen.endDate && endDate >= chosen.endDate ? 'last' : `(${stamp(endDate)})`;
-    const selectors = encodeURIComponent(dimensions[this.eastward].map(dimension => {
-      if (dimension === 'time') return `[(${stamp(from)}):1:${to}]`;
-      if (dimension === 'latitude') return `[(${lat})]`;
-      if (dimension === 'longitude') return `[(${lon})]`;
-      return '[0]';
-    }).join(''));
-    const url = `${this.baseUrl}/griddap/${chosen.dataset}.csv?${names.map(name => name + selectors).join(',')}`;
-    let text;
-    try {
-      text = await this.fetchManager.fetch(this.url(url), TIMES_TTL, TIMEOUT).then(res => res.text());
-    } catch (error) {
-      if (error.name === 'HTTPError') return null;
-      throw error;
-    }
-    const lines = text.trim().split(/\r?\n/);
-    const header = lines[0].split(',');
-    const at = name => header.indexOf(name);
-    const result = {
-      network: chosen.network, dataset: chosen.dataset, cell: undefined,
-      eastward: this.eastward, northward: this.northward,
-      variables: names.map(name => ({ name, attributes: attributes[name] ?? {} })),
-      data: Object.fromEntries(names.map(name => [name, {}])),
-    };
-    lines.slice(2).forEach(line => {
-      const cells = line.split(',');
-      const key = hourOf(new Date(cells[at('time')])).toISOString();
-      result.cell ??= { latitude: Number(cells[at('latitude')]), longitude: Number(cells[at('longitude')]) };
+    const name = networks.some(n => n.network === network) ? network : networks[0]?.network;
+    let result = null;
+    for (const chosen of networks.filter(n => n.network === name)) {
+      const { dimensions, attributes } = await this.grid(chosen.dataset);
+      const shape = (dimensions[this.eastward] ?? []).join(',');
+      const names = Object.keys(dimensions).filter(name => dimensions[name].length > 1 && dimensions[name].join(',') === shape);
+      const from = chosen.startDate && startDate < chosen.startDate ? chosen.startDate : startDate;
+      const to = chosen.endDate && endDate >= chosen.endDate ? 'last' : `(${stamp(endDate)})`;
+      const selectors = encodeURIComponent(dimensions[this.eastward].map(dimension => {
+        if (dimension === 'time') return `[(${stamp(from)}):1:${to}]`;
+        if (dimension === 'latitude') return `[(${lat})]`;
+        if (dimension === 'longitude') return `[(${lon})]`;
+        return '[0]';
+      }).join(''));
+      const url = `${this.baseUrl}/griddap/${chosen.dataset}.csv?${names.map(name => name + selectors).join(',')}`;
+      let text;
+      try {
+        text = await this.fetchManager.fetch(this.url(url), TIMES_TTL, TIMEOUT).then(res => res.text());
+      } catch (error) {
+        if (error.name === 'HTTPError') continue; // nothing there in the window
+        throw error;
+      }
+      const lines = text.trim().split(/\r?\n/);
+      const header = lines[0].split(',');
+      const at = name => header.indexOf(name);
+      result ??= {
+        network: chosen.network, dataset: chosen.dataset, cell: undefined,
+        eastward: this.eastward, northward: this.northward,
+        variables: [], data: {}, origins: {},
+      };
       names.forEach(name => {
-        const raw = cells[at(name)];
-        const value = Number(raw);
-        if (raw !== 'NaN' && raw !== '' && Number.isFinite(value) && result.data[name][key] == undefined) result.data[name][key] = value;
+        if (result.data[name]) return;
+        result.variables.push({ name, attributes: attributes[name] ?? {} });
+        result.data[name] = {};
       });
-    });
+      // The hours an earlier (newer) version already has stay its own
+      const taken = new Set(Object.keys(result.origins));
+      let cell;
+      lines.slice(2).forEach(line => {
+        const cells = line.split(',');
+        const key = hourOf(new Date(cells[at('time')])).toISOString();
+        if (taken.has(key)) return;
+        cell ??= { latitude: Number(cells[at('latitude')]), longitude: Number(cells[at('longitude')]) };
+        let found = false;
+        names.forEach(name => {
+          const raw = cells[at(name)];
+          const value = Number(raw);
+          if (raw !== 'NaN' && raw !== '' && Number.isFinite(value) && result.data[name][key] == undefined) {
+            result.data[name][key] = value;
+            found = true;
+          }
+        });
+        if (found) result.origins[key] ??= { ...this.originOf(chosen.dataset), cell };
+      });
+      result.cell ??= cell;
+    }
     return result;
   }
 
@@ -446,23 +597,54 @@ class SourceErddapHFRadars extends Source {
         return {};
       }),
     })));
-    // One row per network, even where it spans several datasets (versions)
+    // One row per network, even where it spans several datasets (versions):
+    // an hour from the first version that has it, as the map takes it
     const byNetwork = new Map();
     rows.forEach(row => {
       const hours = byNetwork.get(row.network)?.hours ?? {};
-      Object.entries(row.hours).forEach(([hour, count]) => { hours[hour] = Math.max(hours[hour] ?? 0, count); });
+      Object.entries(row.hours).forEach(([hour, count]) => { hours[hour] ??= count; });
       byNetwork.set(row.network, { network: row.network, hours });
     });
     return [...byNetwork.values()];
   }
 
-  async countsOf(network, startDate) {
+  // How many grid points the network has, hour by hour in [startDate,
+  // endDate] - every cell, unlike getAvailability's sample, so the counts
+  // compare with the EU HFR Node's and GitHub's for the network timeline:
+  //   { points: { 'YYYY-MM-DDTHH:00:00Z': count }, origins: { <same keys>: origin } }
+  // An hour from the first dataset (version) that has it. One .nc request
+  // per dataset, ~20 KB an hour for ICATMAR's grid.
+  async getValidPointsCount(startDate, endDate = new Date()) {
+    const networks = (await this.networksIn(undefined, startDate))
+      .filter(n => !n.startDate || n.startDate <= endDate);
+    const counts = await Promise.all(networks.map(network => this.countsOf(network, startDate, endDate, 1).catch(error => {
+      console.error(`HF radar point counts from ${network.dataset}:`, error);
+      return {};
+    })));
+    const points = {}, origins = {};
+    counts.forEach((hours, k) => Object.entries(hours).forEach(([hour, count]) => {
+      // Keyed as the EU HFR Node's and GitHub's counts are
+      const key = hour.replace('.000Z', 'Z');
+      if (count === 0 || points[key] != undefined) return;
+      points[key] = count;
+      origins[key] = this.originOf(networks[k].dataset);
+    }));
+    return { points, origins };
+  }
+
+  // A network's count of cells with data, per hour, from `startDate` to
+  // `endDate` (to its latest map without one): every `stride`-th row and
+  // column of countVariable - { '<ISO hour>': count }
+  async countsOf(network, startDate, endDate, stride = COUNT_STRIDE) {
     const { dimensions } = await this.grid(network.dataset);
     const variable = this.countVariable;
+    // Within the dataset's own time range - asking outside it is an error
+    const from = network.startDate && startDate < network.startDate ? network.startDate : startDate;
+    const to = !endDate || (network.endDate && endDate >= network.endDate) ? 'last' : `(${stamp(endDate)})`;
+    if (endDate && from > endDate) return {};
     const selectors = (dimensions[variable] ?? ['time', 'depth', 'latitude', 'longitude']).map(dimension => {
-      // From startDate to whatever the dataset's last time is - asking past it is an error
-      if (dimension === 'time') return `[(${stamp(startDate)}):1:last]`;
-      if (dimension === 'latitude' || dimension === 'longitude') return `[0:${COUNT_STRIDE}:last]`;
+      if (dimension === 'time') return `[(${stamp(from)}):1:${to}]`;
+      if (dimension === 'latitude' || dimension === 'longitude') return `[0:${stride}:last]`;
       return '[0]';
     }).join('');
     const url = `${this.baseUrl}/griddap/${network.dataset}.nc?${variable}${encodeURIComponent(selectors)}`;
@@ -470,7 +652,7 @@ class SourceErddapHFRadars extends Source {
     try {
       buffer = await this.fetchManager.fetch(this.url(url), COUNT_TTL, TIMEOUT).then(res => res.arrayBuffer());
     } catch (error) {
-      if (error.name === 'HTTPError') return {}; // nothing since startDate
+      if (error.name === 'HTTPError') return {}; // nothing in the range
       throw error;
     }
     const file = readNetCDF3(buffer);
@@ -483,7 +665,7 @@ class SourceErddapHFRadars extends Source {
       let count = 0;
       for (let i = k * perTime; i < (k + 1) * perTime; i++) if (values[i] !== fill && !Number.isNaN(values[i])) count++;
       // The hour this map belongs to (see inHour); the fullest map if several do
-      const hour = new Date(Math.floor((seconds * 1000 + HALF_HOUR_MS) / 3600000) * 3600000).toISOString();
+      const hour = hourOf(new Date(seconds * 1000)).toISOString();
       hours[hour] = Math.max(hours[hour] ?? 0, count);
     });
     return hours;

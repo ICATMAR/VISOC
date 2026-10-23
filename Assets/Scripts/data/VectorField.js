@@ -5,7 +5,18 @@
 // southward - the order an image is read in, so a field decoded from a PNG
 // needs no reshuffling. NaN marks a cell with no data (land, or a hole in the
 // radar's coverage).
+
+const KM_PER_DEGREE = 6371 * Math.PI / 180;
+
 class VectorField {
+
+  // The distance between two points, in km - equirectangular (a degree of
+  // longitude shrinks with cos(latitude)): exact enough over a few grid
+  // spacings to rank grid points by, which is all it is for
+  static distanceKm(lon1, lat1, lon2, lat2) {
+    const x = (lon2 - lon1) * Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
+    return Math.hypot(x, lat2 - lat1) * KM_PER_DEGREE;
+  }
 
   constructor({ lonMin, latMax, dLon, dLat, nx, ny, u, v, time, label }) {
     Object.assign(this, { lonMin, latMax, dLon, dLat, nx, ny, u, v, time, label });
@@ -35,8 +46,10 @@ class VectorField {
 
   // The grid point with data nearest a point, no further than one grid
   // spacing in either direction: { lon, lat, u, v, distance } (distance in
-  // grid spacings), or null. What a map click picks: the data points are
-  // what can be compared.
+  // km, see distanceKm - comparable across networks of different spacings),
+  // or null. Found from the grid's layout: only the 3x3 cells around the
+  // point are looked at. What a map click picks: the data points are what
+  // can be compared.
   nearestCell(lon, lat) {
     const x = (lon - this.lonMin) / this.dLon;
     const y = (this.latMax - lat) / this.dLat;
@@ -47,9 +60,10 @@ class VectorField {
         if (Math.abs(col - x) > 1 || Math.abs(row - y) > 1) continue;
         const index = row * this.nx + col;
         if (Number.isNaN(this.u[index])) continue;
-        const distance = Math.hypot(col - x, row - y);
+        const cellLon = this.lonMin + col * this.dLon, cellLat = this.latMax - row * this.dLat;
+        const distance = VectorField.distanceKm(lon, lat, cellLon, cellLat);
         if (!best || distance < best.distance)
-          best = { lon: this.lonMin + col * this.dLon, lat: this.latMax - row * this.dLat, u: this.u[index], v: this.v[index], distance };
+          best = { lon: cellLon, lat: cellLat, u: this.u[index], v: this.v[index], distance };
       }
     }
     return best;

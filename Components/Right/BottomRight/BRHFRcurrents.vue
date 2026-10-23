@@ -96,8 +96,14 @@
       <template v-if="$gui.hfrFieldStatus.state === 'loading'">
         <span class="spinner-border field-spinner"></span>{{ $t('Loading') }}
       </template>
+      <!-- Where the map is from, linking to it (the ERDDAP dataset's page,
+           the GitHub or static file) -->
       <template v-else-if="$gui.hfrFieldStatus.state === 'ok'">
-        {{ $gui.hfrFieldStatus.label }} · {{ formatTime($gui.hfrFieldStatus.time) }}
+        <a v-if="$gui.hfrFieldStatus.url" class="field-status-link" :href="$gui.hfrFieldStatus.url"
+          target="_blank" rel="noopener" :title="$gui.hfrFieldStatus.url">
+          {{ $gui.hfrFieldStatus.label }} · {{ formatTime($gui.hfrFieldStatus.time) }}
+        </a>
+        <template v-else>{{ $gui.hfrFieldStatus.label }} · {{ formatTime($gui.hfrFieldStatus.time) }}</template>
       </template>
       <template v-else>{{ $t('No HF radar data at') }} {{ formatTime($gui.hfrFieldStatus.time) }}</template>
     </div>
@@ -239,6 +245,15 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
+  text-wrap: wrap;
+}
+
+.field-status-link {
+  color: inherit;
+  text-decoration: none;
+}
+.field-status-link:hover {
+  text-decoration: underline;
 }
 
 .field-spinner {

@@ -121,6 +121,9 @@ class GUIManager {
   // What the Compare view has at the selected time, for the circle arrows on
   // the map (MapOverlayPoint): [{ name, code, speed, direction, tag }]
   hfrPointArrows = [];
+  // Whether the bottom section (Compare, Point) is still loading the data of
+  // the place it is about - MapOverlayPoint shows a spinner there meanwhile
+  hfrPointLoading = false;
   // Whether the circle arrows are up at hfrPoint (MapOverlayPoint) - the
   // clicked platform's own chip gives way to them, the circle saying all it
   // did and more
