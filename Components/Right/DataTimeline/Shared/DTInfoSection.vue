@@ -22,6 +22,12 @@
           <div class="info-row" v-for="(row, index) in sourceInfo.rows" :key="index">
             <span class="info-label">{{ $t(row.label) }}</span>
             <a v-if="row.url" :href="row.url" target="_blank" rel="noopener" class="info-link">{{ row.value }}</a>
+            <!-- A measure ({ code, value }, standard unit): shown in the unit
+                 picked for its quantity, the unit clicked to switch it -->
+            <span v-else-if="row.amount" class="info-value">{{ amount(row.amount.code, row.amount.value, row.amount.decimals) }}
+              <span class="info-unit" :class="{ clickable: $gui.isUnitSwitchable(row.amount.code) }"
+                :title="$gui.isUnitSwitchable(row.amount.code) ? $t('Change units') : ''"
+                @click="cycleUnit(row.amount.code)">{{ unitOf(row.amount.code) }}</span></span>
             <span v-else class="info-value" :class="{ 'info-ack': row.long }">{{ row.value }}</span>
           </div>
           <div class="info-row" v-if="sourceInfo.loading">

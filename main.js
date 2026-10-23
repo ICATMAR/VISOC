@@ -39,6 +39,9 @@ window.zoomToShowCoast = zoomToShowCoast;
 // How the HFR dashboard describes a data source in the info panel
 import * as hfrSourceInfo from './Assets/Scripts/hfrSourceInfo.js';
 window.hfrSourceInfo = hfrSourceInfo;
+// Spherical-earth helpers - a radial bin's range and bearing from its antenna
+import { radialRangeBearing } from './Assets/Scripts/data/geo.js';
+window.radialRangeBearing = radialRangeBearing;
 
 import RadialParticles from './Assets/Scripts/RadialParticles.js';
 import { scrollFade } from './Assets/Scripts/scrollFade.js';

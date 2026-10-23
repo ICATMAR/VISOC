@@ -70,11 +70,6 @@ const INTERVAL_OPTIONS = [{ label: 'Hourly', minutes: 60 }];
 const GITHUB_FILL_HOURS = 24;
 const GITHUB_FILL_RADIAL_HOURS = 48;
 const isQC = name => name === 'QCflag' || name === 'qcflag' || name.endsWith('_QC');
-const haversineKm = (lat1, lon1, lat2, lon2) => {
-  const rad = Math.PI / 180;
-  const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.sqrt(a));
-};
 
 // The HFR dashboard's Point view (GUIManager.hfrDataPoint): a totals grid
 // point from DPHFRTotals.getCellSeries, a radial bin from
@@ -317,14 +312,27 @@ export default {
       } : null;
       // The dataset or file itself, before the cell is written into it below
       if (origin) origin.datasetId = origin.dataset;
-      // Where on its grid: sources grid the radars differently, so an hour
-      // may be read at a cell next to the clicked one
+      // Where on its grid. No distance to the point: the point is snapped to
+      // the grid, so it would always read 0
       if (origin?.cell && this.point) {
-        const km = haversineKm(this.point.lat, this.point.lon, origin.cell.latitude, origin.cell.longitude);
-        origin.dataset = `${origin.dataset} · ${this.$t('cell')} ${Number(origin.cell.latitude).toFixed(4)}º N, ${Number(origin.cell.longitude).toFixed(4)}º E (${km < 0.05 ? '0' : km.toFixed(1)} km)`;
+        origin.dataset = `${origin.dataset} · ${this.$t('cell')} ${Number(origin.cell.latitude).toFixed(4)}º N, ${Number(origin.cell.longitude).toFixed(4)}º E`;
       }
       this.$gui.hfrDataPointOrigin = origin;
       this.describeSource(origin, key);
+    },
+    // A radial bin's range and bearing from its antenna, as info panel rows
+    radialRows(p) {
+      const geometry = window.radialRangeBearing(p);
+      if (!geometry) return [];
+      const note = geometry.computed ? ` (${this.$t('from the station position')})` : '';
+      return [
+        // One decimal at any range - the bins are ~1.7 km apart
+        { label: 'Range', value: `${geometry.range.toFixed(1)} km`, amount: { code: 'HDIST', value: geometry.range, decimals: 1 } },
+        { label: 'Bearing', value: `${Math.round(geometry.bearing)}º${note}` },
+        // Its range cell (or range ring): how many range resolutions out from
+        // the antenna it is - a .ruv's SPRC
+        ...(geometry.rangeCell != undefined ? [{ label: 'Range cell', value: `R${geometry.rangeCell}` }] : []),
+      ];
     },
     // The selected hour's source, described in the info panel
     // (GUIManager.hfrDataPointSourceInfo): ICATMAR's GitHub file - with what
@@ -360,9 +368,16 @@ export default {
           { label: 'Processing', value: this.$t(origin.source !== 'EU HFR Node'
             ? "ICATMAR's own processing of its radars"
             : "The EU HFR Node's processing of the network's radars"), long: true },
-          isRadial
-            ? { label: 'Radial bin', value: `${p.station}${p.axisNames?.[0] === 'RNGE' ? ` · ${p.a.toFixed(1)} km · ${Math.round(p.b)}º` : ''} · ${p.lat.toFixed(4)}º N, ${p.lon.toFixed(4)}º E` }
-            : { label: 'Grid cell used', value: cell },
+          ...(isRadial
+            ? [
+              { label: 'Radial bin', value: `${p.station} · ${p.lat.toFixed(4)}º N, ${p.lon.toFixed(4)}º E` },
+              // Range (distance from the antenna) in the unit picked for
+              // horizontal distances (clicked to switch it - see
+              // DTInfoSection), and bearing - the dataset's own, or worked out
+              // from the station's position for one gridded in lat/lon
+              ...this.radialRows(p),
+            ]
+            : [{ label: 'Grid cell used', value: cell }]),
           // An HF radar sees the current in the top layer the radar's Bragg
           // waves move with - about λ/8π: 0.9 m for ICATMAR's 13.5 MHz SeaSondes
           { label: 'Depth', value: network === 'ICATMAR'

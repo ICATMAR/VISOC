@@ -498,7 +498,11 @@ class SourceErddapEUHFR extends Source {
     const fill = rdva.attributes['_FillValue'];
 
     const site = entry.site;
-    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [];
+    // A polar grid's range cells: its RNGE axis counts them from the antenna
+    // (0 km, then one range resolution each - 1.66 km for ICATMAR's), the
+    // same numbers as a .ruv's SPRC
+    const spacing = isPolar && axisA.length > 1 ? (axisA[axisA.length - 1] - axisA[0]) / (axisA.length - 1) : undefined;
+    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [], rangeCell = [];
     let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
     for (let a = 0; a < axisA.length; a++) {
       for (let b = 0; b < axisB.length; b++) {
@@ -507,6 +511,7 @@ class SourceErddapEUHFR extends Source {
         const [pLat, pLon] = isPolar ? destination(site, axisB[b], axisA[a]) : [axisA[a], axisB[b]];
         lat.push(pLat); lon.push(pLon); velocity.push(v); qc.push(flags[a * axisB.length + b]);
         ax.push(axisA[a]); bx.push(axisB[b]);
+        if (spacing) rangeCell.push(Math.round(axisA[a] / spacing));
         direction.push(bearingAwayFrom(site, pLat, pLon));
         if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
         if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
@@ -519,6 +524,8 @@ class SourceErddapEUHFR extends Source {
       // Each bin by its grid axes, to ask for its series (getRadialBinSeries):
       // RNGE (km) / BEAR (deg), or latitude / longitude
       axisNames: [dimA, dimB], ax: Float32Array.from(ax), bx: Float32Array.from(bx),
+      // Each bin's range cell (SPRC), for a polar grid - undefined otherwise
+      rangeCell: spacing ? Int16Array.from(rangeCell) : undefined,
       site,
       lat: Float32Array.from(lat), lon: Float32Array.from(lon),
       velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),

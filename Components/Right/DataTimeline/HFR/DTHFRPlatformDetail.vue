@@ -9,6 +9,13 @@
     <!-- Comparison map (left) -->
     <div class="map-container map-clickable" @click="centerMainMap" :title="$t('Click to center main map')">
       <div ref="compareMap" class="pd-map"></div>
+      <!-- The unit the distances are written in, clicked to switch it - for
+           every horizontal distance in the app, as any other unit -->
+      <button class="pd-map-unit" :class="{ clickable: $gui.isUnitSwitchable('HDIST') }"
+        :title="$gui.isUnitSwitchable('HDIST') ? $t('Change units') : ''"
+        @click.stop="$gui.cycleUnit('HDIST')">
+        <i class="fa-solid fa-ruler-horizontal"></i>{{ distanceUnit }}
+      </button>
     </div>
 
     <div class="pd-info">
@@ -156,9 +163,13 @@ export default {
       const { unit, decimals, toDisplay } = this.$gui.unitFor('HCSP');
       return `${toDisplay(speed).toFixed(decimals)} ${unit}`;
     },
+    // A distance (km) in the unit picked for horizontal distances (see the
+    // map's unit button), one decimal while it is short
     formatDistance(km) {
       if (km == undefined) return '';
-      return km < 0.05 ? '0 km' : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+      const { unit, toDisplay } = this.$gui.unitFor('HDIST');
+      const value = toDisplay(km);
+      return value < 0.05 ? `0 ${unit}` : value < 10 ? `${value.toFixed(1)} ${unit}` : `${Math.round(value)} ${unit}`;
     },
     // A product's chip, in full: where its point is, how far, the value, and
     // for the buoy the instrument and depth behind its reading
@@ -198,6 +209,7 @@ export default {
     point() { return this.$gui.hfrPoint; },
     reading() { return this.$gui.hfrPointReading; },
     products() { return this.$gui.hfrComparePoints; },
+    distanceUnit() { return this.$gui.unitFor('HDIST').unit; },
     kindLabel() {
       return { buoy: 'Buoy', drifter: 'Drifter', point: 'Comparison' }[this.point?.kind] ?? 'Point';
     },
@@ -251,6 +263,8 @@ export default {
   },
   watch: {
     products() { this.$nextTick(() => this.drawMap()); },
+    // The distances on the map are drawn into it, so a new unit redraws them
+    distanceUnit() { this.drawMap(); },
     point() { this.fittedKey = null; this.$nextTick(() => this.drawMap()); },
   },
 }
@@ -277,6 +291,29 @@ export default {
 /* Edged in the product's colour on the map */
 .compare-item {
   border-left: 4px solid transparent;
+}
+
+/* The distances' unit, over the map's bottom right corner */
+.hfr-pd > .map-container {
+  position: relative;
+}
+.pd-map-unit {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(34, 34, 34, 0.75);
+  color: white;
+  font: 600 10px Poppins, sans-serif;
+}
+.pd-map-unit.clickable:hover {
+  background: rgba(34, 34, 34, 0.95);
+  text-decoration: underline;
 }
 
 .pd-reading.clickable {

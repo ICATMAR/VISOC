@@ -7,7 +7,9 @@
 <script>
 // The data point the HFR Point view is about (GUIManager.hfrDataPoint) - a
 // totals grid point or a radial bin - ringed on the main map while that view
-// is open, so it can be told apart from the points around it.
+// is open, so it can be told apart from the points around it. A totals grid
+// point with a current measured at the selected hour isn't: its circle arrows
+// mark it instead (MapOverlayPoint).
 export default {
   name: "MapLayerHFRSelection",
   mounted() {
@@ -42,7 +44,9 @@ export default {
     // While the Point view shows it
     selected() {
       const shown = this.$gui.hfrTab === 'Point' && this.$gui.selectedPlatform?.kind === 'datapoint';
-      return shown ? this.$gui.hfrDataPoint : null;
+      const point = shown ? this.$gui.hfrDataPoint : null;
+      if (point?.kind === 'total' && this.$gui.hfrDataPointVelocity) return null;
+      return point;
     },
   },
   watch: {

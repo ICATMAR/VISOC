@@ -12,6 +12,7 @@ import SourceOpenMeteo from '../sources/SourceOpenMeteo.js';
 import SourceErddapWaveForecast from '../sources/SourceErddapWaveForecast.js';
 import SourceErddapSeaSurfaceForecast from '../sources/SourceErddapSeaSurfaceForecast.js';
 import SourceErddapHFRadars from '../sources/SourceErddapHFRadars.js';
+import SourceCMEMS from '../sources/SourceCMEMS.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
@@ -27,6 +28,8 @@ import DPSeaSurfaceForecast from './DPSeaSurfaceForecast.js';
 const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
 const NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}
 const WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
+// CMEMS IBI (Iberia-Biscay-Ireland) model domain - reaches the Catalan coast
+const IBIBBOX = {minLat: 26, minLon: -19.1, maxLat: 56.1, maxLon: 5.1}
 
 
 const KelvinToCelsius = (value) => {
@@ -590,7 +593,7 @@ const dataProducts = [
   {
     name: 'Sea surface forecast',
     Class: DPSeaSurfaceForecast,
-    description: 'High-resolution short-term forecast of sea surface temperature and currents of the Catalan Sea',
+    description: 'Short-term forecast of sea surface temperature and currents of the Catalan Sea (high resolution) and the Mediterranean',
     type: 'forecast',
     sources: [
       {
@@ -609,7 +612,46 @@ const dataProducts = [
           SST: {code: 'TEMP', unitTransform: KelvinToCelsius},
           SSS: {code: 'PSAL'},
         }
-      }
+      },
+      // Copernicus Marine's Mediterranean physics (MedFS, 4.2 km): the whole
+      // Mediterranean and ~10 days ahead, for whatever ROMS doesn't cover.
+      // Which of the product's datasets serves each variable at each time
+      // step is found in its STAC metadata (see SourceCMEMS).
+      {
+        Class: SourceCMEMS,
+        src: 'https://data.marine.copernicus.eu/product/MEDSEA_ANALYSISFORECAST_PHY_006_013/description',
+        product: 'MEDSEA_ANALYSISFORECAST_PHY_006_013',
+        variables: ['uo', 'vo'],
+        // In order of preference - a variable not served hourly is read daily
+        intervals: ['PT1H', 'P1D'],
+        institution: 'Copernicus Marine Service',
+        model: 'CMEMS-MEDSEA',
+        label: 'CMEMS Mediterranean Sea physics (MedFS)',
+        resolution: '4.2 km',
+        bbox: MEDBBOX,
+        mapping: {
+          uo: {code: 'EWCT'},
+          vo: {code: 'NSCT'},
+        }
+      },
+      // Copernicus Marine's Iberia-Biscay-Ireland physics (NEMO, 1/36°): the
+      // Atlantic side of Iberia and the western Mediterranean up to 5°E
+      {
+        Class: SourceCMEMS,
+        src: 'https://data.marine.copernicus.eu/product/IBI_ANALYSISFORECAST_PHY_005_001/description',
+        product: 'IBI_ANALYSISFORECAST_PHY_005_001',
+        variables: ['uo', 'vo'],
+        intervals: ['PT1H', 'P1D'],
+        institution: 'Copernicus Marine Service',
+        model: 'CMEMS-IBI',
+        label: 'CMEMS Iberia-Biscay-Ireland physics (NEMO)',
+        resolution: '2.8 km',
+        bbox: IBIBBOX,
+        mapping: {
+          uo: {code: 'EWCT'},
+          vo: {code: 'NSCT'},
+        }
+      },
     ]
   },
 
@@ -650,8 +692,8 @@ const dataProducts = [
 
   
 
-  // Dynamic generation of other forecast models (CMEMS)
-  // Check HFRadar and VISAP codes
+  // Other CMEMS products (MED/IBI waves, biogeochemistry) - one SourceCMEMS
+  // entry each, in the product they belong to (see SourceCMEMS)
 ]
 
 

@@ -26,3 +26,29 @@ export function bearingBetween(lat1, lon1, lat2, lon2) {
 export function bearingAwayFrom(site, lat, lon) {
   return (bearingBetween(lat, lon, site.lat, site.lon) + 180) % 360;
 }
+
+// Great-circle distance between two points, km
+export function distanceKm(lat1, lon1, lat2, lon2) {
+  const a = Math.sin(toRad(lat2 - lat1) / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(toRad(lon2 - lon1) / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+}
+
+// Where a radial bin is from its antenna: { range (km), bearing (degrees
+// true), computed, rangeCell }. `rangeCell` is the bin's range cell (SPRC),
+// when its source numbered it (see MapLayerHFRRadials). A polar dataset (RNGE/BEAR axes) says so itself; one
+// gridded in latitude/longitude doesn't, and the range and bearing are then
+// worked out from the station's position (`computed`). Undefined if neither
+// is known.
+export function radialRangeBearing(point) {
+  if (point?.axisNames?.[0] === 'RNGE' && isFinite(point.a) && isFinite(point.b))
+    return { range: point.a, bearing: point.b, computed: false, rangeCell: point.rangeCell };
+  const site = point?.site;
+  if (!site || !isFinite(site.lat) || !isFinite(site.lon) || !isFinite(point.lat) || !isFinite(point.lon)) return undefined;
+  return {
+    range: distanceKm(site.lat, site.lon, point.lat, point.lon),
+    bearing: bearingBetween(site.lat, site.lon, point.lat, point.lon),
+    computed: true,
+    rangeCell: point.rangeCell,
+  };
+}

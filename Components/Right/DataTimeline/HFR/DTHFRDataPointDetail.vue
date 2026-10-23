@@ -7,6 +7,13 @@
     <!-- Map (left): the point; for a radial bin, its station too -->
     <div class="map-container map-clickable" @click="centerMainMap" :title="$t('Click to center main map')">
       <div ref="pointMap" class="pd-map"></div>
+      <!-- The unit the radial bin's distance is written in, clicked to switch
+           it - for every horizontal distance in the app -->
+      <button v-if="radial" class="pd-map-unit" :class="{ clickable: $gui.isUnitSwitchable('HDIST') }"
+        :title="$gui.isUnitSwitchable('HDIST') ? $t('Change units') : ''"
+        @click.stop="$gui.cycleUnit('HDIST')">
+        <i class="fa-solid fa-ruler-horizontal"></i>{{ distanceUnit }}
+      </button>
     </div>
 
     <div class="pd-info">
@@ -19,7 +26,13 @@
         </button>
       </div>
 
-      <span class="pd-station-name">{{ title }}<span class="pd-id" v-if="subtitle">{{ subtitle }}</span></span>
+      <!-- A radial bin by its range (unit clicked to switch it) and bearing
+           from the antenna -->
+      <span class="pd-station-name">{{ title }}<span class="pd-id" v-if="radial"
+        :title="radial.computed ? $t('Worked out from the station position') : ''">{{ formatDistance(radial.range, false) }}
+        <span :class="{ 'clickable pd-unit': $gui.isUnitSwitchable('HDIST') }" :title="$t('Change units')"
+          @click="$gui.cycleUnit('HDIST')">{{ distanceUnit }}</span> · {{ Math.round(radial.bearing) }}º<template
+          v-if="radial.rangeCell != undefined"> · <span :title="$t('Range cell')">R{{ radial.rangeCell }}</span></template></span></span>
 
       <div class="pd-facts">
         <span class="pd-date">{{ formattedDate }}</span>
@@ -54,13 +67,6 @@ const MAX_ZOOM = 13;
 // The cell an hour was read at, in the colour Compare gives its provider's row
 const CELL_COLORS = { ICATMAR: '#ff9f43', EU: '#54a0ff' };
 
-// Great-circle distance, km
-const haversineKm = (lat1, lon1, lat2, lon2) => {
-  const rad = Math.PI / 180;
-  const a = Math.sin((lat2 - lat1) * rad / 2) ** 2
-    + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.sqrt(a));
-};
 
 export default {
   name: "DTHFRDataPointDetail",
@@ -133,7 +139,14 @@ export default {
       if (p.site) {
         const site = at(p.site.lon, p.site.lat);
         const line = new ol.Feature(new ol.geom.LineString([site, here]));
-        line.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: 'white', width: 1.2, lineDash: [3, 3] }) }));
+        // Labelled half-way with the bin's distance from the antenna
+        line.setStyle(new ol.style.Style({
+          stroke: new ol.style.Stroke({ color: 'white', width: 1.2, lineDash: [3, 3] }),
+          text: this.radial ? new ol.style.Text({
+            text: this.formatDistance(this.radial.range), font: '600 10px Poppins, sans-serif', placement: 'point',
+            fill: new ol.style.Fill({ color: 'white' }), stroke: new ol.style.Stroke({ color: '#222', width: 3 }),
+          }) : undefined,
+        }));
         const station = new ol.Feature(new ol.geom.Point(site));
         station.setStyle(new ol.style.Style({
           image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#ff6b6b' }), stroke: new ol.style.Stroke({ color: 'white', width: 1.5 }) }),
@@ -149,11 +162,8 @@ export default {
         line.setStyle(new ol.style.Style({ stroke: new ol.style.Stroke({ color: used.color, width: 1.2, lineDash: [3, 3] }) }));
         const dot = new ol.Feature(new ol.geom.Point(there));
         dot.setStyle(new ol.style.Style({
+          // No distance written by it: the point is snapped to the grid
           image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({ color: used.color }), stroke: new ol.style.Stroke({ color: '#222', width: 1 }) }),
-          text: new ol.style.Text({
-            text: this.formatDistance(used.distanceKm), font: '600 10px Poppins, sans-serif', offsetY: -10,
-            fill: new ol.style.Fill({ color: used.color }), stroke: new ol.style.Stroke({ color: '#222', width: 3 }),
-          }),
         }));
         features.push(line, dot);
       }
@@ -175,9 +185,14 @@ export default {
       this.fittedKey = key;
       this.map.getView().fit(ol.extent.buffer(ol.extent.boundingExtent(spots), 7000), { padding: [24, 24, 16, 24], maxZoom: MAX_ZOOM });
     },
-    formatDistance(km) {
+    // A radial bin's distance (km) in the unit picked for horizontal
+    // distances, with one decimal at any range - the bins are ~1.7 km apart -
+    // and with its unit, unless `withUnit` is false
+    formatDistance(km, withUnit = true) {
       if (km == undefined) return '';
-      return km < 0.05 ? '0 km' : km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+      const { unit, toDisplay } = this.$gui.unitFor('HDIST');
+      const number = toDisplay(km).toFixed(1);
+      return withUnit ? `${number} ${unit}` : number;
     },
     copyCoords() {
       navigator.clipboard?.writeText(`${this.point.lat}, ${this.point.lon}`);
@@ -198,18 +213,18 @@ export default {
       if (!cell || !p || p.kind === 'radial') return null;
       const lat = Number(cell.latitude), lon = Number(cell.longitude);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-      return { lat, lon, color: CELL_COLORS[p.provider] ?? CELL_COLORS.ICATMAR, distanceKm: haversineKm(p.lat, p.lon, lat, lon) };
+      return { lat, lon, color: CELL_COLORS[p.provider] ?? CELL_COLORS.ICATMAR };
     },
     title() {
       const p = this.point;
       return p.kind === 'radial' ? `${p.station} · ${p.network}` : p.network;
     },
-    // A radial bin by its range and bearing from the antenna
-    subtitle() {
-      const p = this.point;
-      if (p.kind !== 'radial') return '';
-      return p.axisNames?.[0] === 'RNGE' ? `${p.a.toFixed(1)} km · ${Math.round(p.b)}º` : '';
+    // A radial bin's range and bearing from its antenna (see
+    // geo.radialRangeBearing) - null for a totals grid point
+    radial() {
+      return this.point?.kind === 'radial' ? window.radialRangeBearing(this.point) ?? null : null;
     },
+    distanceUnit() { return this.$gui.unitFor('HDIST').unit; },
     coordsLabel() {
       const { lat, lon } = this.point;
       return `${Math.abs(lat).toFixed(3)}° ${lat < 0 ? 'S' : 'N'}, ${Math.abs(lon).toFixed(3)}° ${lon < 0 ? 'W' : 'E'}`;
@@ -226,6 +241,8 @@ export default {
   watch: {
     point() { this.fittedKey = null; this.gridCells = []; this.$nextTick(() => this.drawMap()); this.loadGrid(); },
     usedCell() { this.$nextTick(() => this.drawMap()); },
+    // The distance on the map is drawn into it, so a new unit redraws it
+    distanceUnit() { this.drawMap(); },
     origin() { this.loadGrid(); },
     '$gui.selectedTime'() { this.loadGrid(); },
   },
@@ -248,5 +265,33 @@ export default {
 }
 .pd-value-missing {
   opacity: 0.5;
+}
+
+.pd-unit.clickable {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The distance's unit, over the map's bottom right corner (as Compare's) */
+.pd-container > .map-container {
+  position: relative;
+}
+.pd-map-unit {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(34, 34, 34, 0.75);
+  color: white;
+  font: 600 10px Poppins, sans-serif;
+}
+.pd-map-unit.clickable:hover {
+  background: rgba(34, 34, 34, 0.95);
+  text-decoration: underline;
 }
 </style>

@@ -47,7 +47,7 @@ import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
 const roundToHour = time => new Date(Math.floor((time.getTime() + 1800 * 1000) / 3600000) * 3600000);
 
 // Each compared product's colour on the comparison map (DTHFRPlatformDetail)
-const COMPARE_COLORS = { platform: '#ffffff', ICATMAR: '#ff9f43', EU: '#54a0ff', model: '#1dd1a1' };
+const COMPARE_COLORS = { platform: '#ffffff', ICATMAR: '#ff9f43', EU: '#54a0ff', model: '#1dd1a1', 'cmems-med': '#c56cf0', 'cmems-ibi': '#ff6b81' };
 
 // Great-circle distance, km
 const haversineKm = (lat1, lon1, lat2, lon2) => {
@@ -68,7 +68,9 @@ const INTERVAL_OPTIONS = [{ label: 'Hourly', minutes: 60 }];
 // Sea water velocity at one place (GUIManager.hfrPoint), from every source
 // there is for it, side by side over the timeline's range: the buoy or drifter
 // that was clicked, the HF radars (ICATMAR's own and the EU HFR Node's), and
-// ICATMAR's model. CMEMS is listed, to come (Phase 5).
+// the models of the sea surface forecast - ICATMAR's ROMS, CMEMS MEDSEA and
+// CMEMS IBI - each in its own row (a row with a `model` is filled with that
+// model's series).
 //
 // Also tells the map what to draw at the point (GUIManager.hfrPointArrows,
 // see MapOverlayPoint) and the detail panel what the platform measured
@@ -130,10 +132,15 @@ export default {
           .then(result => done(provider, Object.values(result.data), { cell: result.cell, cells: result.cells, used: result.used }))
           .catch(failed(provider));
       });
+      // Every model on its own, not merged - one call for all of them
       const modelPoint = { id: `hfr:${point.lat.toFixed(4)},${point.lon.toFixed(4)}`, latitude: point.lat, longitude: point.lon };
-      this.$dataService.ssforecast.getPointForecast(modelPoint, start, end)
-        .then(result => done('model', this.fromCodes(result.data), { series: result.series }))
-        .catch(failed('model'));
+      const modelRows = this.rows.filter(r => r.model && !r.placeholder);
+      this.$dataService.ssforecast.getPointSeriesBySource(modelPoint, start, end)
+        .then(result => modelRows.forEach(row => {
+          const series = result.series.find(entry => entry.model === row.model);
+          done(row.key, this.fromCodes(series?.data), { series: series ? [series] : [] });
+        }))
+        .catch(error => modelRows.forEach(row => failed(row.key)(error)));
     },
     // { '<ISO>': { HCSP: { value, ... }, HCDT: { value } } } -> every reading,
     // keeping what it says about itself (sensor, instrument, depth)
@@ -215,10 +222,13 @@ export default {
     },
     // What is known about a source, shown as rows of label / value. The HF
     // radars' from their ERDDAP datasets' own metadata (NC_GLOBAL); the
-    // model's from the forecast series; CMEMS, still to come, as a placeholder.
+    // models' from their forecast series; a source still to come (a
+    // `placeholder` row), as such.
     async describe(row) {
       const key = row.key;
-      const hours = (this.series[key] ?? []).length;
+      // Hours of the window with a value - not the readings, which can fall
+      // outside it (a reading at the start is the hour before the first cell)
+      const hours = (this.binned[key] ?? []).filter(bin => bin?.value != undefined).length;
       const window = this.cells.length;
       if (key === 'ICATMAR' || key === 'EU') {
         const provenance = this.provenance[key];
@@ -241,15 +251,42 @@ export default {
         ] };
         return;
       }
-      if (key === 'model') {
-        const series = this.provenance.model?.series?.[0];
-        const source = this.$dataService.ssforecast.sources[0];
+      if (row.model && this.modelSource(row)?.product) {
+        // CMEMS: what the product's STAC metadata said about the dataset read
+        const series = this.provenance[key]?.series?.[0];
+        const source = this.modelSource(row);
+        const dataset = source.datasets?.find(d => d.id === series?.datasets?.[0]);
+        const intervals = { PT15M: '15 minutes', PT1H: 'Hourly', P1D: 'Daily', P1M: 'Monthly' };
+        const interval = series?.interval ?? source.intervals?.[0];
+        this.$gui.hfrSourceInfo = {
+          key, title: row.name, subtitle: series?.label ?? source.label,
+          rows: [
+            ...this.originRows(row),
+            { label: 'Product', value: source.product, url: source.src },
+            { label: 'Dataset', value: series?.dataset ?? '–', url: source.src },
+            { label: 'Model', value: dataset?.metadata?.source ?? source.label },
+            this.gridSpacingRow(series?.resolution ?? source.resolution),
+            { label: 'Institution', value: 'Copernicus Marine Service (Mercator Ocean International)' },
+            { label: 'Produced by', value: dataset?.metadata?.institution ?? '–' },
+            { label: 'Time step', value: [this.$t(intervals[interval] ?? interval ?? '–'), series?.statistic ? this.$t(series.statistic) : undefined].filter(Boolean).join(' · ') },
+            { label: 'Depth', value: this.$t('Surface (the model\'s top layer)') },
+            { label: 'Grid cell used', value: this.formatCell(series?.cell) },
+            { label: 'Updated', value: this.formatRun(series?.run?.publishedAt) },
+            { label: 'Hours with data', value: `${hours} / ${window}` },
+          ],
+        };
+        return;
+      }
+      if (row.model) {
+        const series = this.provenance[key]?.series?.[0];
+        const source = this.modelSource(row);
         const metadata = source?.metadata ?? {};
         this.$gui.hfrSourceInfo = {
           key, title: row.name, subtitle: series?.label ?? source?.label,
           rows: [
             ...this.originRows(row),
-            { label: 'Model', value: [series?.model ?? source?.model, series?.resolution ?? source?.resolution].filter(Boolean).join(' · ') },
+            { label: 'Model', value: series?.model ?? source?.model ?? '–' },
+            this.gridSpacingRow(series?.resolution ?? source?.resolution),
             { label: 'Institution', value: series?.institution ?? source?.institution ?? '–' },
             { label: 'Depth', value: this.$t('Surface (the model\'s top layer)') },
             { label: 'Grid cell used', value: this.formatCell(series?.cell) },
@@ -262,19 +299,10 @@ export default {
         };
         return;
       }
-      // CMEMS: still to come (Phase 5)
-      const ibi = key === 'cmems-ibi';
+      // A source still to come
       this.$gui.hfrSourceInfo = {
-        key, title: row.name, subtitle: 'Copernicus Marine Service',
-        rows: [
-          { label: 'Sources', value: this.$t('Copernicus Marine Service (to come)'), long: true },
-          { label: 'Product', value: ibi ? 'IBI_ANALYSISFORECAST_PHY_005_001' : 'MEDSEA_ANALYSISFORECAST_PHY_006_013',
-            url: `https://data.marine.copernicus.eu/product/${ibi ? 'IBI_ANALYSISFORECAST_PHY_005_001' : 'MEDSEA_ANALYSISFORECAST_PHY_006_013'}/description` },
-          { label: 'Institution', value: 'Copernicus Marine Service (Mercator Ocean International)' },
-          { label: 'Resolution', value: ibi ? '1/36º (~2.8 km)' : '1/24º (~4.2 km)' },
-          { label: 'Depth', value: this.$t('Surface (the model\'s top layer)') },
-          { label: 'Status', value: this.$t('Coming soon') },
-        ],
+        key, title: row.name,
+        rows: [{ label: 'Status', value: this.$t('Coming soon') }],
       };
     },
     // Where a source's data comes from, first in its panel: the selected
@@ -290,8 +318,9 @@ export default {
     thisHourOrigin(row) {
       const bin = this.bin(row, this.selectedIndex);
       if (!bin?.readings.length) return this.$t('No data');
-      if (row.key === 'model') {
-        const source = this.$dataService.ssforecast.sources[0];
+      if (row.model) {
+        const source = this.modelSource(row);
+        if (source?.product) return `Copernicus Marine · ${this.provenance[row.key]?.series?.[0]?.dataset ?? source.product}`;
         return `ICATMAR ERDDAP · ${source?.dataset ?? ''}`;
       }
       const used = this.provenance[row.key]?.used ?? [];
@@ -307,8 +336,10 @@ export default {
         const origin = this.$dataService.buoys.originOf(bin.readings[0]?.meta?.source);
         return origin ? [origin] : [];
       }
-      if (row.key === 'model') {
-        const source = this.$dataService.ssforecast.sources[0];
+      if (row.model) {
+        const source = this.modelSource(row);
+        if (source?.product)
+          return [{ label: 'Copernicus Marine', dataset: this.provenance[row.key]?.series?.[0]?.dataset ?? source.product, url: source.src }];
         return source ? [{ label: "ICATMAR's ERDDAP", dataset: source.dataset, url: `${source.baseUrl}/info/${source.dataset}/index.html` }] : [];
       }
       const sources = this.$dataService.hfrtotals.mapSources(row.key);
@@ -325,8 +356,14 @@ export default {
       });
       return links;
     },
+    // The sea surface forecast's source a model row reads (see rows)
+    modelSource(row) {
+      return this.$dataService.ssforecast.sources.find(source => source.model === row.model);
+    },
     sourcesOf(row) {
-      if (row.key === 'model')
+      if (row.model && this.modelSource(row)?.product)
+        return `${this.$t('Copernicus Marine Service')}: ${this.modelSource(row).label}, ${this.$t('read from its ARCO Zarr store')}`;
+      if (row.model)
         return this.$t('ICATMAR ERDDAP: the ROMS forecast run by ICATMAR');
       const notes = {
         'ICATMAR ERDDAP': this.$t("ICATMAR's ERDDAP (ICATMAR's processing)"),
@@ -363,6 +400,15 @@ export default {
     // hfrSourceInfo.js)
     metadataRows(metadata) {
       return window.hfrSourceInfo.metadataRows(metadata);
+    },
+    // A model's grid spacing, as the catalogue gives it ('4.2 km', '0.125°'):
+    // a distance in km is a measure the user can switch to nautical miles in
+    // the panel (see DTInfoSection), anything else is shown as written
+    gridSpacingRow(resolution) {
+      const km = /^\s*([\d.]+)\s*km\s*$/.exec(resolution ?? '')?.[1];
+      return km != undefined
+        ? { label: 'Grid spacing', value: resolution, amount: { code: 'HDIST', value: Number(km) } }
+        : { label: 'Grid spacing', value: resolution ?? '–' };
     },
     formatCell(cell) {
       if (!cell) return '–';
@@ -443,7 +489,7 @@ export default {
         let cell, cells;
         const bin = this.bin(row, index);
         if (row.key === 'platform') cell = { latitude: point.lat, longitude: point.lon };
-        else if (row.key === 'model') cell = this.provenance.model?.series?.[0]?.cell;
+        else if (row.model) cell = this.provenance[row.key]?.series?.[0]?.cell;
         // The cell the selected hour was read at - each source has its own
         // grid - or, for an hour with no data, the row's first
         else ({ cell, cells } = bin?.readings?.[0]?.cell ? { cell: bin.readings[0].cell } : (this.provenance[row.key] ?? {}));
@@ -469,9 +515,9 @@ export default {
       rows.push(
         { key: 'ICATMAR', name: 'HFR ICATMAR', circle: 'HFR ICATMAR' },
         { key: 'EU', name: 'HFR EU Node', circle: 'HFR EU Node' },
-        { key: 'model', name: 'Model ICATMAR', circle: 'Model ROMS ICATMAR' },
-        { key: 'cmems-med', name: 'CMEMS MEDSEA', placeholder: true },
-        { key: 'cmems-ibi', name: 'CMEMS IBI', placeholder: true },
+        { key: 'model', name: 'Model ICATMAR', circle: 'Model ROMS ICATMAR', model: 'ROMS' },
+        { key: 'cmems-med', name: 'CMEMS MEDSEA', circle: 'CMEMS MEDSEA', model: 'CMEMS-MEDSEA' },
+        { key: 'cmems-ibi', name: 'CMEMS IBI', circle: 'CMEMS IBI', model: 'CMEMS-IBI' },
       );
       return rows;
     },

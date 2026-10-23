@@ -574,7 +574,7 @@ class SourceGithubHFR extends Source {
     if (!Number.isFinite(siteLat) || !Number.isFinite(siteLon)) return null;
     const site = { lat: siteLat, lon: siteLon };
 
-    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [];
+    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [], rangeCell = [];
     let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
     rows.forEach(row => {
       const { LATD: pLat, LOND: pLon, VELU: u, VELV: v } = row;
@@ -585,6 +585,8 @@ class SourceGithubHFR extends Source {
       velocity.push((u * Math.sin(rad) + v * Math.cos(rad)) / 100);
       qc.push(row.PRIM ?? 1);
       ax.push(row.RNGE); bx.push(row.BEAR);
+      // The spectra range cell: RNGE is SPRC range resolutions from the antenna
+      rangeCell.push(Number.isFinite(row.SPRC) ? row.SPRC : -1);
       if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
       if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
     });
@@ -594,6 +596,8 @@ class SourceGithubHFR extends Source {
       time: hour,
       layout: 'polar',
       axisNames: ['RNGE', 'BEAR'], ax: Float32Array.from(ax), bx: Float32Array.from(bx),
+      // Each bin's range cell (SPRC; -1 where a row lacks it)
+      rangeCell: Int16Array.from(rangeCell),
       site,
       lat: Float32Array.from(lat), lon: Float32Array.from(lon),
       velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),

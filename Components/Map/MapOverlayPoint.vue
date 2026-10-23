@@ -15,10 +15,10 @@ import MapCircleArrows from '../Right/DataTimeline/MapCircleArrows.vue';
 // HFR dashboard: the circle arrows at the place the bottom section is about.
 // In Compare, at the compared place (GUIManager.hfrPoint): one chip per
 // source at the selected hour, the platform's, each HF radar's and the
-// model's (see DTHFRCompare). In Point, at a radial data point
-// (GUIManager.hfrDataPoint): its sea water velocity along the radial at the
-// selected hour, the arrow out from the antenna or in towards it (see
-// DTHFRPoint).
+// model's (see DTHFRCompare). In Point, at the data point
+// (GUIManager.hfrDataPoint), only the current measured there at the selected
+// hour (see DTHFRPoint): a totals grid point's current, or a radial bin's
+// velocity along the radial, the arrow out from the antenna or in towards it.
 export default {
   name: "MapOverlayPoint",
   mounted() {
@@ -39,22 +39,28 @@ export default {
     },
   },
   computed: {
-    // A radial data point open in the Point view
-    radialPoint() {
+    // The data point open in the Point view - a radial bin or a totals grid
+    // point
+    dataPoint() {
       const g = this.$gui;
       const point = g.hfrDataPoint;
-      return g.selectedDashboard === 'hfr' && g.isDataTimelineOpen && g.hfrTab === 'Point' && point?.kind === 'radial' ? point : null;
+      return g.selectedDashboard === 'hfr' && g.isDataTimelineOpen && g.hfrTab === 'Point'
+        && (point?.kind === 'radial' || point?.kind === 'total') ? point : null;
     },
     place() {
-      return this.radialPoint ?? this.$gui.hfrPoint;
+      return this.dataPoint ?? this.$gui.hfrPoint;
     },
     items() {
-      if (!this.radialPoint) return this.$gui.hfrPointArrows;
-      const velocity = this.$gui.hfrDataPointValues.find(item => item.speed != undefined);
-      return velocity ? [{ name: `Radial ${this.radialPoint.station}`, code: 'HCSP', speed: velocity.speed, direction: velocity.direction }] : [];
+      const p = this.dataPoint;
+      if (!p) return this.$gui.hfrPointArrows;
+      const velocity = this.$gui.hfrDataPointVelocity;
+      if (!velocity) return [];
+      // Named as Compare names the HF radar rows
+      const name = p.kind === 'radial' ? `Radial ${p.station}` : p.provider === 'EU' ? 'HFR EU Node' : 'HFR ICATMAR';
+      return [{ name, code: 'HCSP', speed: velocity.speed, direction: velocity.direction }];
     },
     isShown() {
-      return this.radialPoint ? this.items.length > 0 : this.$gui.isHFRPointCircleShown;
+      return this.dataPoint ? this.items.length > 0 : this.$gui.isHFRPointCircleShown;
     },
     // The bottom section still loading the place's data (Compare's rows, the
     // Point view's series)

@@ -93,6 +93,8 @@ export default {
       const dataPoint = {
         kind: 'radial', network: field.network, station: field.station, site: field.site,
         lon, lat, axisNames: field.axisNames, a: field.ax[i], b: field.bx[i], direction: field.direction[i],
+        // Its range cell (SPRC), where the station's grid is polar
+        rangeCell: field.rangeCell?.[i] >= 0 ? field.rangeCell[i] : undefined,
       };
       const name = `${Math.abs(lat).toFixed(3)}º${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(3)}º${lon >= 0 ? 'E' : 'W'}`;
       const comparePoint = { lon, lat, kind: 'point', id: 'point', name, network: field.network };

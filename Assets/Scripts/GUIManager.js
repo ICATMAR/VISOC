@@ -131,6 +131,16 @@ class GUIManager {
     return this.selectedDashboard === 'hfr' && this.isDataTimelineOpen && this.hfrTab === 'Compare'
       && this.hfrPoint != null && this.hfrPointArrows.length > 0;
   }
+  // The current measured at the Point view's data point (a radial bin or a
+  // totals grid point) at the selected hour - { speed, direction }, or null
+  // when there is none. What its circle arrows show on the main map
+  // (MapOverlayPoint), standing in for the selection ring (MapLayerHFRSelection).
+  get hfrDataPointVelocity() {
+    const p = this.hfrDataPoint;
+    if (this.selectedDashboard !== 'hfr' || !this.isDataTimelineOpen || this.hfrTab !== 'Point') return null;
+    if (p?.kind !== 'radial' && p?.kind !== 'total') return null;
+    return this.hfrDataPointValues.find(item => item.speed != undefined) ?? null;
+  }
   isHFRPointChip(kind, id) {
     return this.isHFRPointCircleShown && this.hfrPoint.kind === kind && this.hfrPoint.id === id;
   }
