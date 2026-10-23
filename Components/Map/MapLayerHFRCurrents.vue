@@ -318,19 +318,22 @@ export default {
       const circle = this.pointLayer && this.map.forEachFeatureAtPixel(event.pixel, feature => feature.get('kind') === 'network',
         { layerFilter: layer => layer === this.pointLayer });
       if (circle) return;
-      // The nearest grid point with data - in the Point view (when it is the
-      // open timeline view) its every variable, otherwise Compare there
-      // Snapped by the data product, on the grid of the source that serves
-      // this hour (see DPHFRTotals.nearestGridPoint)
+      // Only where there is HF radar data: a grid point with data within one
+      // grid spacing, on the grid of the source that serves this hour (see
+      // DPHFRTotals.nearestGridPoint)
       const [clickLon, clickLat] = ol.proj.toLonLat(event.coordinate);
       const time = new Date(this.$gui.selectedTime);
       const cell = await this.$dataService.hfrtotals.nearestGridPoint(time, this.$gui.hfrSource, clickLon, clickLat);
       if (!cell) return;
-      const { lon, lat, network } = cell;
-      // Both forms of the place, so Compare and Point can be switched between
-      const dataPoint = { kind: 'total', provider: this.$gui.hfrSource, network, lon, lat };
-      const name = `${Math.abs(lat).toFixed(3)}º${lat >= 0 ? 'N' : 'S'} ${Math.abs(lon).toFixed(3)}º${lon >= 0 ? 'E' : 'W'}`;
-      const comparePoint = { lon, lat, kind: 'point', id: 'point', name, network };
+      // Both forms of the place, so Compare and Point can be switched between:
+      // the Point view is about that grid point, its every variable; Compare
+      // is about the clicked point itself, each source read at its own grid
+      // point nearest it, hour by hour - the sources' grids differ (ICATMAR's
+      // .tuv, the EU HFR Node's), so the distances it shows are real at every
+      // hour, whichever source served the hour clicked at
+      const dataPoint = { kind: 'total', provider: this.$gui.hfrSource, network: cell.network, lon: cell.lon, lat: cell.lat };
+      const name = `${Math.abs(clickLat).toFixed(3)}º${clickLat >= 0 ? 'N' : 'S'} ${Math.abs(clickLon).toFixed(3)}º${clickLon >= 0 ? 'E' : 'W'}`;
+      const comparePoint = { lon: clickLon, lat: clickLat, kind: 'point', id: 'point', name, network: cell.network };
       if (this.$gui.hfrMapClickOpensPoint) this.$gui.openHFRDataPoint(dataPoint, time, comparePoint);
       else this.$gui.openHFRPoint(comparePoint, time, dataPoint);
     },
