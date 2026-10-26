@@ -7,6 +7,11 @@ import { parseTuv, tuvPoints, tuvCell, TUV_TO_STANDARD } from '../parsers/tuv.js
 // fails. Read like ICATMAR's GitHub files (the same format), answering the
 // same calls as the other map sources (see DPHFRTotals), for these hours only:
 // a file never stands in for another hour.
+//
+// The files are only read when one of their hours is actually asked for: the
+// hours themselves come from the file names, so the questions every source is
+// asked at start (which hours, the newest one, the counts of a recent range)
+// are answered without reading anything.
 
 const HALF_HOUR_MS = 30 * 60 * 1000;
 // The hour a time belongs to: 10:00 is 9:30 to 10:30
@@ -27,7 +32,17 @@ class SourceFileHFRTotals extends Source {
     this.endDate = times[times.length - 1];
 
     this.fields = new Map(); // '<ISO hour>' -> VectorField
-    this.loadingPromise = this.load();
+  }
+
+  // The files, read the first time something needs them (see the top)
+  get loadingPromise() {
+    this.loading ??= this.load();
+    return this.loading;
+  }
+
+  // The hours the files are from (by their names), in [startDate, endDate]
+  hoursIn(startDate, endDate = new Date()) {
+    return this.paths.map(p => this.timestampFromPath(p)).filter(time => time && time >= startDate && time <= endDate);
   }
 
   // Extracts the UTC timestamp from a filename, e.g. TOTL_CATS_2026_07_15_0900.tuv
@@ -73,10 +88,13 @@ class SourceFileHFRTotals extends Source {
   // The snapshot of the hour `time`, or undefined
   async snapshotAt(time) {
     const key = hourOf(time).getTime();
+    // No file of that hour: nothing to read
+    if (!this.hoursIn(new Date(key - HALF_HOUR_MS), new Date(key + HALF_HOUR_MS)).some(t => hourOf(t).getTime() === key)) return undefined;
     return (await this.snapshots()).find(s => hourOf(s.time).getTime() === key);
   }
 
   async snapshotsIn(startDate, endDate = new Date()) {
+    if (this.hoursIn(startDate, endDate).length === 0) return [];
     return (await this.snapshots()).filter(s => s.time >= startDate && s.time <= endDate);
   }
 
@@ -99,15 +117,16 @@ class SourceFileHFRTotals extends Source {
     return this.fields.get(key);
   }
 
+  // From the file names - nothing read
   async getLatestTime() {
-    const snapshots = await this.snapshots();
-    return snapshots.length ? snapshots[snapshots.length - 1].time : undefined;
+    return this.endDate;
   }
 
-  // Which hours have a file from `startDate` on, each a full one (as GitHub's)
+  // Which hours have a file from `startDate` on, each a full one (as
+  // GitHub's) - from the file names, nothing read
   async getAvailability(bbox, startDate) {
     const hours = {};
-    (await this.snapshotsIn(startDate)).forEach(s => { hours[hourOf(s.time).toISOString()] = 1; });
+    this.hoursIn(startDate).forEach(time => { hours[hourOf(time).toISOString()] = 1; });
     return [{ network: 'ICATMAR', hours }];
   }
 
