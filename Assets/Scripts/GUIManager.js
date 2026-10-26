@@ -19,21 +19,23 @@ class GUIManager {
   ]
 
 
-  // The dashboard is mirrored in the URL as #/<dashboard> (see main.js for the
-  // other direction). Pushed, not replaced, so Back returns to the previous
-  // dashboard.
+  // The dashboard - in the URL as #/<dashboard>, with the rest of what is
+  // shown (see urlState.js, which writes and reads it)
   _selectedDashboard = 'platforms';
   get selectedDashboard() { return this._selectedDashboard; }
   set selectedDashboard(id) {
     this._selectedDashboard = id;
     this.isDataTimelineOpen = false;
     this.isPlatformDetailOpen = false;
-    const hash = '#/' + id;
-    if (window.location.hash !== hash) window.location.hash = hash;
   }
-  // The dashboard a hash like #/<dashboard>[/<platformId>] points to, or
-  // 'platforms' when it names nothing that can be shown. The platform part is
-  // accepted but not acted on yet.
+  // The selected time came from the URL (t=): the HFR dashboard keeps it
+  // instead of opening on its newest map (see MapLayerHFRCurrents.goToLatest)
+  timeFromUrl = false;
+  // The hour the HFR dashboard put the time handle on by itself - its newest
+  // map (ms). The URL only carries the hour when the handle is elsewhere.
+  hfrDefaultHour = undefined;
+  // The dashboard a hash like #/<dashboard>?... points to, or 'platforms'
+  // when it names nothing that can be shown (see urlState.js)
   dashboardFromHash(hash) {
     const id = /^#\/([^/?&]+)/.exec(hash)?.[1];
     const dashboard = this.dashboards.find(d => d.id === id && d.isAvailable);

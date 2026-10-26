@@ -55,7 +55,7 @@
         :note="sourceNote"></PDSourceLine>
 
       <!-- Switch to HFR currents dashboard -->
-      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="$gui.selectedDashboard = 'hfr'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="switchToDashboard">
         <div class="pd-switch-btn-circle">
           <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
@@ -106,6 +106,13 @@ export default {
     }
   },
   methods: {
+    // Over to the HF radar dashboard on this selection: another network than
+    // ICATMAR's is only there with the EU HFR Node as its source
+    switchToDashboard() {
+      const code = this.$gui.selectedPlatform?.network;
+      if (code && code !== 'HFR-ICATMAR') this.$gui.hfrSource = 'EU';
+      this.$gui.selectedDashboard = 'hfr';
+    },
     initMap() {
       this.map = new ol.Map({
         target: this.$refs.stationMap,

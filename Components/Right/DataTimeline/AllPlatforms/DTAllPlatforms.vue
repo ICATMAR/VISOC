@@ -1,6 +1,7 @@
 <template>
   <!-- Selected view -->
-  <component :is="currentView" v-if="currentView"></component>
+  <!-- The HFR view gets the selected station's network (see viewProps) -->
+  <component :is="currentView" v-if="currentView" v-bind="viewProps"></component>
 
   <!-- Bottom options. Wraps, which is what lets the variable picker open a
        second row underneath without a container of its own. -->
@@ -34,6 +35,7 @@ export default {
     }
     this.$gui.timelineDashboardId = this.selectedView.dashboardId;
     this.$gui.timelineIntervalMinutes = this.selectedView.defaultInterval;
+    this.loadNetworks();
   },
   beforeUnmount() {
     this.$gui.timelineDashboardId = null;
@@ -49,10 +51,17 @@ export default {
     return {
       views,
       selectedView: views[0],
+      networks: [], // getAllNetworks()' groups, once loaded
     }
   },
   methods: {
-    //onclick: function(e){},
+    async loadNetworks() {
+      try {
+        this.networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
+      } catch (error) {
+        console.error('Error loading the HF radar networks:', error);
+      }
+    },
     selectView(view) {
       this.selectedView = view;
       this.$gui.timelineDashboardId = view.dashboardId;
@@ -62,9 +71,29 @@ export default {
   computed: {
     currentView() {
       return this.selectedView.component || null;
-    }
+    },
+    // The HF radar station picked from another network than ICATMAR's (with
+    // External platforms on): that network, as the EU HFR Node publishes it -
+    // its stations are the rows. Otherwise null: ICATMAR's own network, as
+    // ICATMAR processes it (DTAPHFR's default).
+    hfrNetwork() {
+      const code = this.$gui.selectedPlatform?.network;
+      if (!code || code === 'HFR-ICATMAR') return null;
+      return this.$dataService.hfrnetwork.networkOf(this.networks, code);
+    },
+    viewProps() {
+      return this.currentView === 'DTAPHFR' ? { network: this.hfrNetwork } : {};
+    },
   },
   watch: {
+    // External platforms off: another network's station picked is no longer
+    // on the map - let go of it, the timeline goes back to ICATMAR's network
+    '$gui.platformsShowExternal'(shown) {
+      const code = this.$gui.selectedPlatform?.network;
+      if (shown || !code || code === 'HFR-ICATMAR') return;
+      this.$gui.selectedPlatform = null;
+      this.$gui.isPlatformDetailOpen = false;
+    },
     '$gui.timelineDashboardId'(newId) {
       if (!newId) return;
       const view = this.views.find(v => v.dashboardId === newId);

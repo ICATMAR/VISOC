@@ -57,7 +57,7 @@ export default {
     euNetwork() {
       if (this.$gui.hfrSource !== 'EU') return null;
       const code = this.$gui.selectedPlatform?.network || 'HFR-ICATMAR';
-      return this.networks.find(network => this.$dataService.hfrnetwork.networkCode(network) === code) ?? null;
+      return this.$dataService.hfrnetwork.networkOf(this.networks, code);
     },
     placeholder() {
       if (this.$gui.hfrTab === 'Compare') return 'Click on the map, a buoy or a drifter to compare it with the HF radars and the models';

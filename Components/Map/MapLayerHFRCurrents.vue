@@ -91,13 +91,22 @@ export default {
     },
     // Puts the time handle on the hour of the newest map, so the dashboard
     // opens on data rather than on "now", which maps reach an hour or two late
+    // The hour it puts the handle on is the dashboard's own
+    // (GUIManager.hfrDefaultHour): a shared link only says the hour when the
+    // user moved away from it (see urlState.js). A link's hour is kept - the
+    // handle isn't moved, this first time.
     async goToLatest() {
+      const fromUrl = this.$gui.timeFromUrl;
+      this.$gui.timeFromUrl = false;
+      if (fromUrl) this.loadField();
       let latest;
       try {
         latest = await this.$dataService.hfrtotals.getLatestTime(this.$gui.hfrSource, this.viewBbox());
       } catch (error) {
         console.error('Could not find the latest HF radar map:', error);
       }
+      if (latest) this.$gui.hfrDefaultHour = roundToHour(latest).getTime();
+      if (fromUrl) return;
       if (latest) this.$gui.selectedTime = roundToHour(latest);
       this.loadField();
     },
@@ -113,7 +122,10 @@ export default {
       const wasOnNewest = this.selectedHour().getTime() === before;
       await this.loadAvailability();
       const after = newestShown();
-      if (wasOnNewest && after > before) this.$gui.selectedTime = new Date(after); // the watcher loads its map
+      if (wasOnNewest && after > before) {
+        this.$gui.hfrDefaultHour = after;
+        this.$gui.selectedTime = new Date(after); // the watcher loads its map
+      }
       else if (!this.field || shownReprocessed) this.loadField();
     },
     // Which hours have maps, per network in view, over the timeline's range

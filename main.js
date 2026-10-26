@@ -10,11 +10,6 @@ import fr from './lang/fr.js';
 window.eventBus = window.mitt();
 
 
-// Utils for hash and routing
-import {setHashValue, getHashValue, removeHash} from './Assets/Scripts/utils.js';
-window.location.setHashValue = setHashValue;
-window.location.getHashValue = getHashValue;
-window.location.removeHash = removeHash;
 
 // Load scripts
 import GUIManager from './Assets/Scripts/GUIManager.js';
@@ -49,6 +44,8 @@ window.radialRangeBearing = radialRangeBearing;
 import RadialParticles from './Assets/Scripts/RadialParticles.js';
 import { scrollFade } from './Assets/Scripts/scrollFade.js';
 import { dragScroll } from './Assets/Scripts/dragScroll.js';
+// What is shown, in the URL (shareable, Back / Forward)
+import { startUrlState } from './Assets/Scripts/urlState.js';
 window.RadialParticles = RadialParticles;
 
 // Globals
@@ -60,23 +57,10 @@ window.GUIManager = Vue.reactive(new GUIManager());
 window.RequestsManager = new RequestsManager(); // Probably will delete, for now no use
 window.DataService = new DataService(FetchManager);
 
-// Routing: #/<dashboard>. The first dashboard comes from the URL, written back
-// with replaceState so an invalid or empty hash doesn't leave a history entry.
-// After that, Back/Forward (hashchange) drive the dashboard, and the
-// selectedDashboard setter drives the hash. The check against the current
-// dashboard matters: the setter's own hash write fires hashchange too, and
-// setting the same dashboard again would close a timeline opened just after.
-{
-  const initial = window.GUIManager.dashboardFromHash(window.location.hash);
-  window.GUIManager._selectedDashboard = initial;
-  if (!window.location.hash.startsWith('#/' + initial)) history.replaceState(null, '', '#/' + initial);
-  window.addEventListener('hashchange', () => {
-    const id = window.GUIManager.dashboardFromHash(window.location.hash);
-    if (id !== window.GUIManager.selectedDashboard) window.GUIManager.selectedDashboard = id;
-    // Same dashboard but a hash that didn't name it (#/foo): tidy the URL
-    else if (!window.location.hash.startsWith('#/' + id)) history.replaceState(null, '', '#/' + id);
-  });
-}
+// The first dashboard comes from the URL, before anything mounts; the rest of
+// the URL (the selection, the view, the hour, the map - see urlState.js) is
+// applied once the app is mounted, and kept in step from then on
+window.GUIManager._selectedDashboard = window.GUIManager.dashboardFromHash(window.location.hash);
 
 
 // Short screens (see GUIManager.SHORT_SCREEN_MAX_HEIGHT). Set here rather than
@@ -159,3 +143,4 @@ app.config.globalProperties.$gui = window.GUIManager;
 app.config.globalProperties.$requests = window.RequestsManager;
 app.config.globalProperties.$dataService = window.DataService;
 app.mount(document.body);
+startUrlState(window.GUIManager, window.DataService);

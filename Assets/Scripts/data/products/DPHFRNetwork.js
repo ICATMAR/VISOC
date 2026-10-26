@@ -225,6 +225,11 @@ class DPHFRNetwork extends DP {
   // One of getAllNetworks()' groups by its code ('HFR-DeltaEbro'): the
   // Total's site code, or its stations' network should the Total's metadata
   // have failed to load
+  // One of getAllNetworks()' groups by its code ('HFR-Galicia'), or null
+  networkOf(networks, code) {
+    return networks.find(network => this.networkCode(network) === code) ?? null;
+  }
+
   networkCode(network) {
     return network?.total?.site_code ?? network?.stations[0]?.metadata?.network;
   }

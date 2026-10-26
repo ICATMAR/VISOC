@@ -264,6 +264,27 @@ class DPHFRStations extends DP {
     return (await githubSource.radialFile(stationId, hour))?.metadata ?? null;
   }
 
+  // A station's radial bin with data nearest (lon, lat) at `hour` - what a
+  // shared link to a radial Point is rebuilt from (urlState.js), in the shape
+  // MapLayerHFRRadials.onClick gives the Point view - or null when the
+  // station has no bin within ~2 km there that hour
+  async nearestRadialBin(network, stationId, hour, lon, lat) {
+    const field = await this.getRadials(network, stationId, hour);
+    if (!field?.lat?.length) return null;
+    const cosLat = Math.cos(lat * Math.PI / 180);
+    let best = -1, bestDistance = Infinity;
+    for (let i = 0; i < field.lat.length; i++) {
+      const distance = Math.hypot((field.lon[i] - lon) * cosLat, field.lat[i] - lat);
+      if (distance < bestDistance) { bestDistance = distance; best = i; }
+    }
+    if (best < 0 || bestDistance > 0.02) return null;
+    return {
+      kind: 'radial', network, station: stationId, site: field.site,
+      lon: field.lon[best], lat: field.lat[best], axisNames: field.axisNames,
+      a: field.ax[best], b: field.bx[best], direction: field.direction[best],
+    };
+  }
+
   radialExtent(key, field) {
     if (field.coverage) return field.coverage;
     this.radialExtents ??= {};
