@@ -23,6 +23,87 @@ class DPHFRStations extends DP {
     return `HFR-${String(network ?? 'ICATMAR').replace(/^HFR-/, '')}:${stationId}`;
   }
 
+  // REFRESH. Each station's newest data as the views were told:
+  // 'HFR-<NETWORK>:<STATION>' -> ms - its EU HFR Node dataset's end, and for
+  // ICATMAR's stations its last .ruv on GitHub. Taken from the sources as
+  // they are, which only move on in refresh().
+  stationEnds() {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    const ends = new Map();
+    const note = (key, date) => { if (date) ends.set(key, Math.max(ends.get(key) ?? -Infinity, date.getTime())); };
+    Object.entries(euHFRSource?.stations ?? {}).forEach(([key, entry]) => {
+      // '<network>-<station>', or ICATMAR's '<station>'
+      const cut = key.lastIndexOf('-');
+      note(cut < 0 ? this.loadingKey('ICATMAR', key) : this.loadingKey(key.slice(0, cut), key.slice(cut + 1)), entry.endDate);
+    });
+    Object.entries(githubSource?.stations ?? {}).forEach(([id, coverage]) => note(this.loadingKey('ICATMAR', id), coverage.endDate));
+    return ends;
+  }
+
+  // The EU HFR Node's dataset list and GitHub's manifest read again. A
+  // change: { stations: [keys], reprocessed: { <key>: ['<ISO hour>'...] } } -
+  // the stations whose newest data moved on (one first seen now isn't:
+  // nobody was told of it before), and those with hours re-processed on
+  // GitHub (the EU HFR Node doesn't re-process; a .ruv's version is its row
+  // count in the manifest), whose cached files are then dropped
+  async refresh() {
+    const euHFRSource = this.sources.find(s => s instanceof SourceErddapEUHFR);
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    const before = this.announcedEnds ?? this.stationEnds();
+    const versionsBefore = this.announcedRadialVersions ?? await this.radialVersions();
+    await Promise.all([euHFRSource?.refreshEnds(), githubSource?.refresh()].map(p => Promise.resolve(p).catch(error => {
+      console.error('HF radar stations, refresh:', error);
+    })));
+    const after = this.stationEnds();
+    this.announcedEnds = after;
+    const moved = [...after.keys()].filter(key => before.has(key) && before.get(key) !== after.get(key));
+
+    const versionsNow = await this.radialVersions();
+    this.announcedRadialVersions = versionsNow;
+    const reprocessed = {};
+    versionsNow.forEach((versions, id) => {
+      const previous = versionsBefore.get(id);
+      if (!previous) return;
+      const hours = [...versions].filter(([hour, token]) => previous.has(hour) && previous.get(hour) !== token).map(([hour]) => hour);
+      if (hours.length === 0) return;
+      githubSource.invalidateHours(hours, id);
+      reprocessed[this.loadingKey('ICATMAR', id)] = hours;
+      this.reprocessed ??= new Map();
+      hours.forEach(hour => this.reprocessed.set(`${this.loadingKey('ICATMAR', id)}|${hour}`, Date.now()));
+    });
+    const stations = [...new Set([...moved, ...Object.keys(reprocessed)])];
+    if (stations.length) this.changed({ stations, reprocessed });
+  }
+
+  // When a station's radials for `hour` were found re-processed, if it was
+  // while the page was open (ms) - for the views to say "updated"
+  reprocessedAt(network, stationId, hour) {
+    return this.reprocessed?.get(`${this.loadingKey(network, stationId)}|${new Date(hour).toISOString()}`);
+  }
+
+  // GitHub's version of each of ICATMAR's stations' .ruv over the last
+  // week: Map(station -> Map(hour -> token)) - from the manifest, no request
+  async radialVersions() {
+    const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
+    const result = new Map();
+    if (!githubSource) return result;
+    const end = new Date(), start = new Date(end.getTime() - 7 * 86400000);
+    await Promise.all(hfrIcatmarNetwork.stations.map(async station => {
+      result.set(station.id, await githubSource.getRadialVersions(station.id, start, end).catch(() => new Map()));
+    }));
+    return result;
+  }
+
+  // A read found a station's data for `hour`: past what the views were told,
+  // refresh now rather than at the next tick
+  noteStationHour(network, stationId, hour) {
+    if (!hour) return;
+    this.announcedEnds ??= this.stationEnds();
+    const known = this.announcedEnds.get(this.loadingKey(network, stationId));
+    if (known != undefined && new Date(hour).getTime() > known) this.requestRefresh();
+  }
+
   isStationLoading(network, stationId) {
     return this.loadingCounts.has(this.loadingKey(network, stationId));
   }
@@ -137,6 +218,7 @@ class DPHFRStations extends DP {
       field = fromGithub ?? (field === undefined ? null : field);
     }
     if (!field) return field;
+    this.noteStationHour(network, stationId, hour);
     return { ...field, extent: this.radialExtent(`${network}:${stationId}`, field) };
   }
 
@@ -152,7 +234,9 @@ class DPHFRStations extends DP {
   async getGithubRadialHours(stationId, startDate, endDate) {
     const githubSource = this.sources.find(s => s instanceof SourceGithubHFR);
     if (!githubSource || !hfrIcatmarNetwork.stations.some(s => s.id === stationId)) return [];
-    return this.trackLoading('ICATMAR', stationId, Promise.resolve(githubSource.radialHours(stationId, startDate, endDate)));
+    const hours = await this.trackLoading('ICATMAR', stationId, Promise.resolve(githubSource.radialHours(stationId, startDate, endDate)));
+    if (hours.length) this.noteStationHour('ICATMAR', stationId, hours[hours.length - 1]);
+    return hours;
   }
 
   // One radial bin at one hour from ICATMAR's GitHub (see

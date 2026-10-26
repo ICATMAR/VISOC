@@ -36,6 +36,9 @@ const GRIDDAP_ENTRY_KEYS = ['time_coverage_start', 'time_coverage_end', 'site_la
 // requests themselves are cached
 const RADIAL_CACHE_SIZE = 300;
 const RADIAL_TTL_MINUTES = 10;
+// How long an hour found without radials waits before it is asked again
+// past the HTTP cache (see getRadialField)
+const EMPTY_RECHECK_MS = 2 * 60 * 1000;
 const HALF_HOUR_MS = 30 * 60 * 1000;
 
 function pick(metadata, keys) {
@@ -115,6 +118,26 @@ class SourceErddapEUHFR extends Source {
     const { startDate, endDate } = this.dateRange();
     this.startDate = startDate;
     this.endDate = endDate;
+  }
+
+  // The stations' newest data, read again now (see DPHFRStations.refresh):
+  // one request - the server's dataset list, which has every dataset's
+  // maxTime - rather than each station's info page again. Moves on the end
+  // of every station already known (its entry and its time_coverage_end);
+  // whether any moved.
+  async refreshEnds() {
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const ends = new Map(allDatasets.filter(d => d['maxTime']).map(d => [d['datasetID'], new Date(d['maxTime'])]));
+    let moved = false;
+    Object.values(this.stations).forEach(entry => {
+      const end = ends.get(entry.dataset);
+      if (!end || (entry.endDate && end <= entry.endDate)) return;
+      entry.endDate = end;
+      if (entry.metadata) entry.metadata['time_coverage_end'] = end.toISOString().replace('.000Z', 'Z');
+      moved = true;
+    });
+    if (moved) Object.assign(this, this.dateRange());
+    return moved;
   }
 
   // Earliest start and latest end across all stations - each one may have
@@ -445,10 +468,24 @@ class SourceErddapEUHFR extends Source {
     const key = `${entry.dataset}|${hour.toISOString()}`;
     this.radialFields ??= new Map();
     if (!this.radialFields.has(key)) {
-      this.radialFields.set(key, this.fetchRadialField(entry, hour).catch(error => {
+      // "No radials that hour" isn't kept: the station may publish it later.
+      // Asked again past the HTTP cache - but no more than every
+      // EMPTY_RECHECK_MS, so panning over an empty hour doesn't re-ask
+      this.radialEmptyAt ??= new Map();
+      const emptyAt = this.radialEmptyAt.get(key);
+      const fresh = emptyAt != undefined && Date.now() - emptyAt > EMPTY_RECHECK_MS;
+      const promise = this.fetchRadialField(entry, hour, fresh).then(field => {
+        if (field) this.radialEmptyAt.delete(key);
+        else {
+          if (emptyAt == undefined || fresh) this.radialEmptyAt.set(key, Date.now());
+          if (this.radialFields.get(key) === promise) this.radialFields.delete(key);
+        }
+        return field;
+      }, error => {
         this.radialFields.delete(key);
         throw error;
-      }));
+      });
+      this.radialFields.set(key, promise);
       // Least recently added out first
       if (this.radialFields.size > RADIAL_CACHE_SIZE) this.radialFields.delete(this.radialFields.keys().next().value);
     }
@@ -458,7 +495,7 @@ class SourceErddapEUHFR extends Source {
     return { ...field, origin: this.originOf(entry.dataset), coverage: c ? [c.minLon, c.minLat, c.maxLon, c.maxLat] : undefined };
   }
 
-  async fetchRadialField(entry, hour) {
+  async fetchRadialField(entry, hour, fresh = false) {
     const from = new Date(hour.getTime() - HALF_HOUR_MS);
     const to = new Date(hour.getTime() + HALF_HOUR_MS);
     if (entry.startDate && to <= entry.startDate) return null;
@@ -470,7 +507,7 @@ class SourceErddapEUHFR extends Source {
     const url = `${this.baseUrl}/griddap/${entry.dataset}.nc?RDVA${selectors},QCflag${selectors}`;
     let buffer;
     try {
-      buffer = await this.fetchManager.fetch(url, RADIAL_TTL_MINUTES).then(res => res.arrayBuffer());
+      buffer = await this.fetchManager.fetch(url, fresh ? 0 : RADIAL_TTL_MINUTES).then(res => res.arrayBuffer());
     } catch (error) {
       if (error.name === 'HTTPError') return null; // nothing from that hour on
       throw error;

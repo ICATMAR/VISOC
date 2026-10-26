@@ -25,6 +25,9 @@ import DataService from './Assets/Scripts/data/DataService.js';
 // Vue mixin to poll for data and update the GUI, common for several .vue components
 import pollMixin from './Assets/Scripts/pollMixin.js';
 window.pollMixin = pollMixin;
+// Vue mixin: a component reacts to a data product's new data (see DataProduct.changed)
+import dataProductMixin from './Assets/Scripts/dataProductMixin.js';
+window.dataProductMixin = dataProductMixin;
 // Vue mixin for the platform details: short screens move the map focus to the main map
 import pdFocusMixin from './Assets/Scripts/pdFocusMixin.js';
 window.pdFocusMixin = pdFocusMixin;

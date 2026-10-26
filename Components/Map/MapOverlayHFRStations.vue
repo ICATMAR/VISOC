@@ -31,6 +31,8 @@ const NON_ICATMAR_INSTITUTIONS = ['CEFREM', 'Puertos del Estado'];
 
 export default {
   name: "MapOverlayHFRStations",
+  // Stations with new data while the page is open (DPHFRStations.refresh)
+  mixins: [window.dataProductMixin({ hfrstations: 'onStationsChanged' })],
   mounted() {
 
     this.$nextTick(() => {
@@ -60,6 +62,16 @@ export default {
     }
   },
   methods: {
+    // Their newest data moved on: each marker's status again, from the
+    // networks as they are now (see DPHFRNetwork.applyStationEnds) - the same
+    // markers, so nothing is re-created on the map
+    async onStationsChanged() {
+      const networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
+      networks.flatMap(network => network.stations).forEach(live => {
+        const station = this.stations.find(s => this.keyOf(s) === this.keyOf(live));
+        if (station) station.metadata = { ...live.metadata };
+      });
+    },
     // getAllNetworks() groups stations by network (each { total, stations })
     // - flattened here since the map just shows every station regardless of
     // which network it's on.

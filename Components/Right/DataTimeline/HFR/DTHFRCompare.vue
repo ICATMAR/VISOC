@@ -84,6 +84,8 @@ export default {
       loading: {},  // row key -> true while its series is on its way
     }
   },
+  // New HF radar maps found while the page is open (DPHFRTotals.refresh)
+  mixins: [window.dataProductMixin({ hfrtotals: 'onTotalsChanged' })],
   mounted() {
     // Hourly while this view is open; the timeline's own choice is put back
     this.previousInterval = this.$gui.timelineIntervalMinutes;
@@ -141,6 +143,25 @@ export default {
           done(row.key, this.fromCodes(series?.data), { series: series ? [series] : [] });
         }))
         .catch(error => modelRows.forEach(row => failed(row.key)(error)));
+    },
+    // New maps (see DPHFRTotals.refresh): the HF radar rows again, and
+    // GitHub's newest hours into ICATMAR's - the other rows, the point and the
+    // selected cell stay as they are
+    onTotalsChanged() {
+      const point = this.$gui.hfrPoint;
+      if (!point) return;
+      const request = this.request;
+      const start = this.$gui.timelineStartDate, end = this.$gui.timelineEndDate;
+      ['ICATMAR', 'EU'].forEach(provider => {
+        this.$dataService.hfrtotals.getPointSeries(provider, point.lon, point.lat, start, end)
+          .then(result => {
+            if (request !== this.request) return;
+            this.series = { ...this.series, [provider]: Object.values(result.data) };
+            this.provenance = { ...this.provenance, [provider]: { cell: result.cell, cells: result.cells, used: result.used } };
+            if (provider === 'ICATMAR') { this.githubFilled = false; this.fillFromGithub(); }
+          })
+          .catch(error => console.error(`Compare: ${provider}, refresh`, error));
+      });
     },
     // { '<ISO>': { HCSP: { value, ... }, HCDT: { value } } } -> every reading,
     // keeping what it says about itself (sensor, instrument, depth)

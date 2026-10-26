@@ -79,6 +79,9 @@ export default {
     // groups); ICATMAR's own network when not given
     network: { type: Object, default: null },
   },
+  // New counts while the page is open: the stations' (DPHFRStations.refresh)
+  // and the network Total's (DPHFRTotals.refresh)
+  mixins: [window.dataProductMixin({ hfrstations: 'loadStations', hfrtotals: 'loadStations' })],
   created() {
     this.loadStations();
     this.selectBarAtSelectedTime(); // a platform picked before this opened

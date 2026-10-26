@@ -119,7 +119,7 @@ class SourceErddapHFRadars extends Source {
   // `network`: the name of a single-dataset source's network.
   // `countVariable`: a variable that is filled wherever a map has data and
   // empty elsewhere - a one-byte QC flag, so counting it per hour is cheap.
-  constructor({ fetchManager, src, datasets, datasetPattern, eastward = 'EWCT', northward = 'NSCT', countVariable = 'QCflag', useProxy = true, provider, network, preferNetwork, label }) {
+  constructor({ fetchManager, src, datasets, datasetPattern, eastward = 'EWCT', northward = 'NSCT', countVariable = 'QCflag', useProxy = true, provider, network, preferNetwork, label, reprocessed = false }) {
     super({ fetchManager });
     this.src = src;
     this.baseUrl = src.replace(/\/index\.html$/, '');
@@ -139,6 +139,12 @@ class SourceErddapHFRadars extends Source {
     this.grids = new Map();        // dataset -> Promise of { dimensions, axes }
     this.times = new Map();        // '<dataset>|<day>' -> Promise<[Date]>
     this.maps = new Map();         // '<dataset>|<ISO>' -> Promise<VectorField>
+    this.staleCounts = new Set();  // '<dataset>|<stride>': counts to ask afresh once (see refresh)
+    // Whether the server re-processes hours it has published (ICATMAR's does;
+    // the EU HFR Node doesn't) - see getVersions
+    this.reprocessed = reprocessed;
+    this.staleHours = new Map();   // '<dataset>' -> Map(hour ms -> when it went stale, ms)
+    this.updatedAt = new Map();    // '<ISO hour>' -> its file's last modification, ms
 
     this.loadingPromise = this.load();
   }
@@ -157,6 +163,103 @@ class SourceErddapHFRadars extends Source {
       this.loadingPromise = this.load();
     }
     return this.loadingPromise;
+  }
+
+  // REPROCESSING. A server that re-processes published hours lists each
+  // hour's file with its last modification (ERDDAP's files service: one
+  // file per hour, all the same size - the time is the version). The
+  // versions in [startDate, endDate]: Map('<ISO hour>' -> ms) - from the
+  // dataset that serves the hour (networksIn's order). One small listing per
+  // dataset and month. Empty for a server that doesn't re-process.
+  async getVersions(startDate, endDate) {
+    const versions = new Map();
+    if (!this.reprocessed) return versions;
+    const networks = (await this.networksIn(undefined, startDate)).filter(n => !n.startDate || n.startDate <= endDate);
+    const months = [];
+    for (let m = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1)); m <= endDate; m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1)))
+      months.push(`${m.getUTCFullYear()}/${String(m.getUTCMonth() + 1).padStart(2, '0')}`);
+    const from = startDate.getTime(), to = endDate.getTime();
+    for (const network of networks) {
+      const listings = await Promise.all(months.map(month =>
+        this.fetchManager.fetch(this.url(`${this.baseUrl}/files/${network.dataset}/${month}/.csv`), 1, TIMEOUT)
+          .then(res => res.text())
+          .catch(() => ''))); // no such month there
+      listings.join('\n').split('\n').forEach(line => {
+        const [name, modified] = line.split(',');
+        const match = name?.match(/_(\d{4})_(\d{2})_(\d{2})_(\d{2})(\d{2})\.nc$/);
+        if (!match || !Number.isFinite(Number(modified))) return;
+        const hour = hourOf(new Date(Date.UTC(match[1], match[2] - 1, match[3], match[4], match[5])));
+        const t = hour.getTime();
+        if (t < from || t > to || versions.has(hour.toISOString())) return;
+        versions.set(hour.toISOString(), Number(modified));
+        this.updatedAt.set(hour.toISOString(), Number(modified));
+      });
+    }
+    return versions;
+  }
+
+  // When the hour's file was last modified (ms), as far as getVersions has seen
+  getUpdatedAt(hour) {
+    return this.updatedAt.get(new Date(hour).toISOString());
+  }
+
+  // Hours whose files changed: their maps are dropped, and any request
+  // about them - the map, a series or the counts reaching them - is asked
+  // again once (see freshTtl)
+  invalidateHours(hours) {
+    const now = Date.now();
+    this.networks.forEach(network => {
+      const stale = this.staleHours.get(network.dataset) ?? new Map();
+      hours.forEach(hour => {
+        stale.set(new Date(hour).getTime(), now);
+        [...this.maps.keys()].forEach(key => {
+          const [dataset, time] = key.split('|');
+          if (dataset === network.dataset && hourOf(new Date(time)).toISOString() === hour) this.maps.delete(key);
+        });
+      });
+      this.staleHours.set(network.dataset, stale);
+    });
+  }
+
+  // The TTL for a request about `dataset` covering [from, to] (Dates; `to`
+  // undefined: up to its last map): 0 - asked again - when an hour in it
+  // went stale after the response kept for `url` was fetched, else `ttl`
+  freshTtl(dataset, url, from, to, ttl) {
+    const stale = this.staleHours.get(dataset);
+    if (!stale?.size) return ttl;
+    const fetchedAt = this.fetchManager.fetchedAt?.(url);
+    if (fetchedAt == undefined) return ttl;
+    const a = from.getTime() - HALF_HOUR_MS, b = to ? to.getTime() + HALF_HOUR_MS : Infinity;
+    for (const [hour, at] of stale) if (hour >= a && hour <= b && at > fetchedAt) return 0;
+    return ttl;
+  }
+
+  // The dataset list read again now (see the data products' refresh): a
+  // dataset's last time moves on as maps are published. Whether any did -
+  // then its lists of times from its old last day on are asked again, and
+  // so are its availability counts (which end at 'last', the same URL).
+  async refresh() {
+    await this.loadingPromise?.catch(() => {});
+    const before = new Map(this.networks.map(n => [n.dataset, n.endDate?.getTime()]));
+    try {
+      await this.loadDatasets();
+    } catch (error) {
+      console.error(`HF radar totals on ${this.src}, refresh:`, error);
+      return false;
+    }
+    let changed = false;
+    this.networks.forEach(n => {
+      const old = before.get(n.dataset);
+      if (n.endDate?.getTime() === old) return;
+      changed = true;
+      const fromDay = old == undefined ? 0 : new Date(old).setUTCHours(0, 0, 0, 0);
+      [...this.times.keys()].forEach(key => {
+        const [dataset, day] = key.split('|');
+        if (dataset === n.dataset && new Date(day).getTime() >= fromDay) this.times.delete(key);
+      });
+      [1, COUNT_STRIDE].forEach(stride => this.staleCounts.add(`${n.dataset}|${stride}`));
+    });
+    return changed;
   }
 
   // The datasets, their networks, where and when they have data - all from
@@ -322,8 +425,8 @@ class SourceErddapHFRadars extends Source {
     const url = `${this.baseUrl}/griddap/${network.dataset}.csv?${this.eastward}${selectors}`;
     let text;
     try {
-      // A published map doesn't change
-      text = await this.fetchManager.fetch(this.url(url), IMAGE_TTL, TIMEOUT).then(res => res.text());
+      // A published map doesn't change - unless re-processed (see freshTtl)
+      text = await this.fetchManager.fetch(this.url(url), this.freshTtl(network.dataset, this.url(url), best, best, IMAGE_TTL), TIMEOUT).then(res => res.text());
     } catch (error) {
       if (error.name === 'HTTPError') return [];
       throw error;
@@ -393,8 +496,8 @@ class SourceErddapHFRadars extends Source {
   async fetchMap(network, time) {
     const { dimensions, axes } = await this.grid(network.dataset);
     const [east, north] = await Promise.all([
-      this.fetchImageData(this.imageUrl(network.dataset, this.eastward, time, dimensions, axes)),
-      this.fetchImageData(this.imageUrl(network.dataset, this.northward, time, dimensions, axes)),
+      this.fetchImageData(this.imageUrl(network.dataset, this.eastward, time, dimensions, axes), network.dataset, time),
+      this.fetchImageData(this.imageUrl(network.dataset, this.northward, time, dimensions, axes), network.dataset, time),
     ]);
     const field = VectorField.fromGrayImages(east, north, axes, RANGE, time, network.network);
     // Which dataset it is from (one network's - a merge of several has none),
@@ -452,7 +555,8 @@ class SourceErddapHFRadars extends Source {
         + `${this.eastward}${encodeURIComponent(selectors)},${this.northward}${encodeURIComponent(selectors)}`;
       let text;
       try {
-        text = await this.fetchManager.fetch(this.url(url), TIMES_TTL, TIMEOUT).then(res => res.text());
+        const ttl = this.freshTtl(network.dataset, this.url(url), from, to === 'last' ? undefined : endDate, TIMES_TTL);
+        text = await this.fetchManager.fetch(this.url(url), ttl, TIMEOUT).then(res => res.text());
       } catch (error) {
         if (error.name === 'HTTPError') continue; // nothing there in the window
         throw error;
@@ -541,7 +645,8 @@ class SourceErddapHFRadars extends Source {
       const url = `${this.baseUrl}/griddap/${chosen.dataset}.csv?${names.map(name => name + selectors).join(',')}`;
       let text;
       try {
-        text = await this.fetchManager.fetch(this.url(url), TIMES_TTL, TIMEOUT).then(res => res.text());
+        const ttl = this.freshTtl(chosen.dataset, this.url(url), from, to === 'last' ? undefined : endDate, TIMES_TTL);
+        text = await this.fetchManager.fetch(this.url(url), ttl, TIMEOUT).then(res => res.text());
       } catch (error) {
         if (error.name === 'HTTPError') continue; // nothing there in the window
         throw error;
@@ -650,7 +755,10 @@ class SourceErddapHFRadars extends Source {
     const url = `${this.baseUrl}/griddap/${network.dataset}.nc?${variable}${encodeURIComponent(selectors)}`;
     let buffer;
     try {
-      buffer = await this.fetchManager.fetch(this.url(url), COUNT_TTL, TIMEOUT).then(res => res.arrayBuffer());
+      // Once afresh after a refresh found new maps: the URL ends at 'last'
+      const ttl = this.staleCounts.delete(`${network.dataset}|${stride}`) ? 0
+        : this.freshTtl(network.dataset, this.url(url), from, endDate, COUNT_TTL);
+      buffer = await this.fetchManager.fetch(this.url(url), ttl, TIMEOUT).then(res => res.arrayBuffer());
     } catch (error) {
       if (error.name === 'HTTPError') return {}; // nothing in the range
       throw error;
@@ -728,8 +836,10 @@ class SourceErddapHFRadars extends Source {
       + `&.size=${encodeURIComponent(`${axes.nx * UPSCALE}|${axes.ny * UPSCALE}`)}`;
   }
 
-  async fetchImageData(url) {
-    const blob = await this.fetchManager.fetch(this.url(url), IMAGE_TTL, TIMEOUT).then(res => res.blob());
+  async fetchImageData(url, dataset, time) {
+    // A published map doesn't change - unless re-processed (see freshTtl)
+    const ttl = dataset ? this.freshTtl(dataset, this.url(url), time, time, IMAGE_TTL) : IMAGE_TTL;
+    const blob = await this.fetchManager.fetch(this.url(url), ttl, TIMEOUT).then(res => res.blob());
     const bitmap = await createImageBitmap(blob);
     const canvas = typeof OffscreenCanvas !== 'undefined'
       ? new OffscreenCanvas(bitmap.width, bitmap.height)

@@ -11,7 +11,112 @@ const ICATMAR_NAMES = {
 };
 const quantityOf = name => ICATMAR_NAMES[name] ?? name;
 
+// The HF dashboard's two choices of maps (see mapSources)
+const PROVIDERS = ['ICATMAR', 'EU'];
+// How far back re-processed hours are looked for (see refresh) - the hours
+// a timeline shows
+const REPROCESS_WINDOW_DAYS = 7;
+
 class DPHFRTotals extends DP {
+
+  // REFRESH. What the views were told: the newest map per provider
+  // ({ ICATMAR: ms, EU: ms }), taken when the refresh starts (the views load
+  // then) and at every change since. Compared against the sources as they
+  // are now - not against their previous state, which can move on its own
+  // (GitHub's manifest is read again every few minutes by whatever asks).
+  startRefresh(minutes) {
+    super.startRefresh(minutes);
+    this.announced ??= this.latestTimes();
+    this.announcedVersions ??= this.versionsNow();
+  }
+
+  // Each re-processing source's version of every hour in the last
+  // REPROCESS_WINDOW_DAYS (see SourceErddapHFRadars / SourceGithubHFR
+  // getVersions): [{ source, versions: Map(hour -> token) }]. ICATMAR's ERDDAP
+  // and GitHub re-process published hours; the EU HFR Node doesn't.
+  async versionsNow() {
+    const end = new Date(), start = new Date(end.getTime() - REPROCESS_WINDOW_DAYS * 86400000);
+    const sources = this.sources.filter(s => typeof s.getVersions === 'function');
+    const versions = await Promise.all(sources.map(s => s.getVersions(start, end).catch(error => {
+      console.error(`HF radar totals, versions from ${s.label}:`, error);
+      return null;
+    })));
+    return sources.map((source, i) => ({ source, versions: versions[i] }));
+  }
+
+  async latestTimes() {
+    const times = await Promise.all(PROVIDERS.map(p => this.getLatestTime(p).catch(() => undefined)));
+    return Object.fromEntries(PROVIDERS.map((p, i) => [p, times[i]?.getTime()]));
+  }
+
+  // Every source checks for new maps (GitHub's manifest, the ERDDAPs'
+  // dataset lists, read afresh) and for re-processed hours (each hour's
+  // version against the one the views were told of - its cached maps and
+  // files are then dropped). A change: { previousLatest, latest } (Dates per
+  // provider) and reprocessed: { <provider>: ['<ISO hour>'...] }
+  async refresh() {
+    await Promise.all(this.sources.filter(s => typeof s.refresh === 'function').map(s => s.refresh().catch(error => {
+      console.error(`HF radar totals, refresh of ${s.label}:`, error);
+    })));
+    const previous = await this.announced;
+    const latest = await this.latestTimes();
+    const reprocessed = await this.findReprocessed();
+    const moved = !previous || PROVIDERS.some(p => latest[p] !== previous[p]);
+    if (!moved && Object.keys(reprocessed).length === 0) return;
+    this.announced = Promise.resolve(latest);
+    const asDates = times => Object.fromEntries(PROVIDERS.map(p => [p, times?.[p] != undefined ? new Date(times[p]) : undefined]));
+    this.changed({ previousLatest: asDates(previous), latest: asDates(latest), reprocessed });
+  }
+
+  // The hours whose version changed since the views were told: dropped from
+  // their source's caches and remembered (see reprocessedAt) -
+  // { <provider>: ['<ISO hour>'...] }. A source that couldn't answer, now or
+  // before, is left for the next refresh.
+  async findReprocessed() {
+    const previous = await this.announcedVersions;
+    const now = await this.versionsNow();
+    const found = {};
+    now.forEach(({ source, versions }, i) => {
+      const before = previous?.[i]?.source === source ? previous[i].versions : null;
+      if (!versions || !before) return;
+      const hours = [...versions].filter(([hour, token]) => before.has(hour) && before.get(hour) !== token).map(([hour]) => hour);
+      if (hours.length === 0) return;
+      source.invalidateHours?.(hours);
+      this.reprocessed ??= new Map();
+      hours.forEach(hour => this.reprocessed.set(`${source.provider}|${hour}`, source.getUpdatedAt?.(hour) ?? Date.now()));
+      found[source.provider] = [...new Set([...(found[source.provider] ?? []), ...hours])];
+    });
+    // Unanswered now: keep what the views were told for that source
+    this.announcedVersions = Promise.resolve(now.map((entry, i) => entry.versions ? entry : (previous?.[i] ?? entry)));
+    return found;
+  }
+
+  // When `provider`'s data for `hour` was re-processed, if it was while the
+  // page was open (ms: its file's modification where the source says, else
+  // when it was found) - for the views to say "updated"
+  reprocessedAt(provider, hour) {
+    return this.reprocessed?.get(`${provider}|${new Date(hour).toISOString()}`);
+  }
+
+  // When the file of `hour` was last modified, as a re-processing ERDDAP
+  // lists it (ms), or undefined
+  getUpdatedAt(provider, hour) {
+    for (const source of this.mapSources(provider)) {
+      const at = source.getUpdatedAt?.(hour);
+      if (at != undefined) return at;
+    }
+    return undefined;
+  }
+
+  // A read of `provider` found data for `hour`: past the newest map the
+  // views were told of for it, the sources have news - refresh now, not at
+  // the next tick (a point opened on an hour the availability bar doesn't
+  // have yet). Per provider: the EU's newest can be another network's.
+  async noteHour(provider, hour) {
+    if (!hour || !this.announced) return;
+    const announced = (await this.announced)?.[provider];
+    if (announced != undefined && new Date(hour).getTime() > announced) this.requestRefresh();
+  }
 
   // Per-hour count of valid grid points for the ICATMAR network's Total,
   // within [startDate, endDate] (endDate defaults to now). Same shape as
@@ -220,6 +325,7 @@ class DPHFRTotals extends DP {
         console.error(`HF radar series from ${source.label}:`, error);
       }
     }
+    this.noteHour(provider, Object.keys(result.data).sort().pop());
     return result;
   }
 
@@ -261,6 +367,7 @@ class DPHFRTotals extends DP {
         result.origins[hour] = originOf(hour);
       });
     }
+    if (result) this.noteHour(provider, Object.keys(result.origins).sort().pop());
     return result;
   }
 
@@ -274,14 +381,18 @@ class DPHFRTotals extends DP {
   // The hours ICATMAR's GitHub has a totals file for, in [startDate, endDate]
   async getGithubHours(startDate, endDate) {
     const github = this.sources.find(s => typeof s.totalsHours === 'function');
-    return github ? github.totalsHours(startDate, endDate) : [];
+    const hours = github ? await github.totalsHours(startDate, endDate) : [];
+    if (hours.length) this.noteHour('ICATMAR', hours[hours.length - 1]);
+    return hours;
   }
 
   // One grid cell at one hour from ICATMAR's GitHub (see
   // SourceGithubHFR.getTotalsCell) - the hours the ERDDAPs don't have yet
   async getGithubCell(hour, lon, lat) {
     const github = this.sources.find(s => typeof s.getTotalsCell === 'function');
-    return github ? github.getTotalsCell(hour, lon, lat) : null;
+    const found = github ? await github.getTotalsCell(hour, lon, lat) : null;
+    if (found) this.noteHour('ICATMAR', hour);
+    return found;
   }
 
   // The header of ICATMAR's totals .tuv on GitHub for an hour - the file the

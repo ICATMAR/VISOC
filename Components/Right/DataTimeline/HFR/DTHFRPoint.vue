@@ -85,6 +85,9 @@ export default {
       visibleWidth: 0, // the timeline's visible width, px (see watchTimelineWidth)
     }
   },
+  // New data found while the page is open (DPHFRTotals / DPHFRStations
+  // refresh): a grid point's or a radial bin's
+  mixins: [window.dataProductMixin({ hfrtotals: 'onTotalsChanged', hfrstations: 'onStationsChanged' })],
   mounted() {
     this.previousInterval = this.$gui.timelineIntervalMinutes;
     this.$gui.timelineIntervalMinutes = 60;
@@ -113,15 +116,28 @@ export default {
       this.timelineObserver = new ResizeObserver(() => { this.visibleWidth = scroller.clientWidth; });
       this.timelineObserver.observe(scroller);
     },
-    async load() {
+    // New maps: a grid point's series again
+    onTotalsChanged() {
+      if (this.point?.kind === 'total') this.load({ keep: true });
+    },
+    // New radials from a station: its bin's series again
+    onStationsChanged({ stations = [] } = {}) {
+      const p = this.point;
+      if (p?.kind === 'radial' && stations.includes(this.$dataService.hfrstations.loadingKey(p.network, p.station))) this.load({ keep: true });
+    },
+    // The data point's series. `keep`: what is shown stays until the new
+    // series is in (new hours found - not another point)
+    async load({ keep = false } = {}) {
       const request = (this.request ?? 0) + 1;
       this.request = request;
-      this.series = null;
-      this.missing = false;
-      this.publish();
       const p = this.point;
+      if (!keep || !this.series) {
+        this.series = null;
+        this.missing = false;
+        this.publish();
+      }
       if (!p) return;
-      this.loading = true;
+      if (!keep) this.loading = true;
       const start = this.$gui.timelineStartDate, end = this.$gui.timelineEndDate;
       let series;
       try {
@@ -317,6 +333,9 @@ export default {
       if (origin?.cell && this.point) {
         origin.dataset = `${origin.dataset} · ${this.$t('cell')} ${Number(origin.cell.latitude).toFixed(4)}º N, ${Number(origin.cell.longitude).toFixed(4)}º E`;
       }
+      // Re-processed while the page was open: said, with when
+      const reprocessedAt = origin && this.reprocessedAt(key);
+      if (reprocessedAt) origin.dataset = `${origin.dataset} · ${this.$t('updated')} ${this.formatUTC(reprocessedAt)}`;
       this.$gui.hfrDataPointOrigin = origin;
       this.describeSource(origin, key);
     },
@@ -351,9 +370,9 @@ export default {
       // A GitHub hour is its own file; an ERDDAP dataset is the same for every hour
       const id = `${this.pointKey}|${origin.source}|${origin.datasetId}|${fromGithub || origin.source === 'Static files' ? hourKey : ''}`;
       if (id === this.describedKey) {
-        // Same source: only "This hour" follows the hour
+        // Same source: only "This hour" and "Updated" follow the hour
         const info = this.$gui.hfrDataPointSourceInfo;
-        if (info) this.$gui.hfrDataPointSourceInfo = { ...info, rows: info.rows.map(r => r.id === 'thisHour' ? this.thisHourRow(origin) : r) };
+        if (info) this.$gui.hfrDataPointSourceInfo = { ...info, rows: this.withHourRows(info.rows.filter(r => r.id !== 'updated'), origin, hourKey) };
         return;
       }
       this.describedKey = id;
@@ -363,7 +382,7 @@ export default {
         key: id,
         title: fromGithub ? 'ICATMAR GitHub' : origin.label,
         subtitle: network ? `${this.$t('Network')} ${network}` : undefined,
-        rows: [
+        rows: this.withHourRows([
           this.thisHourRow(origin),
           { label: 'Processing', value: this.$t(origin.source !== 'EU HFR Node'
             ? "ICATMAR's own processing of its radars"
@@ -383,7 +402,7 @@ export default {
           { label: 'Depth', value: network === 'ICATMAR'
             ? this.$t('Top ~0.9 m of the water column (13.5 MHz SeaSonde, λ/8π)')
             : this.$t('Top ~1 m of the water column (depends on the radar frequency)') },
-        ],
+        ], origin, hourKey),
       };
       this.$gui.hfrDataPointSourceInfo = { ...base, loading: true };
       let more = [];
@@ -411,6 +430,32 @@ export default {
       }
       if (this.describedKey !== id) return; // another source meanwhile
       this.$gui.hfrDataPointSourceInfo = { ...base, rows: [...base.rows, ...more], loading: false };
+    },
+    // `rows` with "This hour" for the hour, and "Updated" after it when known:
+    // when the hour's file was last modified (ICATMAR's ERDDAP lists it), or
+    // when it was found re-processed while the page was open (GitHub's say
+    // when they were processed in their header - see "Processed")
+    withHourRows(rows, origin, hourKey) {
+      const p = this.point;
+      const modified = p?.kind === 'total' && origin.source === 'ICATMAR ERDDAP' ? this.$dataService.hfrtotals.getUpdatedAt(p.provider, hourKey) : undefined;
+      const reprocessed = this.reprocessedAt(hourKey);
+      const at = modified ?? reprocessed;
+      const result = rows.map(r => r.id === 'thisHour' ? this.thisHourRow(origin) : r);
+      if (at) result.splice(1, 0, { id: 'updated', label: 'Updated',
+        value: `${new Date(at).toISOString().substring(0, 10)} ${this.formatUTC(at)}${reprocessed ? ` (${this.$t('re-processed while open')})` : ''}` });
+      return result;
+    },
+    // When this data point's `hourKey` was found re-processed, if it was
+    // while the page was open
+    reprocessedAt(hourKey) {
+      const p = this.point;
+      if (!p || !hourKey) return undefined;
+      return p.kind === 'radial'
+        ? this.$dataService.hfrstations.reprocessedAt(p.network, p.station, hourKey)
+        : this.$dataService.hfrtotals.reprocessedAt(p.provider, hourKey);
+    },
+    formatUTC(ms) {
+      return `${new Date(ms).toISOString().substring(11, 16)} UTC`;
     },
     // "This hour": the file or dataset the selected hour's values came from
     thisHourRow(origin) {

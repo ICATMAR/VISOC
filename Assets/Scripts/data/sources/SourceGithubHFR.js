@@ -167,19 +167,37 @@ class SourceGithubHFR extends Source {
   // ICATMAR/data's manifest (see MANIFEST_URL), indexed by ISO hour:
   // { generated, radials: { STA: Map(hour -> rows) }, totals: Map(hour -> rows) }
   // - or null when it can't be had (then the API fallbacks below are used).
-  // Read again once MANIFEST_TTL_MINUTES have passed, so new hours appear.
-  loadManifest() {
-    if (this.manifestPromise && Date.now() - this.manifestAt < MANIFEST_TTL_MINUTES * 60000) return this.manifestPromise;
+  // Read again once MANIFEST_TTL_MINUTES have passed, so new hours appear -
+  // or now, with `force` (see refresh): then past FetchManager's copy and the
+  // Pages CDN's (max-age 600), with a stamp in the URL that changes every
+  // minute, so the products refreshing together share one request.
+  loadManifest({ force = false } = {}) {
+    if (!force && this.manifestPromise && Date.now() - this.manifestAt < MANIFEST_TTL_MINUTES * 60000) return this.manifestPromise;
     this.manifestAt = Date.now();
-    this.manifestPromise = this.fetchManager.fetch(MANIFEST_URL, MANIFEST_TTL_MINUTES)
+    const url = force ? `${MANIFEST_URL}?t=${Math.floor(Date.now() / 60000)}` : MANIFEST_URL;
+    this.manifestPromise = this.fetchManager.fetch(url, force ? 1 : MANIFEST_TTL_MINUTES)
       .then(res => res.json())
       .then(json => {
-        const radials = {};
+        // An hour is its file's row count - or [rows, sha] should the
+        // manifest also give each file's git blob SHA. Its version (see
+        // getVersions) is the SHA, or else the count: a file reprocessed
+        // keeping its count goes unnoticed without the SHA.
+        const rowsOf = value => Array.isArray(value) ? value[0] : value;
+        const versionOf = value => Array.isArray(value) ? value[1] ?? value[0] : value;
+        const index = hours => {
+          const rows = new Map(), versions = new Map();
+          Object.entries(hours ?? {}).forEach(([key, value]) => {
+            rows.set(manifestHour(key), rowsOf(value));
+            versions.set(manifestHour(key), String(versionOf(value)));
+          });
+          return { rows, versions };
+        };
+        const radials = {}, radialVersions = {};
         Object.entries(json.radials ?? {}).forEach(([station, hours]) => {
-          radials[station] = new Map(Object.entries(hours).map(([key, rows]) => [manifestHour(key), rows]));
+          ({ rows: radials[station], versions: radialVersions[station] } = index(hours));
         });
-        const totals = new Map(Object.entries(json.totals ?? {}).map(([key, rows]) => [manifestHour(key), rows]));
-        this.manifest = { generated: json.generated, radials, totals };
+        const { rows: totals, versions: totalsVersions } = index(json.totals);
+        this.manifest = { generated: json.generated, radials, totals, radialVersions, totalsVersions };
         return this.manifest;
       })
       .catch(error => {
@@ -188,6 +206,18 @@ class SourceGithubHFR extends Source {
         return null;
       });
     return this.manifestPromise;
+  }
+
+  // The manifest read again now (see the data products' refresh): whether
+  // it changed since the last refresh - new hours, or files re-processed.
+  // The stations' coverage is worked out from it again (in memory).
+  async refresh() {
+    const manifest = await this.loadManifest({ force: true });
+    if (!manifest) return false;
+    await this.load();
+    const changed = manifest.generated !== this.refreshedGenerated;
+    this.refreshedGenerated = manifest.generated;
+    return changed;
   }
 
   // Every station's earliest/latest hour: from the manifest, or - without
@@ -415,18 +445,24 @@ class SourceGithubHFR extends Source {
   // The totals map for the hour `time` (files are on the hour), or null if
   // the repository has none. Points the processing flagged (VFLG != 0) are
   // left out; VELU/VELV are in cm/s.
+  // "No map" isn't kept: the hour may be in the next manifest (a map asked
+  // for before its file was published - the neighbour hours the map
+  // preloads - would otherwise stay empty all session). Not costly: an hour
+  // the manifest doesn't list is no request.
   getField(time) {
     const hour = new Date(Math.round(time.getTime() / 3600000) * 3600000);
     const key = hour.toISOString();
     if (!this.totalsMaps.has(key)) {
-      this.totalsMaps.set(key, (async () => {
+      const promise = (async () => {
         const file = await this.totalsFile(hour);
         if (!file) return null;
         const field = VectorField.fromPoints(tuvPoints(file.rows), hour, 'ICATMAR');
         // Which file it is from, and where
         if (field) Object.assign(field, { dataset: this.originOf(this.totalsUrl(hour)).dataset, url: this.totalsUrl(hour) });
+        else if (this.totalsMaps.get(key) === promise) this.totalsMaps.delete(key);
         return field;
-      })().catch(error => { this.totalsMaps.delete(key); throw error; }));
+      })().catch(error => { this.totalsMaps.delete(key); throw error; });
+      this.totalsMaps.set(key, promise);
       if (this.totalsMaps.size > TOTALS_MAP_CACHE_SIZE) this.totalsMaps.delete(this.totalsMaps.keys().next().value);
     }
     return this.totalsMaps.get(key);
@@ -444,10 +480,15 @@ class SourceGithubHFR extends Source {
     const key = `${stationId}|${hour.toISOString()}`;
     this.radialFields ??= new Map();
     if (!this.radialFields.has(key)) {
-      this.radialFields.set(key, this.fetchRadialField(stationId, hour).catch(error => {
+      // "No radials" isn't kept (see getField)
+      const promise = this.fetchRadialField(stationId, hour).then(field => {
+        if (!field && this.radialFields.get(key) === promise) this.radialFields.delete(key);
+        return field;
+      }, error => {
         this.radialFields.delete(key);
         throw error;
-      }));
+      });
+      this.radialFields.set(key, promise);
       if (this.radialFields.size > RADIAL_CACHE_SIZE) this.radialFields.delete(this.radialFields.keys().next().value);
     }
     return this.radialFields.get(key);
@@ -467,7 +508,7 @@ class SourceGithubHFR extends Source {
     const key = `${stationId}|${hour.toISOString()}`;
     this.radialFiles ??= new Map();
     if (!this.radialFiles.has(key)) {
-      this.radialFiles.set(key, this.fetchManager.fetch(this.radialUrl(stationId, hour), RADIAL_TTL_MINUTES)
+      this.radialFiles.set(key, this.fetchManager.fetch(this.radialUrl(stationId, hour) + this.bustOf(key), RADIAL_TTL_MINUTES)
         .then(res => res.text()).then(text => parseTuv(text))
         .catch(error => {
           if (error.name === 'HTTPError' && error.status === 404) return null;
@@ -522,7 +563,7 @@ class SourceGithubHFR extends Source {
     const key = hour.toISOString();
     this.totalsFiles ??= new Map();
     if (!this.totalsFiles.has(key)) {
-      this.totalsFiles.set(key, this.fetchManager.fetch(this.totalsUrl(hour), TOTALS_TTL, 60)
+      this.totalsFiles.set(key, this.fetchManager.fetch(this.totalsUrl(hour) + this.bustOf(key), TOTALS_TTL, 60)
         .then(res => res.text()).then(text => parseTuv(text))
         .catch(error => {
           if (error.name === 'HTTPError' && error.status === 404) return null;
@@ -532,6 +573,50 @@ class SourceGithubHFR extends Source {
       if (this.totalsFiles.size > TOTALS_FILE_CACHE_SIZE) this.totalsFiles.delete(this.totalsFiles.keys().next().value);
     }
     return this.totalsFiles.get(key);
+  }
+
+  // REPROCESSING. ICATMAR re-processes hours already published: an hour's
+  // file can change. Its version per hour, from the manifest (no request):
+  // Map('<ISO hour>' -> token) for [startDate, endDate] - the totals, or a
+  // station's radials
+  async getVersions(startDate, endDate) {
+    return this.versionsIn((await this.loadManifest())?.totalsVersions, startDate, endDate);
+  }
+  async getRadialVersions(stationId, startDate, endDate) {
+    return this.versionsIn((await this.loadManifest())?.radialVersions?.[stationId], startDate, endDate);
+  }
+  versionsIn(versions, startDate, endDate) {
+    const found = new Map();
+    const from = startDate.getTime(), to = endDate.getTime();
+    versions?.forEach((token, key) => {
+      const t = new Date(key).getTime();
+      if (t >= from && t <= to) found.set(key, token);
+    });
+    return found;
+  }
+
+  // Hours whose file changed: what was kept of them is dropped, and they are
+  // read again past FetchManager's copy and the Pages CDN's (a query with
+  // the new version - Pages ignores it). `stationId`: a station's radials;
+  // without it, the totals.
+  invalidateHours(hours, stationId) {
+    this.bust ??= new Map();
+    hours.forEach(hour => {
+      if (stationId) {
+        const key = `${stationId}|${hour}`;
+        this.radialFiles?.delete(key);
+        this.radialFields?.delete(key);
+        this.bust.set(key, Date.now());
+      } else {
+        this.totalsFiles?.delete(hour);
+        this.totalsMaps?.delete(hour);
+        this.bust.set(hour, Date.now());
+      }
+    });
+  }
+  bustOf(key) {
+    const stamp = this.bust?.get(key);
+    return stamp ? `?v=${stamp}` : '';
   }
 
   // The hours in [startDate, endDate] the repository has a totals .tuv /

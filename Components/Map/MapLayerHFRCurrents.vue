@@ -35,6 +35,8 @@ const roundToHour = time => new Date(Math.floor((time.getTime() + 1800 * 1000) /
 
 export default {
   name: "MapLayerHFRCurrents",
+  // New maps found while the page is open (DPHFRTotals.refresh)
+  mixins: [window.dataProductMixin({ hfrtotals: 'onTotalsChanged' })],
   mounted() {
     this.$nextTick(() => {
       this.map = this.$parent.map;
@@ -99,6 +101,21 @@ export default {
       if (latest) this.$gui.selectedTime = roundToHour(latest);
       this.loadField();
     },
+    // New or re-processed maps (see DPHFRTotals.refresh): the availability
+    // bar again; the time handle onto the newest hour if it was on the newest
+    // one the bar showed (anywhere else it stays - the user is looking at
+    // that hour); the map again if the hour shown had none, or was
+    // re-processed (in place - the handle doesn't move)
+    async onTotalsChanged({ reprocessed = {} } = {}) {
+      const shownReprocessed = (reprocessed[this.$gui.hfrSource] ?? []).includes(this.selectedHour().toISOString());
+      const newestShown = () => Math.max(-Infinity, ...this.$gui.hfrAvailability.flatMap(row => Object.keys(row.hours).map(hour => new Date(hour).getTime())));
+      const before = newestShown();
+      const wasOnNewest = this.selectedHour().getTime() === before;
+      await this.loadAvailability();
+      const after = newestShown();
+      if (wasOnNewest && after > before) this.$gui.selectedTime = new Date(after); // the watcher loads its map
+      else if (!this.field || shownReprocessed) this.loadField();
+    },
     // Which hours have maps, per network in view, over the timeline's range
     async loadAvailability() {
       const source = this.$gui.hfrSource;
@@ -143,9 +160,12 @@ export default {
       // Always where the map is from: the source, and its dataset or file
       // where it is one (a map of several networks has one per network) -
       // with its page, which the status links to
+      // An hour re-processed while the page was open says so, and when
+      const updatedAt = field && this.$dataService.hfrtotals.reprocessedAt(source, time);
+      const updated = updatedAt ? ` · ${this.$t('updated')} ${new Date(updatedAt).toISOString().substring(11, 16)} UTC` : '';
       this.$gui.hfrFieldStatus = field
-        ? { state: 'ok', time: field.time, url: field.url,
-          label: `${field.label} (${this.$t('from')} ${field.source}${field.dataset ? ` · ${field.dataset}` : ''})` }
+        ? { state: 'ok', time: field.time, url: field.url, updatedAt,
+          label: `${field.label} (${this.$t('from')} ${field.source}${field.dataset ? ` · ${field.dataset}` : ''})${updated}` }
         : { state: 'none', time };
       this.updateParticles();
       this.updateGridPoints();

@@ -55,7 +55,30 @@ class DPHFRNetwork extends DP {
       this._allNetworksPromise = this.loadAllNetworks(stationsProduct)
         .catch(error => { this._allNetworksPromise = undefined; throw error; });
     }
-    return this._allNetworksPromise;
+    // Each station's newest data as its sources know it now - it moves on
+    // while the page is open (see DPHFRStations.refresh)
+    return this._allNetworksPromise.then(networks => {
+      this.applyStationEnds(networks, stationsProduct);
+      return networks;
+    });
+  }
+
+  // Moves each station's time_coverage_end on to the newest its sources
+  // know of: its EU HFR Node dataset, and for ICATMAR's network its last file
+  // on GitHub. Never back - only what a refresh found since the load.
+  applyStationEnds(networks, stationsProduct) {
+    const euHFRSource = stationsProduct.sources.find(s => s instanceof SourceErddapEUHFR);
+    const githubSource = stationsProduct.sources.find(s => s instanceof SourceGithubHFR);
+    networks.forEach(network => network.stations.forEach(station => {
+      if (!station.metadata) return;
+      const code = String(station.metadata.network ?? '').replace(/^HFR-/, '');
+      const ends = [euHFRSource?.stations[`${code}-${station.id}`]?.endDate];
+      if (code === 'ICATMAR') ends.push(euHFRSource?.stations[station.id]?.endDate, githubSource?.stations[station.id]?.endDate);
+      const newest = Math.max(...ends.filter(Boolean).map(Number));
+      if (!Number.isFinite(newest)) return;
+      const known = station.metadata.time_coverage_end ? new Date(station.metadata.time_coverage_end).getTime() : -Infinity;
+      if (newest > known) station.metadata.time_coverage_end = new Date(newest).toISOString().replace('.000Z', 'Z');
+    }));
   }
 
   // DPHFRNetwork has no sources of its own - station discovery belongs to

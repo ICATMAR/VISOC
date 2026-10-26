@@ -137,6 +137,10 @@ const dataProducts = [
         provider: 'ICATMAR',
         label: 'ICATMAR ERDDAP',
         datasets: ['HF_radar_L3B_recent'],
+        // ICATMAR re-processes the recent hours it has published (see
+        // SourceErddapHFRadars.getVersions); its historic datasets and the
+        // EU HFR Node never are
+        reprocessed: true,
         network: 'ICATMAR',
         eastward: 'u',
         northward: 'v',

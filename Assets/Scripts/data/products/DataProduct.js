@@ -1,5 +1,8 @@
 class DataProduct {
 
+  // The shortest time between two refreshes (see requestRefresh)
+  static MIN_REFRESH_GAP_MS = 30 * 1000;
+
   constructor(catalogueDP, fetchManager) {
     this.fetchManager = fetchManager; // kept for subclasses' own supplementary fetches, beyond their configured sources
     this.name = catalogueDP.name;
@@ -20,6 +23,50 @@ class DataProduct {
     });
 
     console.log(`${this.constructor.name}: sources loaded`, this.sources);
+
+    // What the product has can change while the page is open (new hours
+    // published): refresh() finds out, and changed() tells whoever listens -
+    // the views, through dataProductMixin - with a 'change' event
+    this.changes = new EventTarget();
+    this.version = 0;
+  }
+
+  // Tells the views the product's data changed; `detail` says how (each
+  // product its own)
+  changed(detail = {}) {
+    this.version++;
+    this.changes.dispatchEvent(new CustomEvent('change', { detail }));
+  }
+
+  // Finds out whether the sources have new data, and calls changed() if so.
+  // Nothing by default: each product knows what to re-check.
+  async refresh() {}
+
+  // refresh() now - one at a time, and no sooner than MIN_REFRESH_GAP_MS
+  // after the last (a read that found something new asks for it too, and
+  // several may)
+  requestRefresh() {
+    if (this.refreshing) return this.refreshing;
+    if (this.refreshedAt && Date.now() - this.refreshedAt < DataProduct.MIN_REFRESH_GAP_MS) return Promise.resolve();
+    this.refreshedAt = Date.now();
+    this.refreshing = Promise.resolve(this.refresh())
+      .catch(error => console.error(`${this.constructor.name}: refresh failed`, error))
+      .finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  }
+
+  // requestRefresh() every `minutes` while the page is visible - and on
+  // coming back to it, if a refresh is due
+  startRefresh(minutes) {
+    const every = minutes * 60000;
+    clearInterval(this.refreshTimer);
+    this.refreshTimer = setInterval(() => { if (!document.hidden) this.requestRefresh(); }, every);
+    this.onVisible ??= () => {
+      if (!document.hidden && (!this.refreshedAt || Date.now() - this.refreshedAt >= every)) this.requestRefresh();
+    };
+    document.removeEventListener('visibilitychange', this.onVisible);
+    document.addEventListener('visibilitychange', this.onVisible);
+    this.refreshedAt ??= Date.now();
   }
 
   // Where a value came from, as the user is told: { label, url }, from what

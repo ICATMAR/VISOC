@@ -102,6 +102,8 @@ const MAX_AGE_HOURS = 2;
 const LOOKBACK_HOURS = 3;
 
 export default {
+  // New HF radar data while the page is open (see onHFRChanged)
+  mixins: [window.dataProductMixin({ hfrstations: 'onHFRChanged', hfrtotals: 'onHFRChanged' })],
   name: "MenuPlatformList",
   data() {
     return {
@@ -128,6 +130,11 @@ export default {
       } finally {
         this.isLoading = false;
       }
+    },
+    // New data from the stations or the network's Total (see the HF radar
+    // products' refresh): the list's last update and valid points again
+    onHFRChanged() {
+      if (this.dashboardId === 'hfr') this.loadHFR().catch(error => console.error('Could not refresh the platform list:', error));
     },
     async loadHFR() {
       const { start, end } = this.window();

@@ -26,6 +26,12 @@ class FetchManager {
     return match ? decodeURIComponent(match[1]) : undefined;
   }
 
+  // When the response kept for `url` was fetched (ms), or undefined - so a
+  // caller that learns its data changed since can ask again (ttl 0)
+  static fetchedAt(url) {
+    return FetchManager.requests.get(url)?.fetchedAt;
+  }
+
   static fetch(url, ttl, timeout = 30) {
     let entry = FetchManager.requests.get(url);
     if (entry == undefined) {
@@ -67,6 +73,7 @@ class FetchManager {
       }
 
       entry.response = res; // stays UNREAD forever - every caller only ever clones it
+      entry.fetchedAt = Date.now();
       entry.promise = undefined;
       entry.expiresAt = (typeof ttl === 'number' && ttl > 0) ? Date.now() + ttl * 60000 : undefined;
       return res; // return the original - callers clone it themselves (see above and below)

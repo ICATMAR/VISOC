@@ -2,6 +2,9 @@ import FetchManager from './FetchManager.js';
 import ServiceStatus from './ServiceStatus.js';
 import Catalogue from './products/Catalogue.js';
 
+// How often the HF radar products look for new hours
+const HFR_REFRESH_MINUTES = 5;
+
 class DataService {
 
   constructor(FetchManager) {
@@ -19,6 +22,13 @@ class DataService {
 
     const hfrtotals = Catalogue.find(p => p.name === 'High-frequency radar totals');
     this.hfrtotals = new hfrtotals.Class(hfrtotals, FetchManager);
+
+    // New hours arrive while the page is open: the HF radar products look
+    // for them every few minutes and tell the views (see
+    // DataProduct.startRefresh, dataProductMixin). The EU HFR Node publishes
+    // hourly; GitHub Pages serves the manifest up to 10 minutes old.
+    this.hfrtotals.startRefresh(HFR_REFRESH_MINUTES);
+    this.hfrstations.startRefresh(HFR_REFRESH_MINUTES);
 
     // this.hfrstations.getICATMARHFRStations().then(stations => console.log(stations));
     // this.hfrnetwork.getAllNetworks(this.hfrstations).then(networks => console.log(networks));

@@ -33,6 +33,8 @@ const BIN_DOT_MIN_SPACING_PX = 3;
 
 export default {
   name: "MapLayerHFRRadials",
+  // Stations with new data while the page is open (DPHFRStations.refresh)
+  mixins: [window.dataProductMixin({ hfrstations: 'onStationsChanged' })],
   mounted() {
     this.$nextTick(async () => {
       this.map = this.$parent.map;
@@ -169,6 +171,13 @@ export default {
       const box = c ? [c.minLon, c.minLat, c.maxLon, c.maxLat]
         : [station.longitude - dLon, station.latitude - dLat, station.longitude + dLon, station.latitude + dLat];
       return box[0] <= maxLon && box[2] >= minLon && box[1] <= maxLat && box[3] >= minLat;
+    },
+    // A station that had nothing at the hour shown may have it now; one
+    // whose radials for that hour were re-processed has new ones
+    onStationsChanged({ stations = [], reprocessed = {} } = {}) {
+      const drawn = new Set((this.drawnFields ?? []).map(f => this.$dataService.hfrstations.loadingKey(f.network, f.station)));
+      const hour = roundToHour(this.$gui.selectedTime).toISOString();
+      if (stations.some(key => !drawn.has(key) || reprocessed[key]?.includes(hour))) this.update();
     },
     // Loads and draws the radials of the stations switched on, at the hour.
     // Drawn as they arrive; a newer call (another hour, a pan) supersedes this.
