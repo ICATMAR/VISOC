@@ -15,6 +15,14 @@ class SourceErddap extends Source {
     this.recentWindowDays = 2;  // how far back getEndTimestamp() checks for recent data
 
     this.loadingPromise = this.load();
+    // Said once here rather than left unhandled: a dataset the server doesn't
+    // list (ERDDAP unloads one it can't load, or it isn't published yet) is a
+    // notice - it may be back later - and anything else an error. Whoever
+    // awaits loadingPromise still gets the rejection.
+    this.loadingPromise.catch(error => {
+      if (error.name === 'DatasetMissing') console.info(`ERDDAP: ${error.message} - not on the server for now`);
+      else console.error(`ERDDAP: could not load '${this.dataset}' from ${this.src}:`, error);
+    });
   }
 
   static proxied(url) {
@@ -50,7 +58,9 @@ class SourceErddap extends Source {
     const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
     const datasetInfo = allDatasets.find(d => d['datasetID'] === this.dataset);
     if (!datasetInfo) {
-      throw new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
+      const missing = new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
+      missing.name = 'DatasetMissing';
+      throw missing;
     }
 
     // 2) variables + metadata, from the dataset's own info page

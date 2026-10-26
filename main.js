@@ -20,6 +20,10 @@ import DataService from './Assets/Scripts/data/DataService.js';
 // Vue mixin to poll for data and update the GUI, common for several .vue components
 import pollMixin from './Assets/Scripts/pollMixin.js';
 window.pollMixin = pollMixin;
+// The app's one clock for everything periodic (refreshes, the "now" line):
+// due times on the real clock, so a hidden tab catches up on return
+import scheduler from './Assets/Scripts/scheduler.js';
+window.scheduler = scheduler;
 // Vue mixin: a component reacts to a data product's new data (see DataProduct.changed)
 import dataProductMixin from './Assets/Scripts/dataProductMixin.js';
 window.dataProductMixin = dataProductMixin;

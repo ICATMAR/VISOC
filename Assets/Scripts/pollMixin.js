@@ -17,14 +17,19 @@
 //     mixins: [pollMixin('refreshData', 5)],
 //     methods: { refreshData() { ... } },
 //   }
+//
+// On the app's one clock (scheduler.js), not a setInterval of its own: a
+// hidden tab's timers stall, the scheduler runs whatever ran out on return.
+// (No component uses this now - the data products refresh themselves and
+// views follow them through dataProductMixin; kept for what isn't a product.)
 export default function pollMixin(methodName, intervalMinutes) {
   return {
     created() {
-      this[methodName]();
-      this._pollTimer = setInterval(() => this[methodName](), intervalMinutes * 60000);
+      this._pollTaskId = `poll:${methodName}:${Math.random().toString(36).slice(2)}`;
+      window.scheduler.every(this._pollTaskId, intervalMinutes * 60000, () => this[methodName](), { runNow: true });
     },
     beforeUnmount() {
-      clearInterval(this._pollTimer);
+      window.scheduler.cancel(this._pollTaskId);
     },
   };
 }

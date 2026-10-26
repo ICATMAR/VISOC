@@ -1,3 +1,5 @@
+import scheduler from '../../scheduler.js';
+
 class DataProduct {
 
   // The shortest time between two refreshes (see requestRefresh)
@@ -55,18 +57,12 @@ class DataProduct {
     return this.refreshing;
   }
 
-  // requestRefresh() every `minutes` while the page is visible - and on
-  // coming back to it, if a refresh is due
+  // requestRefresh() every `minutes`, on the app's one clock (scheduler.js):
+  // not while the tab is hidden, and at once on coming back if one ran out
+  // meanwhile - a hidden tab's timers can't be trusted to fire
   startRefresh(minutes) {
-    const every = minutes * 60000;
-    clearInterval(this.refreshTimer);
-    this.refreshTimer = setInterval(() => { if (!document.hidden) this.requestRefresh(); }, every);
-    this.onVisible ??= () => {
-      if (!document.hidden && (!this.refreshedAt || Date.now() - this.refreshedAt >= every)) this.requestRefresh();
-    };
-    document.removeEventListener('visibilitychange', this.onVisible);
-    document.addEventListener('visibilitychange', this.onVisible);
     this.refreshedAt ??= Date.now();
+    scheduler.every(`${this.constructor.name}:${this.name}:refresh`, minutes * 60000, () => this.requestRefresh());
   }
 
   // Where a value came from, as the user is told: { label, url }, from what

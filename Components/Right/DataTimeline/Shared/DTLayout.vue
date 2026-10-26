@@ -135,13 +135,16 @@ export default {
     // Rows shift when the pane is resized, and nothing else tells us
     this.onResize = () => { this.measureCell(); this.measureRows(); };
     window.addEventListener('resize', this.onResize);
-    this.nowTimer = setInterval(() => { this.now = Date.now(); }, NOW_TICK_MS);
+    // On the app's one clock (scheduler.js): right again on coming back to a
+    // hidden tab, whose own timers stall
+    this.nowTaskId = `DTLayout:now:${Math.random().toString(36).slice(2)}`;
+    window.scheduler.every(this.nowTaskId, NOW_TICK_MS, () => { this.now = Date.now(); });
   },
   // Clean up global listeners if component is destroyed
   beforeUnmount() {
     this.stopDragging();
     window.removeEventListener('resize', this.onResize);
-    clearInterval(this.nowTimer);
+    window.scheduler.cancel(this.nowTaskId);
   },
   data() {
     return {
