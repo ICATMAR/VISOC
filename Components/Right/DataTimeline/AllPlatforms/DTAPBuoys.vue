@@ -45,13 +45,10 @@
 <script>
 import DTLayout from '../Shared/DTLayout.vue';
 import DTTimelineGrid from '../Shared/DTTimelineGrid.vue';
-// pollMixin is a bare global (see main.js) - a .vue file's <script> block
-// isn't a real ES module under vue3-sfc-loader, so importing a plain .js file
-// directly here doesn't resolve, the same reason ol.Map works everywhere with
-// no import.
-
-// How often refreshVariableData() re-asks DPBuoys for fresh values.
-const REFRESH_MINUTES = 5;
+// dataProductMixin is a bare global (see main.js) - a .vue file's <script>
+// block isn't a real ES module under vue3-sfc-loader, so importing a plain .js
+// file directly here doesn't resolve, the same reason ol.Map works everywhere
+// with no import.
 
 // A cell is an average now, so a whole day in one cell would flatten a sea
 // breeze into nothing - hence 12h at the coarsest rather than daily.
@@ -67,12 +64,18 @@ const OUT_OF_RANGE_FACTOR = 3;
 
 export default {
   name: "DTAPBuoys",
-  mixins: [pollMixin('refreshVariableData', REFRESH_MINUTES)],
+  // Fresh values when the buoys have new readings (DPBuoys.refresh, every few
+  // minutes) - the product looks, once for every view, instead of this
+  // timeline polling on its own
+  mixins: [window.dataProductMixin({ buoys: 'refreshVariableData' })],
   // Row list comes from the real buoy catalogue - static first (synchronous,
   // so there's something to show immediately), refined once the live sources
   // resolve and can add buoys the static file doesn't know about, the same
   // two-step pattern as MapOverlayBuoys.vue.
   created() {
+    // First, as the poll that used to start it did: the cache is painted
+    // before the rows are built (see refreshVariableData)
+    this.refreshVariableData();
     this.buildRows(this.$dataService.buoys.getBuoys());
     this.$dataService.buoys.loadBuoys()
       .then(buoys => this.buildRows(buoys))
@@ -126,9 +129,9 @@ export default {
     },
     // A row is waiting if a request is out and nothing has arrived for it yet.
     // Deliberately derived rather than a per-row flag set when the request
-    // starts: pollMixin's created() runs BEFORE this component's own (Vue
-    // merges mixin hooks first), so on the very first load - the one time the
-    // spinner really matters - there are no rows yet to mark.
+    // starts: refreshVariableData() runs first in created(), before the rows
+    // are built, so on the very first load - the one time the spinner really
+    // matters - there are no rows yet to mark.
     isLoading(buoyId) {
       return this.isFetching && this.values[buoyId] == undefined;
     },
@@ -144,15 +147,13 @@ export default {
       // data service, which outlives every view. Without this the grid would
       // spin its way through a full reload of data the app never lost.
       //
-      // Here rather than in created() because pollMixin's created() runs
-      // BEFORE this component's own (Vue merges mixin hooks first), so a seed
-      // in created() would be racing the very poll it exists to pre-empt.
-      // Re-seeding on each poll is harmless: the cache is where applyResult's
-      // data came from in the first place.
+      // Here, at the start of every refresh, so the seed always comes before
+      // the request it pre-empts. Re-seeding on each refresh is harmless: the
+      // cache is where applyResult's data came from in the first place.
       this.seedFromCache();
 
       // Only rows with nothing to show yet end up spinning (see isLoading), so
-      // the five-minute refresh never blanks out a row that already has data.
+      // a refresh never blanks out a row that already has data.
       this.isFetching = true;
 
       this.$dataService.buoys.getVariablesData(this.$gui.buoyVariableCodes, this.$gui.timelineStartDate, this.$gui.timelineEndDate)

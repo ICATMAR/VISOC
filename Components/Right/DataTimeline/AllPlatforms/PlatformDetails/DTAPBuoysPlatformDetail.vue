@@ -163,7 +163,9 @@ import PDSourceLine from '../../Shared/PDSourceLine.vue';
 
 export default {
   name: "DTAPBuoysPlatformDetail",
-  mixins: [window.pdFocusMixin],
+  // New readings found while the page is open (DPBuoys.refresh): the buoys'
+  // dates again, for the status and last update
+  mixins: [window.pdFocusMixin, window.dataProductMixin({ buoys: 'onBuoysChanged' })],
   // The buoy catalogue this panel reads position/status from - static first
   // (synchronous, so whatever's already selected resolves immediately),
   // refined once the live sources (ERDDAP/MSM/SOMO) resolve and can supply a
@@ -211,6 +213,13 @@ export default {
     }
   },
   methods: {
+    async onBuoysChanged() {
+      try {
+        this.buoys = await this.$dataService.buoys.loadBuoys();
+      } catch (error) {
+        console.error('Could not refresh the buoys for the platform detail panel:', error);
+      }
+    },
     // Clicking a reading switches the unit of its QUANTITY, app-wide - the same
     // gesture and the same GUIManager.cycleUnit as the timeline's variable bar,
     // so putting wind into knots here puts it into knots there too. Only

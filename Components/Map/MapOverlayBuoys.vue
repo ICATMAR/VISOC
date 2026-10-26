@@ -41,6 +41,8 @@ const roundToHour = time => new Date(Math.floor((time.getTime() + HALF_HOUR_MS) 
 
 export default {
   name: "MapOverlayBuoys",
+  // New readings found while the page is open (DPBuoys.refresh)
+  mixins: [window.dataProductMixin({ buoys: 'onBuoysChanged' })],
   mounted() {
 
     this.$nextTick(() => {
@@ -74,18 +76,29 @@ export default {
       this.createOverlays();
 
       try {
-        const liveBuoys = await this.$dataService.buoys.loadBuoys();
-        const liveById = new Map(liveBuoys.map(b => [b.id, b]));
-        this.buoys.forEach(buoy => {
-          const live = liveById.get(buoy.id);
-          if (live) {
-            buoy.startDate = live.startDate;
-            buoy.endDate = live.endDate;
-          }
-        });
+        await this.updateDates();
       } finally {
         this.isLiveLoaded = true;
       }
+    },
+    // The live sources' dates, onto the same buoy objects (see loadBuoys)
+    async updateDates() {
+      const liveBuoys = await this.$dataService.buoys.loadBuoys();
+      const liveById = new Map(liveBuoys.map(b => [b.id, b]));
+      this.buoys.forEach(buoy => {
+        const live = liveById.get(buoy.id);
+        if (live) {
+          buoy.startDate = live.startDate;
+          buoy.endDate = live.endDate;
+        }
+      });
+    },
+    // New readings: each buoy's status again (its newest reading), and the
+    // currents shown at the hour, if any
+    async onBuoysChanged() {
+      await this.updateDates().catch(error => console.error('Could not refresh the buoys:', error));
+      this.buoys = [...this.buoys]; // the dates were written in place - the status re-reads them
+      if (this.currentsHour) this.loadCurrents(new Date(this.currentsHour), { keep: true });
     },
     createOverlays() {
       for (let i = 0; i < this.buoys.length; i++) {
@@ -130,12 +143,14 @@ export default {
     // The current each buoy measured in the selected hour (9:30 to 10:30 for
     // 10:00), the reading closest to the hour. Through the same block cache
     // as the buoys timeline, so a buoy already loaded there costs nothing.
-    async loadCurrents(hour) {
+    // `keep`: what is shown stays until the new values are in (new readings
+    // for the same hour - not another hour)
+    async loadCurrents(hour, { keep = false } = {}) {
       const request = (this.currentsRequest ?? 0) + 1;
       this.currentsRequest = request;
-      this.currents = {};
+      if (!keep) this.currents = {};
       if (!hour) { this.$gui.hfrBuoysLoading = false; return; }
-      this.$gui.hfrBuoysLoading = true;
+      if (!keep) this.$gui.hfrBuoysLoading = true;
       const start = new Date(hour.getTime() - 2 * HALF_HOUR_MS);
       const end = new Date(hour.getTime() + 2 * HALF_HOUR_MS);
       let promises = [];

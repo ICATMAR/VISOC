@@ -191,6 +191,10 @@ class SourceCMEMS extends Source {
         startDate: new Date(time.validStartDate ?? properties.admp_valid_start_date ?? properties.start_datetime),
         endDate: new Date(properties.end_datetime),
         metadata: properties,
+        // Where its description is, and the update the views were given
+        // (see checkRun)
+        href,
+        runToken: properties.admp_updated_data ?? properties.admp_updated,
       };
     }
     return undefined;
@@ -262,6 +266,37 @@ class SourceCMEMS extends Source {
     return dataset.zarrPromise;
   }
 
+  // REFRESH (see DPForecast.refresh). Whether the datasets read so far were
+  // updated - a new run: their STAC description read again (one small JSON
+  // each), its update date the token. An updated dataset's axes, dates and
+  // description follow, and its chunks are dropped and asked again.
+  // undefined while nothing has been read.
+  async checkRun() {
+    await this.loadingPromise?.catch(() => {});
+    const opened = (this.datasets ?? []).filter(dataset => dataset.zarrPromise);
+    if (opened.length === 0) return undefined;
+    const tokens = await Promise.all(opened.map(async dataset => {
+      const stac = await this.fetchJSON(`${STAC_URL}${this.product}/${dataset.href}`, 0).catch(() => undefined);
+      const properties = stac?.properties;
+      if (!properties) return dataset.runToken;
+      const token = properties.admp_updated_data ?? properties.admp_updated;
+      if (token !== dataset.runToken) {
+        const geo = stac.assets?.geoChunked;
+        Object.entries(geo?.viewDims ?? {}).forEach(([dimension, description]) => { dataset.axes[dimension] = description.coords; });
+        const time = geo?.viewDims?.time ?? {};
+        dataset.startDate = new Date(time.validStartDate ?? properties.admp_valid_start_date ?? properties.start_datetime);
+        dataset.endDate = new Date(properties.end_datetime);
+        dataset.metadata = properties;
+        dataset.zarrPromise = undefined;
+        [...this.chunks.keys()].forEach(url => { if (url.startsWith(dataset.zarr)) this.chunks.delete(url); });
+        dataset.runToken = token;
+        this.runChangedAt = Date.now();
+      }
+      return token;
+    }));
+    return tokens.join('|');
+  }
+
   // One chunk's raw values, decoded into a `Type` typed array - null for a
   // chunk the store doesn't have (Zarr leaves out the ones that are all fill
   // value, and S3 answers 403 for a key that doesn't exist where listing
@@ -270,7 +305,10 @@ class SourceCMEMS extends Source {
     const cached = this.chunks.get(url);
     if (cached && Date.now() < cached.expiresAt) return cached.promise;
 
-    const promise = this.fetchManager.fetch(url, DATA_TTL, DATA_TIMEOUT)
+    // Asked again when the dataset was updated after this chunk was kept (see checkRun)
+    const fetchedAt = this.fetchManager.fetchedAt?.(url);
+    const ttl = this.runChangedAt && fetchedAt != undefined && fetchedAt < this.runChangedAt ? 0 : DATA_TTL;
+    const promise = this.fetchManager.fetch(url, ttl, DATA_TIMEOUT)
       .then(res => res.arrayBuffer())
       .then(buffer => {
         const bytes = decompressBlosc(buffer);

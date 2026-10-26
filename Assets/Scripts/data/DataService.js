@@ -4,6 +4,10 @@ import Catalogue from './products/Catalogue.js';
 
 // How often the HF radar products look for new hours
 const HFR_REFRESH_MINUTES = 5;
+// How often the buoys look for new readings
+const BUOYS_REFRESH_MINUTES = 5;
+// How often the forecasts look for a new run - published once or twice a day
+const FORECAST_REFRESH_MINUTES = 30;
 
 class DataService {
 
@@ -36,11 +40,15 @@ class DataService {
 
     const buoys = Catalogue.find(p => p.name === 'Buoys');
     this.buoys = new buoys.Class(buoys, FetchManager);
+    // New readings found while the page is open (see DataProduct.startRefresh)
+    this.buoys.startRefresh(BUOYS_REFRESH_MINUTES);
 
     this.buoys.loadBuoys().then(console.log);
 
     const ssforecast = Catalogue.find(p => p.name === 'Sea surface forecast');
     this.ssforecast = new ssforecast.Class(ssforecast, FetchManager);
+    // A new run found while the page is open
+    this.ssforecast.startRefresh(FORECAST_REFRESH_MINUTES);
 
     this.dataProducts = [
       { name: drifters.name, product: this.drifters },

@@ -287,6 +287,9 @@ const LICENSE_URLS = {
 
 export default {
   name: "DTInfoSection",
+  // New data found while the page is open: the buoys' and the HF radar
+  // stations' last updates (DPBuoys / DPHFRStations refresh)
+  mixins: [window.dataProductMixin({ buoys: 'onBuoysChanged', hfrstations: 'onStationsChanged' })],
   // The buoy catalogue, static first (synchronous, so a buoy already selected
   // resolves immediately) then refined once the live sources merge in - the
   // same two-step every other buoy view uses.
@@ -533,6 +536,22 @@ export default {
     },
   },
   methods: {
+    async onBuoysChanged() {
+      try {
+        this.buoys = await this.$dataService.buoys.loadBuoys();
+      } catch (error) {
+        console.error('Could not refresh the buoys for the info section:', error);
+      }
+    },
+    async onStationsChanged() {
+      try {
+        // The same networks, their stations' ends moved on in place (see
+        // DPHFRNetwork.applyStationEnds): a new array, so the panel re-reads them
+        this.hfrNetworks = [...await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations)];
+      } catch (error) {
+        console.error('Could not refresh the HF radar networks for the info section:', error);
+      }
+    },
     // Whether a photo exists, asked once per URL
     lookForPhoto(url) {
       if (!url || url in this.photoFound) return;

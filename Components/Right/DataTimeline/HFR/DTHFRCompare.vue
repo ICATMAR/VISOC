@@ -84,8 +84,9 @@ export default {
       loading: {},  // row key -> true while its series is on its way
     }
   },
-  // New HF radar maps found while the page is open (DPHFRTotals.refresh)
-  mixins: [window.dataProductMixin({ hfrtotals: 'onTotalsChanged' })],
+  // New data found while the page is open: HF radar maps (DPHFRTotals),
+  // buoy readings (DPBuoys), a model's new run (DPForecast)
+  mixins: [window.dataProductMixin({ hfrtotals: 'onTotalsChanged', buoys: 'onBuoysChanged', ssforecast: 'onForecastChanged' })],
   mounted() {
     // Hourly while this view is open; the timeline's own choice is put back
     this.previousInterval = this.$gui.timelineIntervalMinutes;
@@ -162,6 +163,39 @@ export default {
           })
           .catch(error => console.error(`Compare: ${provider}, refresh`, error));
       });
+    },
+    // New readings from the compared buoy: its row again - the others, the
+    // point and the selected cell stay
+    onBuoysChanged({ buoys = [] } = {}) {
+      const point = this.$gui.hfrPoint;
+      if (point?.kind !== 'buoy' || !buoys.includes(point.id)) return;
+      const request = this.request;
+      this.$dataService.buoys.getBuoyDetailData(point.id, ['HCSP', 'HCDT'], this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+        .then(result => {
+          if (request === this.request) this.series = { ...this.series, platform: this.fromCodes(result.data) };
+        })
+        .catch(error => console.error('Compare: platform, refresh', error));
+    },
+    // A model's new run: the model rows again, the rest stays
+    onForecastChanged() {
+      const point = this.$gui.hfrPoint;
+      if (!point) return;
+      const request = this.request;
+      const modelPoint = { id: `hfr:${point.lat.toFixed(4)},${point.lon.toFixed(4)}`, latitude: point.lat, longitude: point.lon };
+      const modelRows = this.rows.filter(r => r.model && !r.placeholder);
+      this.$dataService.ssforecast.getPointSeriesBySource(modelPoint, this.$gui.timelineStartDate, this.$gui.timelineEndDate)
+        .then(result => {
+          if (request !== this.request) return;
+          const series = { ...this.series }, provenance = { ...this.provenance };
+          modelRows.forEach(row => {
+            const found = result.series.find(entry => entry.model === row.model);
+            series[row.key] = this.fromCodes(found?.data);
+            provenance[row.key] = { series: found ? [found] : [] };
+          });
+          this.series = series;
+          this.provenance = provenance;
+        })
+        .catch(error => console.error('Compare: models, refresh', error));
     },
     // { '<ISO>': { HCSP: { value, ... }, HCDT: { value } } } -> every reading,
     // keeping what it says about itself (sensor, instrument, depth)

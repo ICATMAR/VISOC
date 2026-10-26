@@ -102,8 +102,8 @@ const MAX_AGE_HOURS = 2;
 const LOOKBACK_HOURS = 3;
 
 export default {
-  // New HF radar data while the page is open (see onHFRChanged)
-  mixins: [window.dataProductMixin({ hfrstations: 'onHFRChanged', hfrtotals: 'onHFRChanged' })],
+  // New data while the page is open (see onHFRChanged, onBuoysChanged)
+  mixins: [window.dataProductMixin({ hfrstations: 'onHFRChanged', hfrtotals: 'onHFRChanged', buoys: 'onBuoysChanged' })],
   name: "MenuPlatformList",
   data() {
     return {
@@ -153,6 +153,11 @@ export default {
         const latest = Object.keys(points ?? {}).sort().pop();
         this.validPoints = { ...this.validPoints, [id]: latest ? points[latest] : null };
       })));
+    },
+    // New buoy readings (see DPBuoys.refresh): the list's last update and
+    // values again
+    onBuoysChanged() {
+      if (this.dashboardId === 'buoys') this.loadBuoys().catch(error => console.error('Could not refresh the platform list:', error));
     },
     async loadBuoys() {
       const { start, end } = this.window();

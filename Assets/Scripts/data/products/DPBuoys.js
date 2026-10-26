@@ -99,6 +99,56 @@ class DPBuoys extends DP {
     this.providers = new Map();
   }
 
+  // REFRESH (see DataProduct). What the views were told: each buoy's newest
+  // reading as its sources know it (id -> ms), taken when the refresh starts
+  // and at every change since.
+  startRefresh(minutes) {
+    super.startRefresh(minutes);
+    this.announcedEnds ??= this.loadBuoys().then(() => this.buoyEnds());
+  }
+
+  // Each buoy's newest reading, from the sources that can tell (id -> ms):
+  // a source whose coverage is unknown (Puertos - see coverageUnknown) is
+  // left out, its "end" is only ever "now"
+  buoyEnds() {
+    const ends = new Map();
+    this.providers.forEach((sources, id) => {
+      const newest = Math.max(...sources.filter(s => !s.coverageUnknown)
+        .map(s => s.buoys?.find(b => b.id === id)?.endDate).filter(Boolean).map(Number));
+      if (Number.isFinite(newest)) ends.set(id, newest);
+    });
+    return ends;
+  }
+
+  // Every source re-reads how far it reaches (past its 5-minute trust); a
+  // buoy whose newest reading moved on is a change: { buoys: [ids] }. A buoy
+  // with a source that can't say (Puertos) is always in it: its views then
+  // re-ask the newest block, what their own polling did before.
+  async refresh() {
+    await this.loadBuoys();
+    const sources = [...new Set([...this.providers.values()].flat())].filter(source => source.servesData);
+    await Promise.all(sources.map(source => {
+      source.coverageCheckedAt = undefined;
+      return source.getEndDate().catch(error => console.error(`Could not check how fresh ${source.src} is:`, error));
+    }));
+    await this.loadBuoys();
+    const before = await this.announcedEnds;
+    const now = this.buoyEnds();
+    this.announcedEnds = Promise.resolve(now);
+    const moved = [...now].filter(([id, end]) => before?.has(id) && before.get(id) !== end).map(([id]) => id);
+    const unknown = [...this.providers].filter(([, sources]) => sources.some(s => s.coverageUnknown)).map(([id]) => id);
+    const buoys = [...new Set([...moved, ...unknown])];
+    if (buoys.length) this.changed({ buoys });
+  }
+
+  // A read found a buoy's reading at `timestamp`: past what the views were
+  // told, refresh now rather than at the next tick
+  async noteReading(buoyId, timestamp) {
+    if (!timestamp || !this.announcedEnds) return;
+    const known = (await this.announcedEnds)?.get(buoyId);
+    if (known != undefined && new Date(timestamp).getTime() > known) this.requestRefresh();
+  }
+
   // Get buoys
   getBuoys() {
     // Return static buoy data
@@ -462,7 +512,9 @@ class DPBuoys extends DP {
     // Read back from the cache rather than from what was just fetched: the
     // window asked for usually spans blocks that were already held, and this
     // is the one place that knows how to put both halves together.
-    return { ...this.collectFromCache(buoyId, codes, startDate, endDate), errors };
+    const collected = this.collectFromCache(buoyId, codes, startDate, endDate);
+    this.noteReading(buoyId, Object.keys(collected.data).sort().pop());
+    return { ...collected, errors };
   }
 
   // Everything the block cache already holds for [startDate, endDate], with no

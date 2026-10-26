@@ -17,6 +17,23 @@ import DP from './DataProduct.js';
 // where it stops, without any date being hardcoded.
 class DPForecast extends DP {
 
+  // REFRESH (see DataProduct). A forecast changes when a new run is
+  // published: each source that can tell checks which run it holds against
+  // the one it loaded (checkRun - the ERDDAP datasets' time range, CMEMS'
+  // update date; Open-Meteo has no separate check and is left out) and
+  // drops what it kept of an old one. A source whose run changed since the
+  // last refresh is a change: { sources: [labels] }.
+  async refresh() {
+    const since = this.runsCheckedAt ?? 0;
+    this.runsCheckedAt = Date.now();
+    const sources = this.sources.filter(source => typeof source.checkRun === 'function');
+    await Promise.all(sources.map(source => source.checkRun().catch(error => {
+      console.error(`${this.constructor.name}: run check of ${source.label ?? source.src} failed`, error);
+    })));
+    const changed = sources.filter(source => source.runChangedAt > since).map(source => source.label ?? source.src);
+    if (changed.length) this.changed({ sources: changed });
+  }
+
   // Forecast at one point - { id, latitude, longitude } (sources keyed by buoy
   // use the id, gridded ones the position) - within [startDate, endDate], in
   // standard codes, every source merged into one answer (what a buoy's cells
