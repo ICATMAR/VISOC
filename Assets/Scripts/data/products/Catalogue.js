@@ -625,7 +625,9 @@ const dataProducts = [
         Class: SourceCMEMS,
         src: 'https://data.marine.copernicus.eu/product/MEDSEA_ANALYSISFORECAST_PHY_006_013/description',
         product: 'MEDSEA_ANALYSISFORECAST_PHY_006_013',
-        variables: ['uo', 'vo'],
+        variables: ['uo', 'vo', 'thetao'],
+        // thetao: the sea temperature at the surface (the Buoys dashboard's
+        // water temperature Compare)
         // In order of preference - a variable not served hourly is read daily
         intervals: ['PT1H', 'P1D'],
         institution: 'Copernicus Marine Service',
@@ -636,6 +638,7 @@ const dataProducts = [
         mapping: {
           uo: {code: 'EWCT'},
           vo: {code: 'NSCT'},
+          thetao: {code: 'TEMP'},
         }
       },
       // Copernicus Marine's Iberia-Biscay-Ireland physics (NEMO, 1/36°): the
@@ -644,7 +647,9 @@ const dataProducts = [
         Class: SourceCMEMS,
         src: 'https://data.marine.copernicus.eu/product/IBI_ANALYSISFORECAST_PHY_005_001/description',
         product: 'IBI_ANALYSISFORECAST_PHY_005_001',
-        variables: ['uo', 'vo'],
+        variables: ['uo', 'vo', 'thetao'],
+        // thetao: the sea temperature at the surface (the Buoys dashboard's
+        // water temperature Compare)
         intervals: ['PT1H', 'P1D'],
         institution: 'Copernicus Marine Service',
         model: 'CMEMS-IBI',
@@ -654,6 +659,7 @@ const dataProducts = [
         mapping: {
           uo: {code: 'EWCT'},
           vo: {code: 'NSCT'},
+          thetao: {code: 'TEMP'},
         }
       },
     ]

@@ -24,6 +24,10 @@ window.pollMixin = pollMixin;
 // due times on the real clock, so a hidden tab catches up on return
 import scheduler from './Assets/Scripts/scheduler.js';
 window.scheduler = scheduler;
+// How buoy readings become timeline cells (averages, directions, arrows) -
+// shared by every buoy view and the map's value chips
+import * as buoyCells from './Assets/Scripts/buoyCells.js';
+window.buoyCells = buoyCells;
 // Vue mixin: a component reacts to a data product's new data (see DataProduct.changed)
 import dataProductMixin from './Assets/Scripts/dataProductMixin.js';
 window.dataProductMixin = dataProductMixin;

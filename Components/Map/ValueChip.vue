@@ -1,11 +1,11 @@
 <template>
-  <!-- A current measured at a platform, on the map: where the water goes (the
-       arrow) and how fast, on the current-speed colour scale - the same one
-       the HF radar particles are painted with, so the two can be compared at
-       a glance. -->
+  <!-- A value measured at a platform, on the map: a current (where the water
+       goes and how fast), a wind, a wave height, a temperature... on its
+       variable's colour scale - for a current the same one the HF radar
+       particles are painted with, so the two can be compared at a glance. -->
   <!-- The number alone: the unit is in the tooltip and on the legend -->
-  <div class="current-chip" :style="{ background: color }" :title="title">
-    <i v-if="direction != null" class="fa fa-location-arrow current-chip-arrow" :style="{ rotate: (direction - 45) + 'deg' }"></i>
+  <div class="value-chip" :style="{ background: color }" :title="title">
+    <i v-if="direction != null" class="fa fa-location-arrow value-chip-arrow" :style="{ rotate: (direction - 45) + 'deg' }"></i>
     <span>{{ number }}</span>
   </div>
 </template>
@@ -13,27 +13,29 @@
 
 <script>
 export default {
-  name: "CurrentChip",
+  name: "ValueChip",
   props: {
-    speed: { type: Number, required: true },  // m/s
-    direction: Number,                         // degrees, where the water goes TO
+    code: { type: String, default: 'HCSP' },  // the variable's standard code
+    value: { type: Number, required: true },   // in the code's standard unit
+    direction: Number,                         // degrees the arrow points TO (where the water/wind/waves go)
+    range: Array,                              // the colour range, when not the code's own
     label: String,                             // who measured it, for the tooltip
     time: Date,                                // when, for the tooltip
   },
   computed: {
-    unit() { return this.$gui.unitFor('HCSP'); },
+    unit() { return this.$gui.unitFor(this.code); },
     number() {
       const { decimals, toDisplay } = this.unit;
-      return toDisplay(this.speed).toFixed(decimals);
+      return toDisplay(this.value).toFixed(decimals);
     },
-    value() {
+    withUnit() {
       return `${this.number} ${this.unit.unit}`;
     },
     color() {
-      return this.$gui.colorFor('HCSP', this.speed) ?? 'white';
+      return this.$gui.colorFor(this.code, this.value, this.range) ?? 'white';
     },
     title() {
-      const parts = [this.label, this.value];
+      const parts = [this.label, this.withUnit];
       if (this.direction != null) parts.push(`${Math.round(this.direction)}º`);
       if (this.time) parts.push(this.time.toLocaleString(this.$i18n.locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
       return parts.filter(Boolean).join(' · ');
@@ -44,7 +46,7 @@ export default {
 
 
 <style scoped>
-.current-chip {
+.value-chip {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -58,14 +60,14 @@ export default {
 }
 
 /* Black and unshadowed, over the global span style (white with a shadow) */
-.current-chip span,
-.current-chip i {
+.value-chip span,
+.value-chip i {
   color: black;
   text-shadow: none;
 }
 
 /* fa-location-arrow points north-east, hence the -45º */
-.current-chip-arrow {
+.value-chip-arrow {
   font-size: 0.65rem;
 }
 </style>

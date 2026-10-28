@@ -111,8 +111,8 @@
       <span>{{ formatPosition($gui.hfrCursor) }}</span>
       <!-- The value as the map draws a platform's: a chip on the legend's
            colour, with the arrow - the unit is on the legend above -->
-      <CurrentChip v-if="$gui.hfrCursor.speed != null" :speed="$gui.hfrCursor.speed"
-        :direction="$gui.hfrCursor.direction" :label="$gui.hfrCursor.network"></CurrentChip>
+      <ValueChip v-if="$gui.hfrCursor.speed != null" code="HCSP" :value="$gui.hfrCursor.speed"
+        :direction="$gui.hfrCursor.direction" :label="$gui.hfrCursor.network"></ValueChip>
       <span v-else class="cursor-no-data">· {{ $t('no data') }}</span>
     </div>
   </div>
@@ -124,7 +124,7 @@
 import OnOffButton from '../../Utils/OnOffButton.vue';
 import OnOffButtonWithText from '../../Utils/OnOffButtonWithText.vue';
 import DTColorLegend from '../DataTimeline/Shared/DTColorLegend.vue';
-import CurrentChip from '../../Map/CurrentChip.vue';
+import ValueChip from '../../Map/ValueChip.vue';
 
 // Past this many stations in view, the radials are switched on and off by
 // network rather than station by station
@@ -202,7 +202,7 @@ export default {
     OnOffButton,
     OnOffButtonWithText,
     DTColorLegend,
-    CurrentChip,
+    ValueChip,
   }
 }
 </script>
@@ -231,7 +231,7 @@ export default {
 .cursor-status {
   margin-top: 0;
 }
-.cursor-status .current-chip {
+.cursor-status .value-chip {
   box-shadow: none;
 }
 .cursor-no-data {

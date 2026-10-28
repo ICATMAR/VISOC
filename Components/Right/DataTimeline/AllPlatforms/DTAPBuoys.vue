@@ -58,9 +58,6 @@ const INTERVAL_OPTIONS = [
   { label: 'Hourly',   minutes: 60  },
 ];
 
-// A value this many times past the top of a variable's range is discarded as a
-// fault rather than averaged in (see binVariable).
-const OUT_OF_RANGE_FACTOR = 3;
 
 export default {
   name: "DTAPBuoys",
@@ -187,19 +184,9 @@ export default {
       if (Object.keys(seeded).length === 0) return;
       this.values = { ...seeded, ...this.values };
     },
-    // { '<ISO>': { code: point } } -> { code: { '<ISO>': point } }, which is the
-    // shape the binning below walks. The WHOLE point is kept, not just its
-    // value: each one carries the sensor, instrument and server it came from,
-    // and a cell lists whatever contributed to it.
+    // The shape the binning walks (see buoyCells.js)
     byCode(data) {
-      const byCode = {};
-      Object.entries(data).forEach(([timestamp, codes]) => {
-        Object.entries(codes).forEach(([code, point]) => {
-          if (byCode[code] == undefined) byCode[code] = {};
-          byCode[code][timestamp] = point;
-        });
-      });
-      return byCode;
+      return window.buoyCells.byCode(data);
     },
     // Reassigned rather than mutated so the computed rebuilds. Recording the
     // values is what stops this row spinning - see isLoading.
@@ -207,86 +194,10 @@ export default {
       this.values = { ...this.values, [result.buoyId]: this.byCode(result.data) };
     },
 
-    // One variable's cells for one buoy: the mean of the magnitudes that fell
-    // in each, and the mean DIRECTION as a vector rather than a number -
-    // averaging 350º and 10º arithmetically gives 180º, which points exactly
-    // the wrong way. Weighted by the magnitude measured at the same moment,
-    // so a heading recorded in a flat calm doesn't drag the arrow around.
+    // One variable's cells for one buoy (see buoyCells.js - shared with the
+    // Buoys dashboard and the map, so a cell is averaged one way everywhere)
     binVariable(byCode, variable, cells, startTime, stepMs) {
-      // `raw` is what each code was PUBLISHED as by whoever served it (see
-      // DPBuoys' rawName) - VHM0 arriving as Puertos' 'Hm0'. Kept per code, so
-      // a magnitude and its direction can name their own spellings.
-      const bins = cells.map(() => ({ count: 0, total: 0, x: 0, y: 0, directions: 0, from: new Map(), raw: {} }));
-      const binOf = timestamp => {
-        const index = Math.floor((new Date(timestamp).getTime() - startTime) / stepMs);
-        return index >= 0 && index < bins.length ? bins[index] : undefined;
-      };
-      // Who contributed to a cell. A cell is an average over hours, so it can
-      // mix sensors and servers - keyed by both so the same instrument served
-      // by two servers is listed once per server, which is the distinction
-      // that matters when a number looks wrong.
-      const credit = (bin, point) => {
-        if (point?.sensor == undefined && point?.source == undefined) return;
-        bin.from.set(`${point.source}|${point.sensor}`, {
-          sensor: point.sensor, source: point.source, instrument: point.instrument,
-        });
-      };
-
-      // A reading far past the top of the legend's range is an instrument
-      // fault, not weather - the SOMO logger writes 1000 m/s for a failed
-      // anemometer (see SourceGithubSOMO), and one of those in a cell would
-      // drag its average somewhere meaningless. Generous rather than tight:
-      // three times the range still lets a genuinely extreme storm through.
-      // The detail variables (see GUIManager.buoyDetailVariables) carry no
-      // range of their own, so fall back to the code's colour range and, for a
-      // code that has neither, filter nothing rather than throw.
-      const range = variable.range ?? this.$gui.rangeFor(variable.code);
-      const ceiling = range ? range[1] * OUT_OF_RANGE_FACTOR : Infinity;
-      const magnitudes = {};
-      const rejected = new Set();
-      Object.entries(byCode?.[variable.code] ?? {}).forEach(([timestamp, point]) => {
-        if (!isFinite(point?.value) || point.value > ceiling) { rejected.add(timestamp); return; }
-        magnitudes[timestamp] = point;
-      });
-
-      Object.entries(magnitudes).forEach(([timestamp, point]) => {
-        const bin = binOf(timestamp);
-        if (!bin) return;
-        bin.count++;
-        bin.total += point.value;
-        if (point.rawName) bin.raw[variable.code] = point.rawName;
-        credit(bin, point);
-      });
-
-      if (variable.directionCode) {
-        Object.entries(byCode?.[variable.directionCode] ?? {}).forEach(([timestamp, point]) => {
-          const bin = binOf(timestamp);
-          const degrees = point?.value;
-          if (!bin || !isFinite(degrees)) return;
-          // A heading recorded alongside a rejected magnitude goes with it:
-          // the logger writes a perfectly plausible direction next to its
-          // 1000 m/s fault marker, which is why SourceGithubSOMO drops the
-          // whole wind block rather than just the speed.
-          if (rejected.has(timestamp)) return;
-          // Unweighted only where there is no magnitude to weight BY - not
-          // where there was one and it was thrown away.
-          const weight = isFinite(magnitudes[timestamp]?.value) ? magnitudes[timestamp].value : 1;
-          const radians = degrees * Math.PI / 180;
-          bin.x += Math.cos(radians) * weight;
-          bin.y += Math.sin(radians) * weight;
-          bin.directions++;
-          if (point.rawName) bin.raw[variable.directionCode] = point.rawName;
-          credit(bin, point);
-        });
-      }
-
-      return bins.map(bin => ({
-        value: bin.count ? bin.total / bin.count : undefined,
-        direction: bin.directions && (bin.x || bin.y)
-          ? ((Math.atan2(bin.y, bin.x) * 180 / Math.PI) + 360) % 360
-          : undefined,
-        from: [...bin.from.values()],
-      }));
+      return window.buoyCells.binVariable(byCode, variable, cells, startTime, stepMs, this.$gui.rangeFor(variable.code));
     },
 
     binFor(buoy, index) {
@@ -308,10 +219,7 @@ export default {
     // NE to begin with - the same offset DTAPBuoysPlatformDetail uses, so the
     // cell and the panel agree.
     arrowAngle(buoy, index) {
-      const bin = this.binFor(buoy, index);
-      if (bin?.direction == undefined) return undefined;
-      const variable = this.$gui.selectedBuoyVariable;
-      return ((variable.fromDirection ? bin.direction + 180 : bin.direction) % 360 + 360) % 360;
+      return window.buoyCells.arrowBearing(this.binFor(buoy, index)?.direction, this.$gui.selectedBuoyVariable.fromDirection);
     },
     // The legend's own colour for this cell's average, from GUIManager.colorFor
     // - shared with the platform detail panel and the map's circle arrows, so

@@ -463,6 +463,35 @@ class DPBuoys extends DP {
     return { ...result, missing: [...result.missing, ...unpublished] };
   }
 
+  // ONE sensor of a buoy - every code it publishes, from that instrument
+  // only (the Buoys dashboard's By sensor view): { buoyId, sensorId, codes,
+  // data, used, missing, errors }, the shape getBuoyDetailData gives. The
+  // sensor's own candidates, in the same order of preference, cached apart
+  // from the per-code choice (a code another sensor serves better is still
+  // this sensor's reading here).
+  async getSensorData(buoyId, sensorId, startDate, endDate) {
+    await this.loadBuoys();
+    const sources = (this.providers.get(buoyId) ?? []).filter(source => source.servesData);
+    await Promise.all(sources.map(source => source.getEndDate().catch(error => {
+      console.error(`Could not check how fresh ${source.src} is:`, error);
+    })));
+    // Every code the sensor publishes, wherever it is served from
+    const codes = new Set();
+    sources.forEach(source => {
+      const sensor = source.getBuoy(buoyId)?.sensors.find(s => s.id === sensorId);
+      if (sensor) Object.keys(this.publishedNamesByCode(source, sensor)).forEach(code => codes.add(code));
+    });
+    const { byBuoy } = this.planVariablesData([...codes], startDate, endDate);
+    const candidatesByCode = {};
+    Object.entries(byBuoy[buoyId] ?? {}).forEach(([code, candidates]) => {
+      const own = candidates.filter(c => c.sensorId === sensorId);
+      if (own.length) candidatesByCode[code] = own;
+    });
+    if (Object.keys(candidatesByCode).length === 0) return { buoyId, sensorId, codes: [], data: {}, used: {}, missing: [...codes], errors: [] };
+    const result = await this.fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate, `${buoyId}@${sensorId}`);
+    return { ...result, sensorId, codes: Object.keys(candidatesByCode) };
+  }
+
   // One buoy's values for [startDate, endDate], served from the block cache and
   // requesting only what it doesn't already hold.
   //
@@ -473,7 +502,11 @@ class DPBuoys extends DP {
   // FetchManager collapses them too. Blocks inside the re-request window (see
   // REREQUEST_HOUR_WINDOW_FROM_NOW) are always re-asked; older ones are frozen
   // and answered from memory.
-  async fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate) {
+  //
+  // `cacheId`: what the block cache files these values under - the buoy, or
+  // the buoy and one of its sensors (getSensorData), whose values must not
+  // mix with those chosen per code.
+  async fetchBuoyVariables(buoyId, candidatesByCode, startDate, endDate, cacheId = buoyId) {
     const now = Date.now();
     const codes = Object.keys(candidatesByCode);
     const errors = [];
@@ -482,7 +515,7 @@ class DPBuoys extends DP {
     const missingByCode = {};
     const allMissing = new Set();
     codes.forEach(code => {
-      const missing = this.cache.missingBlocks(`${buoyId}|${code}`, startDate, endDate, now);
+      const missing = this.cache.missingBlocks(`${cacheId}|${code}`, startDate, endDate, now);
       if (missing.length === 0) return;
       missingByCode[code] = missing;
       missing.forEach(key => allMissing.add(key));
@@ -505,14 +538,14 @@ class DPBuoys extends DP {
       // is an outage, and caching "no data" for it would outlive the outage.
       wanted.forEach(code => {
         if (!result.answered.has(code)) return;
-        this.cache.write(`${buoyId}|${code}`, span.keys, result.points[code]);
+        this.cache.write(`${cacheId}|${code}`, span.keys, result.points[code]);
       });
     }));
 
     // Read back from the cache rather than from what was just fetched: the
     // window asked for usually spans blocks that were already held, and this
     // is the one place that knows how to put both halves together.
-    const collected = this.collectFromCache(buoyId, codes, startDate, endDate);
+    const collected = this.collectFromCache(buoyId, codes, startDate, endDate, cacheId);
     this.noteReading(buoyId, Object.keys(collected.data).sort().pop());
     return { ...collected, errors };
   }
@@ -547,11 +580,11 @@ class DPBuoys extends DP {
   // Shared by readVariablesData and fetchBuoyVariables so the two can never
   // disagree about what a result looks like: they feed the same table, and a
   // shape that differed between them would make it flicker on every poll.
-  collectFromCache(buoyId, codes, startDate, endDate) {
+  collectFromCache(buoyId, codes, startDate, endDate, cacheId = buoyId) {
     const data = {};
     const used = {};
     codes.forEach(code => {
-      Object.entries(this.cache.read(`${buoyId}|${code}`, startDate, endDate)).forEach(([timestamp, point]) => {
+      Object.entries(this.cache.read(`${cacheId}|${code}`, startDate, endDate)).forEach(([timestamp, point]) => {
         if (data[timestamp] == undefined) data[timestamp] = {};
         data[timestamp][code] = point;
         if (used[code] == undefined) used[code] = { source: point.source, sensor: point.sensor };

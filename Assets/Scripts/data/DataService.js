@@ -45,6 +45,15 @@ class DataService {
 
     this.buoys.loadBuoys().then(console.log);
 
+    // Forecasts at a point (the Buoys dashboard's Compare): a new run found
+    // while the page is open
+    const windforecast = Catalogue.find(p => p.name === 'Wind forecast');
+    this.windforecast = new windforecast.Class(windforecast, FetchManager);
+    this.windforecast.startRefresh(FORECAST_REFRESH_MINUTES);
+    const waveforecast = Catalogue.find(p => p.name === 'Wave forecast');
+    this.waveforecast = new waveforecast.Class(waveforecast, FetchManager);
+    this.waveforecast.startRefresh(FORECAST_REFRESH_MINUTES);
+
     const ssforecast = Catalogue.find(p => p.name === 'Sea surface forecast');
     this.ssforecast = new ssforecast.Class(ssforecast, FetchManager);
     // A new run found while the page is open
@@ -57,6 +66,8 @@ class DataService {
       { name: hfrtotals.name, product: this.hfrtotals },
       { name: buoys.name, product: this.buoys },
       { name: ssforecast.name, product: this.ssforecast },
+      { name: windforecast.name, product: this.windforecast },
+      { name: waveforecast.name, product: this.waveforecast },
     ];
   }
 

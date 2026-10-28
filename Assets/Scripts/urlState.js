@@ -4,7 +4,8 @@
 //
 //   src   the HF radar source (HFR dashboard)              src=EU          (ICATMAR left out)
 //   prod  what the HFR map shows                           prod=radials    (currents left out)
-//   view  HFR: the bottom view; All platforms: its view    view=point, view=compare, view=buoys
+//   view  HFR: the bottom view; All platforms: its view;
+//         Buoys: <mode>:<group> (General left out)         view=point, view=buoys, view=compare:waves
 //   st    the selected platform: an HF radar station as
 //         <network>:<code>, a buoy or drifter as
 //         buoy:<id> / drifter:<id>                         st=Galicia:FIST, st=buoy:SOMO
@@ -85,6 +86,8 @@ function stateOf(gui, openedHour) {
   } else if (selected?.stationId) {
     params.st = `${dashboard === 'drifters' ? 'drifter' : 'buoy'}:${selected.stationId}`;
   }
+  if (dashboard === 'buoys' && gui.isDataTimelineOpen && gui.buoysView?.mode && gui.buoysView.mode !== 'general')
+    params.view = `${gui.buoysView.mode}:${gui.buoysView.group ?? ''}`;
   const hour = roundToHour(gui.selectedTime).getTime();
   if (Math.abs(hour - defaultHour(gui, openedHour)) >= HOUR) params.t = new Date(hour).toISOString().substring(0, 13);
   Object.keys(params).forEach(key => params[key] == undefined && delete params[key]);
@@ -195,6 +198,12 @@ async function apply(gui, dataService, hash, { boot = false, openedHour } = {}) 
     } else if ((dashboard === 'buoys' || dashboard === 'drifters') && code) {
       if (dashboard === 'buoys') place = await buoyPlace(code);
       gui.selectPlatform(dashboard, code);
+    }
+    // The Buoys dashboard's view (General when none)
+    if (dashboard === 'buoys') {
+      const [mode, group] = (view ?? '').split(':');
+      gui.buoysView = ['variable', 'sensor', 'compare'].includes(mode) ? { mode, group: group || undefined } : null;
+      if (view) gui.isDataTimelineOpen = true;
     }
   } catch (error) {
     console.error('Could not apply the URL:', error);

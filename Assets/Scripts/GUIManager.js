@@ -158,9 +158,15 @@ class GUIManager {
   // info panel instead of the platform: { key, title, subtitle, icon, rows:
   // [{ label, value, url, long }], loading } - null for the platform itself
   hfrSourceInfo = null;
-  // Set by "Switch to dashboard" from the HFR buoy detail: which view the
-  // buoys timeline should open on ({ mode: 'variable', group: 'currents' })
+  // The Buoys dashboard's bottom view (DTBuoys): { mode: 'general' |
+  // 'variable' | 'sensor' | 'compare', group } - the group a ▸ view shows (a
+  // buoyDetailGroups / buoyCompareGroups id, or a sensor id). null is General.
+  // Also what "Switch to dashboard" from the HFR buoy detail opens on
+  // ({ mode: 'variable', group: 'currents' }).
   buoysView = null;
+  // The Buoys dashboard's Compare: a source picked in its names column,
+  // described in the info panel (same shape as hfrSourceInfo)
+  buoySourceInfo = null;
 
   // Opens the HFR bottom section on a buoy or drifter chip: Compare, on the
   // hour of the reading that was clicked, with its detail panel
@@ -448,6 +454,36 @@ class GUIManager {
     // them onto the selection like any other. Listing them again would only
     // re-plan work already done.
   ];
+  // The Buoys dashboard's "By variable" groups: the rows of each, a row only
+  // shown for a buoy that publishes its code (see DTBuoys). `directionCode`
+  // draws an arrow, `fromDirection` turns a heading reported as where it
+  // comes FROM (see buoyCells.arrowBearing).
+  buoyDetailGroups = [
+    { id: 'wind', label: 'Wind', rows: [
+      { code: 'WSPD', directionCode: 'WDIR', fromDirection: true },
+      { code: 'GSPD', directionCode: 'GDIR', fromDirection: true },
+    ] },
+    { id: 'waves', label: 'Waves', rows: [
+      { code: 'VHM0', directionCode: 'VMDR', fromDirection: true },
+      { code: 'VTM02' }, { code: 'VTPK' },
+      { code: 'VZMX', directionCode: 'VPED', fromDirection: true },
+      { code: 'VCMX' }, { code: 'VHMH' }, { code: 'VEMH' },
+      { code: 'VSWH', directionCode: 'VSWD', fromDirection: true }, { code: 'VSWT' },
+      { code: 'VMWH', directionCode: 'VMWD', fromDirection: true }, { code: 'VMWT' },
+    ] },
+    { id: 'currents', label: 'Currents', rows: [{ code: 'HCSP', directionCode: 'HCDT' }] },
+    { id: 'air', label: 'Air', rows: [{ code: 'DRYT' }, { code: 'RELH' }, { code: 'DEWT' }, { code: 'ATMS' }] },
+    { id: 'water', label: 'Water', rows: [{ code: 'TEMP' }, { code: 'PSAL' }] },
+  ];
+  // The Buoys dashboard's "Compare" groups: the buoy's reading of `code`
+  // against each model of `product` (a DataService forecast) - and, for the
+  // currents, the HF radars at the buoy
+  buoyCompareGroups = [
+    { id: 'wind', label: 'Wind', code: 'WSPD', directionCode: 'WDIR', fromDirection: true, product: 'windforecast' },
+    { id: 'waves', label: 'Waves', code: 'VHM0', directionCode: 'VMDR', fromDirection: true, product: 'waveforecast' },
+    { id: 'currents', label: 'Currents', code: 'HCSP', directionCode: 'HCDT', product: 'ssforecast', hfr: true },
+    { id: 'water', label: 'Water temperature', code: 'TEMP', product: 'ssforecast' },
+  ];
   get buoyDetailCodes() {
     return [...new Set(this.buoyDetailVariables.flatMap(v => [v.code, v.directionCode].filter(Boolean)))];
   }
@@ -526,6 +562,12 @@ class GUIManager {
   }
 
   // The [min, max] a code's colour scale spans, in STANDARD units.
+  // What a standard code means (data/variables.js): { longName,
+  // standardName, unit, ... } or undefined - for the views' row titles
+  variableOf(code) {
+    return VARIABLES[code];
+  }
+
   rangeFor(code) {
     return VARIABLE_RANGES[code];
   }

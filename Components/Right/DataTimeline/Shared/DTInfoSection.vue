@@ -375,6 +375,9 @@ export default {
         return this.$gui.hfrSourceInfo;
       if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Point' && this.$gui.hfrDataPointSourceInfo)
         return this.$gui.hfrDataPointSourceInfo;
+      // The Buoys dashboard's Compare: a source picked in its names column
+      if (this.$gui.selectedDashboard === 'buoys' && this.$gui.buoysView?.mode === 'compare' && this.$gui.buoySourceInfo)
+        return this.$gui.buoySourceInfo;
       return this.euNetworkInfo;
     },
     // A station or the Total of another network than ICATMAR's, as the EU HFR

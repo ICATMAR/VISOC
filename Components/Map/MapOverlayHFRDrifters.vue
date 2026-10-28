@@ -7,15 +7,15 @@
     <!-- The clicked one gives way to the circle arrows drawn in its place -->
     <div v-for="drifter in drifters" :key="drifter.id" :ref="'drifter-' + drifter.id"
       v-show="readings[drifter.id] && !$gui.isHFRPointChip('drifter', drifter.id)">
-      <CurrentChip v-if="readings[drifter.id]" class="clickable" @click="chipClicked($event, drifter)" :speed="readings[drifter.id].speed"
-        :direction="readings[drifter.id].direction" :label="drifter.id" :time="readings[drifter.id].time"></CurrentChip>
+      <ValueChip v-if="readings[drifter.id]" class="clickable" @click="chipClicked($event, drifter)" code="HCSP" :value="readings[drifter.id].speed"
+        :direction="readings[drifter.id].direction" :label="drifter.id" :time="readings[drifter.id].time"></ValueChip>
     </div>
   </div>
 </template>
 
 
 <script>
-import CurrentChip from './CurrentChip.vue';
+import ValueChip from './ValueChip.vue';
 
 // The hour a time belongs to: 9:30 up to (not including) 10:30 is 10:00
 const HALF_HOUR_MS = 30 * 60 * 1000;
@@ -81,6 +81,6 @@ export default {
       if (roundToHour(new Date(time)).getTime() !== roundToHour(new Date(previous)).getTime()) this.update();
     },
   },
-  components: { CurrentChip },
+  components: { ValueChip },
 }
 </script>
