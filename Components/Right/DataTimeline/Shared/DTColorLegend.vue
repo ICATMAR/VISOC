@@ -52,14 +52,25 @@ export default {
     unit() {
       return this.$gui.unitFor(this.code);
     },
-    // Built straight from the legend's own [t, [r,g,b]] stops (t already
-    // normalized 0..1), so this always matches colorLegends.js without a
-    // second copy of the stops to keep in sync.
+    // The legend's distinct stop values (t, 0..1), each given an EQUAL share
+    // of the bar: { t: position % } - so every stop gets a readable tick
+    // however close its value is to the next (the wind/currents scale's
+    // 0.10, 0.175, 0.25). A sharp colour step (two stops at one t, as in the
+    // waves scale) is one tick.
+    positions() {
+      const values = [...new Set(this.stops.map(([t]) => t))];
+      return new Map(values.map((t, i) => [t, values.length > 1 ? (i / (values.length - 1)) * 100 : 0]));
+    },
+    // Built straight from the legend's own [t, [r,g,b]] stops, so it always
+    // matches colorLegends.js - each colour at its stop's EQUALLY SPACED place
+    // (see positions), and the grading between two stops stretched or
+    // squeezed to fit. A stop's colour is exact at its tick; the cells, chips
+    // and map keep painting by value (GUIManager.colorFor).
     gradient() {
-      const colors = this.stops.map(([t, [r, g, b]]) => `rgb(${r}, ${g}, ${b}) ${t * 100}%`);
+      const colors = this.stops.map(([t, [r, g, b]]) => `rgb(${r}, ${g}, ${b}) ${this.positions.get(t)}%`);
       return `linear-gradient(to right, ${colors.join(', ')})`;
     },
-    // Labelled at the legend's OWN stops rather than at even intervals - the
+    // One tick per stop, equally spaced, each labelled with its value: the
     // stops are where the colour changes, so that is where a number is worth
     // reading off.
     //
@@ -68,11 +79,15 @@ export default {
     // numbers written on them change.
     ticks() {
       const [min, max] = this.range;
-      const { toDisplay, decimals } = this.unit;
-      const span = toDisplay(max) - toDisplay(min);
-      return this.stops.map(([t]) => ({
-        percent: t * 100,
-        label: toDisplay(min + t * (max - min)).toFixed(span > 10 ? 0 : decimals),
+      const { toDisplay } = this.unit;
+      // Whole numbers when the scale's top is above 25 (in the unit shown),
+      // one decimal otherwise - rounded, trailing zero dropped. (+1e-9: 0.25
+      // is held as 0.2499..., which would round down.)
+      const top = toDisplay(max);
+      const label = value => top > 25 ? String(Math.round(value)) : String(Number((value + 1e-9).toFixed(1)));
+      return [...this.positions].map(([t, percent]) => ({
+        percent,
+        label: label(toDisplay(min + t * (max - min))),
       }));
     },
   },
