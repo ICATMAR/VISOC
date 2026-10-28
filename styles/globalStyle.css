@@ -445,11 +445,11 @@ compiles its components in the browser - until the map has drawn (main.js)
 /*
 MAP CONTROLS in the top-left corner: the attribution (OpenLayers' (i), the
 basemap's credits) and below it the zoom buttons. ICATMAR's badges run along
-the top to their right (Map.vue), --brand-size each, 35 to 70 px with the
+the top to their right (Map.vue), --brand-size each, 35 to 55 px with the
 screen's width; the credits, when opened, start past them on the same line.
 */
 :root {
-  --brand-size: clamp(35px, 5vw, 70px);
+  --brand-size: clamp(35px, 5vw, 55px);
 }
 .ol-attribution {
   top: 8px;
