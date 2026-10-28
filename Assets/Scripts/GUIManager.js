@@ -11,11 +11,12 @@ class GUIManager {
   selectedTime = new Date();
 
   selectedLanguage = 'en';
+  // Only English is translated for now; the rest are shown as not available yet
   languages = [
-    { name: 'Català', id: 'ca' },
-    { name: 'Español', id: 'es' },
-    { name: 'Français', id: 'fr' },
-    { name: 'English', id: 'en' },
+    { name: 'Català', id: 'ca', isAvailable: false },
+    { name: 'Español', id: 'es', isAvailable: false },
+    { name: 'Français', id: 'fr', isAvailable: false },
+    { name: 'English', id: 'en', isAvailable: true },
   ]
 
 
@@ -24,6 +25,8 @@ class GUIManager {
   _selectedDashboard = 'platforms';
   get selectedDashboard() { return this._selectedDashboard; }
   set selectedDashboard(id) {
+    // A dashboard not available yet can't be opened (its menu tile is greyed out)
+    if (!this.isDashboardAvailable(id)) return;
     this._selectedDashboard = id;
     this.isDataTimelineOpen = false;
     this.isPlatformDetailOpen = false;

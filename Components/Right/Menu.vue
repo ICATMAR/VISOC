@@ -10,15 +10,18 @@
 
           <!-- Language selector -->
           <div class="horizontal button-group" style="justify-content: flex-end">
-            <button class="clickable" v-for="language in $gui.languages" :key="language.id" v-on:click="() => { $gui.selectedLanguage = language.id }" :class="$gui.selectedLanguage === language.id ? 'selected':''">
+            <button v-for="language in $gui.languages" :key="language.id"
+              v-on:click="() => { if (language.isAvailable) $gui.selectedLanguage = language.id }"
+              :class="{ 'selected': $gui.selectedLanguage === language.id, 'clickable': language.isAvailable, 'is-unavailable': !language.isAvailable }"
+              :title="language.isAvailable ? undefined : $t('Not available yet')">
               <span>{{ language.name }}</span>
             </button>
           </div>
 
           <!-- Panels -->
           <div class="horizontal wrap info-links" style="justify-content: flex-end">
-            <button class="clickable"><span>{{ $t('About') }}</span></button>
-            <button class="clickable"><span>{{ $t('Cookie consent') }}</span></button>
+            <button class="is-unavailable" :title="$t('Not available yet')"><span>{{ $t('About') }}</span></button>
+            <button class="is-unavailable" :title="$t('Not available yet')"><span>{{ $t('Cookie consent') }}</span></button>
             <a href="https://github.com/ICATMAR/VISOC" target="_blank" rel="noopener noreferrer">
               <button class="clickable"><span>{{$t('Source code')}}</span></button>
             </a>
@@ -47,7 +50,7 @@
           <div class="horizontal wrap dashboards-container">
             <div class="dashboard-container clickable"v-for="dashboard in platformDashboards" :key="dashboard.id"
               v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-              :class="dashboardClasses[dashboard.id]">
+              :class="dashboardClasses[dashboard.id]" :title="dashboard.isAvailable ? undefined : $t('Not available yet')">
               <div class="dashboard-img-container">
                 <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
                 <img class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -67,7 +70,7 @@
           <div class="horizontal wrap dashboards-container">
             <div class="dashboard-container clickable"v-for="dashboard in variableDashboards" :key="dashboard.id"
               v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-              :class="dashboardClasses[dashboard.id]">
+              :class="dashboardClasses[dashboard.id]" :title="dashboard.isAvailable ? undefined : $t('Not available yet')">
               <div class="dashboard-img-container">
                 <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
                 <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -87,7 +90,7 @@
           <div class="horizontal wrap dashboards-container">
             <div class="dashboard-container clickable"v-for="dashboard in applicationDashboards" :key="dashboard.id"
               v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-              :class="dashboardClasses[dashboard.id]">
+              :class="dashboardClasses[dashboard.id]" :title="dashboard.isAvailable ? undefined : $t('Not available yet')">
               <div class="dashboard-img-container">
                 <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
                 <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -107,7 +110,7 @@
           <div class="horizontal wrap dashboards-container">
             <div class="dashboard-container clickable"v-for="dashboard in modelDashboards" :key="dashboard.id"
               v-on:click="() => { $gui.selectedDashboard = dashboard.id }"
-              :class="dashboardClasses[dashboard.id]">
+              :class="dashboardClasses[dashboard.id]" :title="dashboard.isAvailable ? undefined : $t('Not available yet')">
               <div class="dashboard-img-container">
                 <img class="dashboard-img" :src="dashboard.image" alt="Dashboard image">
                 <img v-if="dashboard.icon" class="dashboard-icon" :src="dashboard.icon" alt="Dashboard icon">
@@ -134,17 +137,19 @@
           <!-- Divider -->
           <div class="divider-small"></div>
 
-          <!-- Providers and funding -->
+          <!-- Providers and funding (the same logos as the loading screen,
+               index.html) - white or grey on the menu's blue -->
           <div class="vertical" style="align-items: center;">
-            <img src="../../Assets/Images/logos/logo-icatmar-negatiu.svg" alt="ICATMAR logo" class="icatmar-logo">
+            <img src="../../Assets/Images/logos/logo-icatmar-negatiu-short.svg" alt="ICATMAR logo" @load="sizeLogo" class="icatmar-logo">
           </div>
-          <div class="horizontal" style="justify-content: space-around;">
-            <img src="../../Assets/Images/logos/generalitat.webp" alt="Generalitat logo" class="funding-logo">
-            <img src="../../Assets/Images/logos/logo-ICM.svg" alt="ICM logo" class="funding-logo">
-          </div>
-          <div class="horizontal" style="justify-content: space-around;">
-            <img src="../../Assets/Images/logos/logo-CSIC.png" alt="CSIC logo" class="funding-logo">
-            <img src="../../Assets/Images/logos/logo-EU.svg" alt="EU logo" class="funding-logo">
+          <div class="horizontal wrap funding-logos">
+            <img src="../../Assets/Images/logos/logo-ICM.svg" alt="ICM logo" @load="sizeLogo" class="funding-logo">
+            <img src="../../Assets/Images/logos/logo-CSIC.png" alt="CSIC logo" @load="sizeLogo" class="funding-logo">
+            <img src="../../Assets/Images/logos/generalitat.webp" alt="Generalitat logo" @load="sizeLogo" class="funding-logo">
+            <img src="../../Assets/Images/logos/logo-EU.svg" alt="EU logo" @load="sizeLogo" class="funding-logo">
+            <img src="../../Assets/Images/logos/logo-interreg-poctefa-text.svg" alt="Interreg POCTEFA logo" @load="sizeLogo" class="funding-logo logo-white">
+            <img src="../../Assets/Images/logos/logo-opale.svg" alt="Opale logo" @load="sizeLogo" class="funding-logo logo-white">
+            <img src="../../Assets/Images/logos/logo-PdE.svg" alt="Puertos del Estado logo" @load="sizeLogo" class="funding-logo logo-white">
           </div>
 
           <div class="divider-small"></div>
@@ -176,6 +181,11 @@ export default {
     }
   },
   methods: {
+    // The same area for every partner logo, whatever its shape (see
+    // window.sizeLogo, index.html)
+    sizeLogo(event) {
+      window.sizeLogo?.(event.target, 3000);
+    },
     //onclick: function(e){},
   },
   computed: {
@@ -246,12 +256,6 @@ export default {
   text-decoration: underline;
   color: white;
   font-size: 0.7rem;
-}
-
-.is-unavailable {
-  pointer-events: none;
-  filter: grayscale(1) contrast(0.7) brightness(0.7);
-  border-radius: 10px;
 }
 
 .dashboards-container {
@@ -330,16 +334,22 @@ export default {
 }
 
 
+/* The same area as the partner logos once loaded (sizeLogo) */
 .icatmar-logo {
-  width: 180px;
-  height: auto;
+  height: 30px;
   object-fit: contain;
   margin: 5px;
 }
 
+/* Two per row, the last one alone centred */
+.funding-logos {
+  justify-content: space-around;
+  align-items: center;
+  gap: 6px 0;
+}
+/* Every partner logo with the same area once loaded (sizeLogo) */
 .funding-logo {
-  width: 120px;
-  height: auto;
+  height: 30px;
   margin: 5px;
   object-fit: contain;
 }

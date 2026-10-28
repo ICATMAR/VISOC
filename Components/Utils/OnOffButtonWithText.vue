@@ -1,7 +1,7 @@
 <template>
-  <!-- Disabled: greyed out and not clickable (a feature not available yet);
-       the container keeps its tooltip -->
-  <div class="onoff-button-with-text-container" :class="{ 'is-disabled': disabled }" :title="disabled ? disabledTitle : undefined">
+  <!-- Disabled: greyed out and not clickable (a feature not available yet,
+       .is-unavailable); the container keeps its tooltip -->
+  <div class="onoff-button-with-text-container" :class="{ 'is-unavailable': disabled }" :title="disabled ? disabledTitle : undefined">
     <OnOffButton ref="onOffButton" :checked="checked" :inSize="inSize" @change="toggle($event)"></OnOffButton>
     <span @click="toggle">{{ text }}</span>
     <!-- Whatever the toggle turned on is still loading -->
@@ -70,17 +70,6 @@
   width: 9px;
   height: 9px;
   border-width: 2px;
-}
-
-.onoff-button-with-text-container.is-disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.onoff-button-with-text-container.is-disabled > * {
-  pointer-events: none;
-}
-.onoff-button-with-text-container.is-disabled:hover {
-  transform: none;
 }
 
 .onoff-button-with-text-container:hover {

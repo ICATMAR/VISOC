@@ -25,9 +25,11 @@
       </div>
     </span>
 
-    <!-- Providers -->
+    <!-- ICATMAR and the EU's co-funding, over the bottom-right panel (both
+         logos white already, like the menu's) -->
     <div class="providers-container" v-show="!$gui.isDataTimelineOpen">
-      <span>ICATMAR</span>
+      <img src="../../Assets/Images/logos/logo-icatmar-negatiu-short.svg" alt="ICATMAR" class="providers-logo">
+      <img src="../../Assets/Images/logos/logo-EU.svg" alt="Cofinançat per la Unió Europea" class="providers-logo">
     </div>
 
     <!-- Bottom right -->
@@ -107,10 +109,22 @@ export default {
   height: calc(100% - 30px);
 }
 
+/* As wide as the bottom-right panel under it (.bottom-right-container), the
+   logos at its right edge, toned down */
 .providers-container {
-  height: 40px;
-  width: 220px;
-  margin-right: 110px;
+  width: 320px;
+  margin-right: 8px;
+  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  opacity: 0.6;
+}
+.providers-logo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
 }
 
 .bottom-right-section {

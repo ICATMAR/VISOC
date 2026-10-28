@@ -38,7 +38,7 @@ html body {
   margin: 0;
   padding: 0;
   position: fixed;
-  background: red;
+  background: var(--darkBlue);
 
 }
 
@@ -55,6 +55,23 @@ button {
 .clickable:hover {
   transform: scale(1.05);
   transition: all 0.2s ease-in-out;
+}
+
+/* Not available yet (a dashboard, view, toggle, menu entry): greyed out and
+   not clickable. Only its content ignores the pointer, so the element's
+   title ("Not available yet") still shows; its click handler must also
+   refuse it (or do nothing), as a click on its own padding still lands. */
+.is-unavailable {
+  opacity: 0.4;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+.is-unavailable > * {
+  pointer-events: none;
+}
+/* No hover grow: over .clickable's and components' own hover rules */
+.is-unavailable:hover {
+  transform: none !important;
 }
 
 * {
@@ -354,4 +371,109 @@ span {
 .scale-fade-enter-to{
   transform: scale(1);
   opacity: 1;
+}
+
+/*
+LOGOS on the dark blue (the loading screen, the menu): white or grey, whatever
+colours the file has. The ICATMAR, ICM, CSIC, Generalitat and EU files are
+already white and need nothing.
+*/
+/* A one-colour logo turned white (Opale, Puertos del Estado) */
+.logo-white {
+  filter: brightness(0) invert(1);
+}
+/* A logo with a flag (Interreg POCTEFA): greys and white, the flag kept
+   readable - whitening it all would make the flag a plain white block */
+.logo-grey {
+  filter: grayscale(1) brightness(3.5) contrast(1.2);
+}
+
+
+/*
+LOADING SCREEN (index.html): over everything while the app starts - Vue
+compiles its components in the browser - until the map has drawn (main.js)
+*/
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: var(--darkBlue);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 24px;
+  box-sizing: border-box;
+  transition: opacity 1s ease;
+}
+#loading-screen.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+/* The same area as the partner logos once loaded (sizeLogo, index.html) */
+#loading-screen .loading-main-logo {
+  height: 40px;
+  object-fit: contain;
+}
+#loading-screen .loading-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: loading-spin 1s linear infinite;
+}
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+#loading-screen .loading-logos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 18px 34px;
+  max-width: 900px;
+}
+/* Every partner logo with the same area once loaded (sizeLogo, index.html) */
+#loading-screen .loading-logos img {
+  height: 40px;
+  object-fit: contain;
+}
+
+
+/*
+MAP CONTROLS in the top-left corner: the attribution (OpenLayers' (i), the
+basemap's credits) and below it the zoom buttons. ICATMAR's badges run along
+the top to their right (Map.vue), --brand-size each, 35 to 70 px with the
+screen's width; the credits, when opened, start past them on the same line.
+*/
+:root {
+  --brand-size: clamp(35px, 5vw, 70px);
+}
+.ol-attribution {
+  top: 8px;
+  left: 8px;
+  right: auto;
+  bottom: auto;
+}
+/* Opened: the credits in their own box past the badges (48px from the left,
+   two badges overlapping by 27%), not under them */
+.ol-attribution:not(.ol-collapsed) {
+  background: none;
+}
+.ol-attribution:not(.ol-collapsed) ul {
+  position: absolute;
+  top: 0;
+  left: calc(40px + var(--brand-size) * 1.73 + 10px);
+  white-space: nowrap;
+  max-width: none;
+  padding: 0 0.5em;
+  line-height: 24px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+}
+.ol-zoom {
+  top: 40px;
+  left: 8px;
 }

@@ -8,7 +8,7 @@
   <div class="horizontal wrap button-group bottom-bar">
     <!-- A view not available yet is greyed out and can't be picked -->
     <button v-for="view in views" :key="view.label"
-      :class="{ 'selectedOption': selectedView === view, 'clickable': isAvailable(view), 'view-unavailable': !isAvailable(view) }"
+      :class="{ 'selectedOption': selectedView === view, 'clickable': isAvailable(view), 'is-unavailable': !isAvailable(view) }"
       :title="isAvailable(view) ? undefined : $t('Not available yet')"
       @click="isAvailable(view) && selectView(view)"><span>{{ $t(view.label) }}</span></button>
 
@@ -130,11 +130,5 @@ export default {
 .bottom-bar > * {
   padding-left: 10px;
   font-size: small;
-}
-
-/* A view not available yet (see isAvailable) */
-.bottom-bar > button.view-unavailable {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 </style>

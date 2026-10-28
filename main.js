@@ -110,7 +110,9 @@ const options = {
   }, // https://github.com/FranckFreiburger/vue3-sfc-loader/discussions/88
   handleModule: async (type, getContentData, path, options) => {
     switch (type) {
-      case '.svg': return 'data:image/svg+xml,' + await getContentData(false);
+      // Encoded: an SVG with a '#' (fill="#003399") is cut there otherwise -
+      // a URL's fragment starts at '#'
+      case '.svg': return 'data:image/svg+xml,' + encodeURIComponent(await getContentData(false));
       case '.webp':
       case '.png': {
         const data = await getContentData(true); // Assuming this returns a Uint8Array or Buffer
@@ -146,5 +148,36 @@ app.directive('drag-scroll', dragScroll);
 app.config.globalProperties.$gui = window.GUIManager;
 app.config.globalProperties.$requests = window.RequestsManager;
 app.config.globalProperties.$dataService = window.DataService;
+// The loading screen (index.html) is in the body the app is mounted on, which
+// the mount replaces: held aside and put back on top
+const loadingScreen = document.getElementById('loading-screen');
+loadingScreen?.remove();
 app.mount(document.body);
+if (loadingScreen) document.body.appendChild(loadingScreen);
 startUrlState(window.GUIManager, window.DataService);
+
+// Faded out once the map has drawn its first frame, but never before
+// LOADING_SCREEN_MIN_MS from the page's start - and after LOADING_SCREEN_MAX_MS
+// whatever happens, so a slow tile server never keeps the app hidden
+{
+  const LOADING_SCREEN_MIN_MS = 2000;
+  const LOADING_SCREEN_MAX_MS = 15000;
+  let hidden = false;
+  const hide = () => {
+    if (hidden || !loadingScreen) return;
+    // performance.now() counts from the page's start
+    const wait = LOADING_SCREEN_MIN_MS - performance.now();
+    if (wait > 0) { setTimeout(hide, wait); return; }
+    hidden = true;
+    loadingScreen.classList.add('is-hidden');
+    loadingScreen.addEventListener('transitionend', () => loadingScreen.remove(), { once: true });
+  };
+  setTimeout(hide, LOADING_SCREEN_MAX_MS);
+  const waitForMap = () => {
+    if (hidden) return;
+    const map = window.GUIManager.olMap;
+    if (map) map.once('rendercomplete', hide);
+    else setTimeout(waitForMap, 100);
+  };
+  waitForMap();
+}

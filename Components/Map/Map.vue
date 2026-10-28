@@ -3,6 +3,18 @@
   <!-- OL map -->
   <div id="map" ref="OLMap" v-on:drop="onDropFile($event)" v-on:dragover="onDragOver($event)"></div>
 
+  <!-- Along the top, right of the map's (i) and +/- (which hold the top-left
+       corner, globalStyle.css): ICATMAR and its observational network, the
+       second overlapping the first and on top of it - each a link (new tab) -->
+  <div class="map-brand">
+    <a href="https://www.icatmar.cat" target="_blank" rel="noopener" title="ICATMAR" class="map-brand-link">
+      <img src="../../Assets/Images/logos/logo-icatmar-mini.svg" alt="ICATMAR">
+    </a>
+    <a href="https://www.icatmar.cat/visors/xarxa-observacional/" target="_blank" rel="noopener" :title="$t('Observational network')" class="map-brand-link map-brand-network">
+      <img src="../../Assets/Images/logos/logo-icatmar-xarxaobs.svg" alt="Xarxa observacional">
+    </a>
+  </div>
+
   <!-- OVERLAYS -->
   <!-- <MapOverlayMockup></MapOverlayMockup> -->
   <MapOverlayHFRStations></MapOverlayHFRStations>
@@ -92,6 +104,39 @@ export default {
 
 
 <style scoped>
+/* ICATMAR's badges along the top, right of the map controls' column (see
+   the template). Their size follows the screen's width, 35 to 70 px. */
+.map-brand {
+  position: fixed;
+  top: 8px;
+  left: 48px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+.map-brand-link {
+  display: block;
+  line-height: 0;
+  border-radius: 50%;
+  transition: transform 0.2s ease-in-out;
+}
+.map-brand-link:hover {
+  transform: scale(1.08);
+}
+.map-brand-link img {
+  width: var(--brand-size);
+  height: var(--brand-size);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+}
+/* The observational network's badge: over ICATMAR's, a bit overlapping */
+.map-brand-network {
+  margin-left: calc(var(--brand-size) * -0.27);
+  position: relative;
+  z-index: 1;
+}
+
 
 #map {
   width: 100%;
