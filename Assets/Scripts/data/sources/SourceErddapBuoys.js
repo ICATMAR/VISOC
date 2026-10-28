@@ -1,5 +1,6 @@
 import SourceBuoys from './SourceBuoys.js';
 import SourceErddap from './SourceErddap.js';
+import ErddapServer from './ErddapServer.js';
 
 // Every source has to report a buoy, and each of its sensors, under the same id
 // as the others, otherwise DPBuoys merges nothing and the same mooring shows up
@@ -47,7 +48,34 @@ class SourceErddapBuoys extends SourceBuoys {
 
     // this.buoys (see SourceBuoys) is filled in by load(): id, array of sensors
     // (metadata, variables...), lat-long, institution, acknowledgement
+    this.watchServer();
     this.loadingPromise = this.load();
+  }
+
+  // This source's buoy datasets on the server's shared list (see
+  // ErddapServer), read by whichever product:
+  // - new data in one: the buoys product refreshes (refreshCoverage moves
+  //   the sensor's dates on, and the views are told);
+  // - a new one: loaded again, for its sensor;
+  // - one gone: its sensor stops being asked for it, and a sensor left with
+  //   no dataset is unavailable (DPBuoys plans nothing on it) - nothing new to
+  //   show, so nobody is told.
+  watchServer() {
+    const mine = id => id.startsWith(this.datasetCommonKey);
+    ErddapServer.for(this.fetchManager, this.baseUrl).changes.addEventListener('change', ({ detail }) => {
+      const { updated, added, removed } = ErddapServer.mine(detail, mine);
+      if (removed.length) {
+        this.buoys.forEach(buoy => buoy.sensors.forEach(sensor => {
+          if (!sensor.datasets?.some(dataset => removed.includes(dataset))) return;
+          sensor.datasets = sensor.datasets.filter(dataset => !removed.includes(dataset));
+          if (sensor.datasets.length === 0) sensor.unavailable = true;
+        }));
+      }
+      if (added.length) {
+        this.loadingPromise = this.load();
+        this.loadingPromise.then(() => this.notifyUpdated(), error => console.error(`Buoys on ${this.src}: could not load again:`, error));
+      } else if (updated.length) this.notifyUpdated();
+    });
   }
 
   async load() {

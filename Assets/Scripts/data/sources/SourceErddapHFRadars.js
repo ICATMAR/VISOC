@@ -1,5 +1,6 @@
 import Source from './Source.js';
 import SourceErddap from './SourceErddap.js';
+import ErddapServer from './ErddapServer.js';
 import VectorField from '../VectorField.js';
 import { readNetCDF3 } from '../parsers/netcdf3.js';
 
@@ -125,6 +126,7 @@ class SourceErddapHFRadars extends Source {
     this.baseUrl = src.replace(/\/index\.html$/, '');
     this.datasetPattern = datasetPattern ? new RegExp(datasetPattern) : undefined;
     this.datasets = datasets;      // filled in by load() when found by pattern
+    this.configuredDatasets = datasets;
     this.dataset = datasets?.length === 1 ? datasets[0] : undefined;
     this.eastward = eastward;
     this.northward = northward;
@@ -146,7 +148,24 @@ class SourceErddapHFRadars extends Source {
     this.staleHours = new Map();   // '<dataset>' -> Map(hour ms -> when it went stale, ms)
     this.updatedAt = new Map();    // '<ISO hour>' -> its file's last modification, ms
 
+    // The server's dataset list, shared with every source on it (read
+    // directly from a server that allows cross-origin requests)
+    this.server = ErddapServer.for(fetchManager, this.baseUrl, { direct: !useProxy });
+    this.watchServer();
     this.loadingPromise = this.load();
+  }
+
+  // New data in this source's datasets on the server's shared list, read by
+  // whichever product: its product refreshes, and refresh() finds what moved
+  // and drops what it kept of it. A dataset gone: the list is applied quietly
+  // - nothing new to show, and no more requests for it.
+  watchServer() {
+    const mine = id => this.datasetPattern ? this.datasetPattern.test(id) : (this.configuredDatasets ?? []).includes(id);
+    this.server.changes.addEventListener('change', ({ detail }) => {
+      const { updated, added, removed } = ErddapServer.mine(detail, mine);
+      if (updated.length || added.length) this.notifyUpdated();
+      else if (removed.length) this.loadDatasets().catch(error => console.error(`HF radar totals on ${this.src}:`, error));
+    });
   }
 
   // load(), again if it failed - but no sooner than RETRY_AFTER_MS after the
@@ -270,13 +289,8 @@ class SourceErddapHFRadars extends Source {
   }
 
   async loadDatasets() {
-    // Straight from a server that allows cross-origin requests, through the
-    // proxy otherwise (SourceErddap.fetchAllDatasets always proxies)
-    const allDatasets = this.useProxy
-      ? await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl)
-      : await this.fetchManager.fetch(`${this.baseUrl}/tabledap/allDatasets.jsonlKVP`, 1)
-        .then(res => res.text())
-        .then(text => text.trim().split('\n').filter(line => line).map(line => JSON.parse(line)));
+    // The server's shared list (see ErddapServer)
+    const allDatasets = [...(await this.server.datasets()).values()];
     const found = allDatasets.filter(d => this.datasetPattern
       ? this.datasetPattern.test(d['datasetID'])
       : this.datasets.includes(d['datasetID']));

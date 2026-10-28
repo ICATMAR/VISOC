@@ -394,6 +394,8 @@ class DPBuoys extends DP {
         if (!buoy) return;
 
         buoy.sensors.forEach(sensor => {
+          // Its dataset(s) gone from the server's list (see SourceErddapBuoys)
+          if (sensor.unavailable) return;
           // A source that dates the buoy but not its sensors (the MSM API)
           // still has usable coverage - fall back to the buoy's own.
           const coverage = {

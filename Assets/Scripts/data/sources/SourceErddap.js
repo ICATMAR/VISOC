@@ -1,4 +1,5 @@
 import Source from './Source.js';
+import ErddapServer from './ErddapServer.js';
 
 const PROXY_URL = 'https://api.icatmar.cat/proxy/';
 
@@ -14,6 +15,7 @@ class SourceErddap extends Source {
     this.metadata = undefined;  // NC_GLOBAL attributes (dataset-level)
     this.recentWindowDays = 2;  // how far back getEndTimestamp() checks for recent data
 
+    this.watchServer();
     this.loadingPromise = this.load();
     // Said once here rather than left unhandled: a dataset the server doesn't
     // list (ERDDAP unloads one it can't load, or it isn't published yet) is a
@@ -33,15 +35,39 @@ class SourceErddap extends Source {
     return SourceErddap.proxied(url);
   }
 
-  // ERDDAP's allDatasets.jsonlKVP (list of every dataset on the server): one
-  // JSON object per line, keyed directly by column name (datasetID, minTime,
-  // maxTime, minLatitude, maxLatitude, ...) - no header rows, unlike .csv.
-  // Shared (not tied to a single `dataset`) so other sources on the same
-  // ERDDAP server can reuse it instead of re-fetching/re-parsing it themselves.
+  // ERDDAP's allDatasets (every dataset on the server, one object per dataset
+  // keyed by column name: datasetID, minTime, maxTime, minLatitude, ...) -
+  // the server's ONE shared copy (see ErddapServer): every source on the
+  // server reads the same list, and learns from any read of it
   static async fetchAllDatasets(fetchManager, baseUrl) {
-    const url = `${baseUrl}/tabledap/allDatasets.jsonlKVP`;
-    const text = await fetchManager.fetch(SourceErddap.proxied(url), 1).then(res => res.text());
-    return text.trim().split('\n').filter(line => line).map(line => JSON.parse(line));
+    return [...(await ErddapServer.for(fetchManager, baseUrl).datasets()).values()];
+  }
+
+  // This source's dataset on its server's shared list: its dates follow the
+  // list, it is missing while the list doesn't have it (ERDDAP unloads a
+  // dataset it can't load) and loaded again when it is back. New data is
+  // said (see Source.updates); a dataset gone is not - nothing new to show.
+  watchServer() {
+    if (!this.dataset) return;
+    ErddapServer.for(this.fetchManager, this.baseUrl).changes.addEventListener('change', ({ detail }) => {
+      if (detail.removed.includes(this.dataset)) this.datasetRemoved();
+      else if (detail.added.includes(this.dataset)) this.datasetAdded();
+      else if (detail.updated.includes(this.dataset)) this.datasetUpdated(ErddapServer.for(this.fetchManager, this.baseUrl).row(this.dataset));
+    });
+  }
+  datasetRemoved() {
+    if (!this.isMissing) console.info(`ERDDAP: '${this.dataset}' no longer on ${this.src} - not asked for until it is back`);
+    this.isMissing = true;
+  }
+  datasetAdded() {
+    this.isMissing = false;
+    this.loadingPromise = this.load();
+    this.loadingPromise.then(() => this.notifyUpdated(), error => console.error(`ERDDAP: could not load '${this.dataset}' again:`, error));
+  }
+  datasetUpdated(row) {
+    if (row?.['minTime']) this.startDate = new Date(row['minTime']);
+    if (row?.['maxTime']) this.endDate = new Date(row['maxTime']);
+    this.notifyUpdated();
   }
 
   // ERDDAP constraint string for this.bbox ({minLat, minLon, maxLat, maxLon}),
@@ -57,6 +83,7 @@ class SourceErddap extends Source {
     // 1) allDatasets.jsonlKVP - cheap way to try to get this dataset's minTime/maxTime
     const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
     const datasetInfo = allDatasets.find(d => d['datasetID'] === this.dataset);
+    this.isMissing = !datasetInfo;
     if (!datasetInfo) {
       const missing = new Error(`Dataset '${this.dataset}' not found in ERDDAP source '${this.src}'`);
       missing.name = 'DatasetMissing';

@@ -20,9 +20,12 @@ const MANIFEST_TTL_MINUTES = 5;
 // The manifest is the repository's, not a data product's: one copy for every
 // SourceGithubHFR (the totals and the stations products each have their own
 // source), so the map and the timeline agree on which hours exist. Re-read by
-// whichever asks once it is stale; a read that finds a newer one says so (see
-// SourceGithubHFR.manifestEvents).
+// whichever asks once it is stale; a read that finds a newer one says so on
+// `manifestEvents`, and every source re-says it as its own 'updated' (see
+// Source.updates), so each product refreshes. A read that fails keeps the
+// last good one.
 const sharedManifest = { promise: undefined, at: 0, value: undefined };
+const manifestEvents = new EventTarget();
 // A manifest hour ('2026-10-22T10:00Z') as the ISO string Dates give
 const manifestHour = key => new Date(key.replace(/Z$/, ':00Z')).toISOString();
 const RADIAL_CACHE_SIZE = 200;
@@ -167,6 +170,9 @@ class SourceGithubHFR extends Source {
     // (both leave startDate/endDate undefined).
     this.isRateLimited = false;
 
+    // A newer manifest, whichever source read it: this source has new data
+    manifestEvents.addEventListener('change', () => this.notifyUpdated());
+
     this.loadingPromise = this.load();
   }
 
@@ -205,10 +211,16 @@ class SourceGithubHFR extends Source {
         const { rows: totals, versions: totalsVersions } = index(json.totals);
         const newer = sharedManifest.value && json.generated !== sharedManifest.value.generated;
         sharedManifest.value = { generated: json.generated, radials, totals, radialVersions, totalsVersions };
-        if (newer) SourceGithubHFR.manifestEvents.dispatchEvent(new Event('change'));
+        if (newer) manifestEvents.dispatchEvent(new Event('change'));
         return sharedManifest.value;
       })
       .catch(error => {
+        // The last good one, when there is one: the repository didn't lose
+        // its files because Pages didn't answer this time
+        if (sharedManifest.value) {
+          console.warn('HF radar manifest: could not read it again, keeping the last one:', error.message ?? error);
+          return sharedManifest.value;
+        }
         console.error('HF radar manifest unavailable - falling back to the GitHub API and asking for each file:', error);
         sharedManifest.value = null;
         return null;
@@ -729,10 +741,5 @@ class SourceGithubHFR extends Source {
     return [{ network: 'ICATMAR', hours: found }];
   }
 }
-
-// 'change' when a read of the manifest finds a newer one, whichever product's
-// source read it: every product built on it refreshes then (DPHFRTotals,
-// DPHFRStations), not at its own next turn
-SourceGithubHFR.manifestEvents = new EventTarget();
 
 export default SourceGithubHFR;

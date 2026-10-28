@@ -1,5 +1,6 @@
 import Source from './Source.js';
 import SourceErddap from './SourceErddap.js';
+import ErddapServer from './ErddapServer.js';
 import { readNetCDF3 } from '../parsers/netcdf3.js';
 import { destination, bearingAwayFrom } from '../geo.js';
 
@@ -73,7 +74,21 @@ class SourceErddapEUHFR extends Source {
     // Per-station results, keyed by station code (e.g. 'CREU').
     this.stations = {};
 
+    this.watchServer();
     this.loadingPromise = this.load();
+  }
+
+  // New data for a station this source knows, on the server's shared list
+  // (see ErddapServer), read by whichever product: its product refreshes
+  // (refreshEnds moves the station's end on). A station's dataset gone: the
+  // entry is marked unavailable - nothing new to show, so nobody is told.
+  watchServer() {
+    const entryOf = id => Object.values(this.stations).find(entry => entry.dataset === id);
+    ErddapServer.for(this.fetchManager, this.baseUrl).changes.addEventListener('change', ({ detail }) => {
+      detail.removed.map(entryOf).filter(Boolean).forEach(entry => { entry.unavailable = true; });
+      detail.added.map(entryOf).filter(Boolean).forEach(entry => { entry.unavailable = false; });
+      if ([...detail.updated, ...detail.added].some(entryOf)) this.notifyUpdated();
+    });
   }
 
   // e.g. 'EUHFR_NRTcurrent_HFR-ICATMAR-CREU_v3_table' -> 'CREU'

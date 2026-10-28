@@ -228,6 +228,15 @@ class SourceErddapGriddap extends SourceErddap {
   // on the server). When it moved, the dataset's description is read again -
   // its run (runInfo) - and the forecasts kept from the old run are asked
   // again (see getPointSeries). undefined when the list can't say.
+  // The dataset's dates moved on the server's list (see SourceErddap.watchServer):
+  // a new run is checked the usual way - its description read again, the old
+  // run's forecasts dropped - before the product is told
+  datasetUpdated() {
+    this.checkRun()
+      .then(() => this.notifyUpdated())
+      .catch(error => console.error(`${this.label ?? this.dataset}: run check failed`, error));
+  }
+
   async checkRun() {
     await this.loadingPromise?.catch(() => {});
     const iso = date => date && !isNaN(date) ? date.toISOString() : '';

@@ -31,6 +31,16 @@ class DataProduct {
     // the views, through dataProductMixin - with a 'change' event
     this.changes = new EventTarget();
     this.version = 0;
+
+    // A source found new data in its server's index (an ERDDAP's dataset
+    // list, the GitHub manifest), read by this product or any other: refresh
+    // now rather than at the next turn - past the gap between refreshes, as a
+    // new index is rare and always worth it. refresh() decides what to tell
+    // the views, as on any turn.
+    this.sources.forEach(source => source.updates?.addEventListener('updated', () => {
+      this.refreshedAt = undefined;
+      this.requestRefresh();
+    }));
   }
 
   // Tells the views the product's data changed; `detail` says how (each
