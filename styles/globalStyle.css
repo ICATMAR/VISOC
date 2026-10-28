@@ -416,16 +416,40 @@ compiles its components in the browser - until the map has drawn (main.js)
   height: 40px;
   object-fit: contain;
 }
-#loading-screen .loading-spinner {
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(255, 255, 255, 0.25);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: loading-spin 1s linear infinite;
+/* The app's name on top: VISOC, and under it what it stands for */
+#loading-screen .loading-title {
+  text-align: center;
+  color: white;
 }
-@keyframes loading-spin {
-  to { transform: rotate(360deg); }
+#loading-screen .loading-title h1 {
+  margin: 0;
+  font-size: 3.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+#loading-screen .loading-title p {
+  margin: 10px 0 0;
+  font-size: 1.25rem;
+  font-weight: 300;
+  line-height: 1.25;
+  color: var(--lightBlue);
+}
+/* The start's progress (main.js): the fill grows from the left */
+#loading-screen .loading-bar {
+  width: 240px;
+  max-width: 70vw;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+#loading-screen .loading-bar-fill {
+  height: 100%;
+  background: var(--lightBlue);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease-out;
 }
 #loading-screen .loading-logos {
   display: flex;

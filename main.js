@@ -86,10 +86,74 @@ const i18n = VueI18n.createI18n({
 });
 
 
+// The loading screen's bar (index.html): how far the start has got, measured
+// rather than timed, in three stages -
+//   up to 60%: the app's files compiled in the browser (the .vue components
+//              and what they import), of as many as the last start needed;
+//   65%:       the map created;
+//   to 100%:   the tiles of the map's first frame, of those it has asked for.
+// It never goes back (a stage's total can grow as it goes), and the screen
+// fills it before fading (see below).
+const startupProgress = {
+  EXPECTED_FILES_KEY: 'visoc.startupFiles',
+  files: 0,
+  expectedFiles: 70, // replaced by the last start's count, when known
+  mapCreated: false,
+  tilesAsked: 0,
+  tilesDone: 0,
+  shown: 0,
+  done: false,
+  bar: document.querySelector('#loading-screen .loading-bar'),
+
+  init() {
+    try {
+      const last = Number(localStorage.getItem(this.EXPECTED_FILES_KEY));
+      if (last > 0) this.expectedFiles = last;
+    } catch (e) { /* storage blocked: the default stands */ }
+  },
+  fraction() {
+    if (this.done) return 1;
+    if (!this.mapCreated) return 0.6 * Math.min(this.files / this.expectedFiles, 0.95);
+    const tiles = this.tilesAsked ? this.tilesDone / this.tilesAsked : 0;
+    return 0.65 + 0.35 * Math.min(tiles, 0.95);
+  },
+  update() {
+    const shown = Math.max(this.shown, this.fraction());
+    if (shown === this.shown || !this.bar) return;
+    this.shown = shown;
+    this.bar.firstElementChild.style.transform = `scaleX(${shown})`;
+    this.bar.setAttribute('aria-valuenow', Math.round(shown * 100));
+  },
+  fileLoaded() {
+    this.files++;
+    this.update();
+  },
+  // The map exists: follow its tile sources' loads
+  watchMap(map) {
+    this.mapCreated = true;
+    map.getAllLayers().forEach(layer => {
+      const source = layer.getSource();
+      if (!source?.on) return;
+      source.on('tileloadstart', () => { this.tilesAsked++; this.update(); });
+      source.on(['tileloadend', 'tileloaderror'], () => { this.tilesDone++; this.update(); });
+    });
+    this.update();
+  },
+  finish() {
+    if (this.done) return;
+    this.done = true;
+    this.update();
+    try { localStorage.setItem(this.EXPECTED_FILES_KEY, String(this.files)); } catch (e) { /* not kept: the default next time */ }
+  },
+};
+startupProgress.init();
+
+
 const options = {
   moduleCache: { vue: Vue },
   async getFile(url) {
     const res = await fetch(url);
+    if (!startupProgress.done) startupProgress.fileLoaded();
     if (!res.ok)
       throw Object.assign(new Error(res.statusText + ' ' + url), { res });
     return {
@@ -165,6 +229,7 @@ startUrlState(window.GUIManager, window.DataService);
   let hidden = false;
   const hide = () => {
     if (hidden || !loadingScreen) return;
+    startupProgress.finish(); // the bar full, while the screen waits out its minimum
     // performance.now() counts from the page's start
     const wait = LOADING_SCREEN_MIN_MS - performance.now();
     if (wait > 0) { setTimeout(hide, wait); return; }
@@ -176,7 +241,10 @@ startUrlState(window.GUIManager, window.DataService);
   const waitForMap = () => {
     if (hidden) return;
     const map = window.GUIManager.olMap;
-    if (map) map.once('rendercomplete', hide);
+    if (map) {
+      startupProgress.watchMap(map);
+      map.once('rendercomplete', hide);
+    }
     else setTimeout(waitForMap, 100);
   };
   waitForMap();

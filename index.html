@@ -63,8 +63,15 @@
   <!-- Loading screen: shown from the first paint, while Vue compiles the app
        in the browser; main.js fades it out once the map has drawn -->
   <div id="loading-screen" aria-busy="true" aria-label="Loading">
+    <div class="loading-title">
+      <h1>VISOC</h1>
+      <p>Visor<br>oceanogràfic</p>
+    </div>
     <img class="loading-main-logo" onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-icatmar-negatiu-short.svg" alt="ICATMAR">
-    <div class="loading-spinner"></div>
+    <!-- How far the start has got (main.js) -->
+    <div class="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="loading-bar-fill"></div>
+    </div>
     <div class="loading-logos">
       <img onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-ICM.svg" alt="Institut de Ciències del Mar">
       <img onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-CSIC.png" alt="CSIC">
