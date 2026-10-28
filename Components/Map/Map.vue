@@ -7,12 +7,17 @@
        corner, globalStyle.css): ICATMAR and its observational network, the
        second overlapping the first and on top of it - each a link (new tab) -->
   <div class="map-brand">
-    <a href="https://www.icatmar.cat" target="_blank" rel="noopener" title="ICATMAR" class="map-brand-link">
-      <img src="../../Assets/Images/logos/logo-icatmar-mini.svg" alt="ICATMAR">
-    </a>
-    <a href="https://www.icatmar.cat/visors/xarxa-observacional/" target="_blank" rel="noopener" :title="$t('Observational network')" class="map-brand-link map-brand-network">
-      <img src="../../Assets/Images/logos/logo-icatmar-xarxaobs.svg" alt="Xarxa observacional">
-    </a>
+    <div class="map-brand-badges">
+      <a href="https://www.icatmar.cat" target="_blank" rel="noopener" title="ICATMAR" class="map-brand-link">
+        <img src="../../Assets/Images/logos/logo-icatmar-mini.svg" alt="ICATMAR">
+      </a>
+      <!-- This viewer: back to its start -->
+      <a href="./" title="Visor oceà" class="map-brand-link map-brand-visor">
+        <img src="../../Assets/Images/logos/logo-icatmar-visor-ocea.svg" alt="Visor oceà">
+      </a>
+    </div>
+    <!-- The EU's co-funding -->
+    <img src="../../Assets/Images/logos/logo-EU.svg" alt="Cofinançat per la Unió Europea" class="map-brand-funding">
   </div>
 
   <!-- OVERLAYS -->
@@ -112,8 +117,14 @@ export default {
   left: 48px;
   z-index: 2;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
   pointer-events: auto;
+}
+.map-brand-badges {
+  display: flex;
+  align-items: center;
 }
 .map-brand-link {
   display: block;
@@ -130,11 +141,18 @@ export default {
   border-radius: 50%;
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
 }
-/* The observational network's badge: over ICATMAR's, a bit overlapping */
-.map-brand-network {
+/* The viewer's badge: over ICATMAR's, a bit overlapping */
+.map-brand-visor {
   margin-left: calc(var(--brand-size) * -0.27);
   position: relative;
   z-index: 1;
+}
+/* As wide as the two badges together, shaded so the white logo reads on the map */
+.map-brand-funding {
+  width: calc(var(--brand-size) * 1.73);
+  height: auto;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+  pointer-events: none;
 }
 
 
