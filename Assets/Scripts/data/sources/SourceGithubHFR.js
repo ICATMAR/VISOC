@@ -1,9 +1,42 @@
 import Source from './Source.js';
+import VectorField from '../VectorField.js';
+import { parseTuv, tuvPoints, tuvCell } from '../parsers/tuv.js';
+import { bearingAwayFrom } from '../geo.js';
 
 const GITHUB_API_URL = 'https://api.github.com/repos';
 const REPO = 'ICATMAR/data';
 const BRANCH = 'main';
 const PATH = 'observational/hf_radar/currents/L2';
+// The repository as a website (GitHub Pages): files by URL with CORS and no
+// API limit - where a station's radials (.ruv) are read from
+const PAGES_URL = 'https://icatmar.github.io/data';
+// What the repository has, kept up to date by a GitHub Action in
+// ICATMAR/data: every hourly radial (.ruv, per station) and totals (.tuv)
+// file and how many vectors it holds (its %TableRows) -
+// { generated, radials: { STA: { 'YYYY-MM-DDTHH:MMZ': rows } }, totals: { hour: rows } }.
+// One request tells which files exist, so none is asked for in vain.
+const MANIFEST_URL = `${PAGES_URL}/observational/hf_radar/manifest.json`;
+const MANIFEST_TTL_MINUTES = 5;
+// The manifest is the repository's, not a data product's: one copy for every
+// SourceGithubHFR (the totals and the stations products each have their own
+// source), so the map and the timeline agree on which hours exist. Re-read by
+// whichever asks once it is stale; a read that finds a newer one says so on
+// `manifestEvents`, and every source re-says it as its own 'updated' (see
+// Source.updates), so each product refreshes. A read that fails keeps the
+// last good one.
+const sharedManifest = { promise: undefined, at: 0, value: undefined };
+const manifestEvents = new EventTarget();
+// A manifest hour ('2026-10-22T10:00Z') as the ISO string Dates give
+const manifestHour = key => new Date(key.replace(/Z$/, ':00Z')).toISOString();
+const RADIAL_CACHE_SIZE = 200;
+// Parsed files kept in memory: a .tuv is ~800 KB of text and a few MB once
+// parsed, a .ruv about a quarter of that - and GitHub only serves the newest
+// hours the ERDDAPs don't have yet, about a dozen. The derived maps and
+// radial fields (typed arrays, ~100 KB each) are kept longer.
+const TOTALS_FILE_CACHE_SIZE = 24;
+const RADIAL_FILE_CACHE_SIZE = 48;
+const TOTALS_MAP_CACHE_SIZE = 72;
+const RADIAL_TTL_MINUTES = 10;
 
 // .ruv (CODAR LLUV radial) files are fixed-format tables: a constant header,
 // then one ~242-byte line per radial vector. That makes the file size a
@@ -70,9 +103,33 @@ const SCAL_METADATA = {
   },
 };
 
+// TOTALS MAPS: the network's hourly totals (.tuv) in the same repository,
+// read straight off raw.githubusercontent.com by file name - which needs no
+// API request (and so isn't held to the API's 60 requests an hour), and is
+// where the newest hours land first, before either ERDDAP has them. About
+// 700 KB a file, so only worth it for those newest hours (see
+// DPHFRTotals.getField, which tries the ERDDAPs first).
+const RAW_URL = 'https://raw.githubusercontent.com';
+const TOTALS_PATH = 'observational/hf_radar/currents/L3/tuv';
+const TOTALS_TTL = 60;     // minutes - a published hour doesn't change
+
 // How long load()'s repo-wide tree is cached for - short, since its only
 // purpose is finding out how fresh each station's data currently is.
 const TREE_TTL_MINUTES = 10;
+
+// .ruv columns that are the EU HFR Node's variables under another name or
+// unit: what the Point view merges them into (cm/s -> m/s). Columns only the
+// files have are left out (the Point view follows ERDDAP's variables). The
+// .tuv's are in parsers/tuv.js (TUV_TO_STANDARD).
+const RUV_TO_STANDARD = {
+  ESPC: { name: 'ESPC', scale: 0.01 }, ETMP: { name: 'ETMP', scale: 0.01 },
+  // The .ruv's velocities are positive TOWARDS the antenna; the EU HFR Node
+  // publishes them positive away (as RDVA) - checked: .ruv MAXV 36.418 cm/s
+  // is the node's MAXV -0.364 m/s for the same bin and hour
+  MAXV: { name: 'MAXV', scale: -0.01 }, MINV: { name: 'MINV', scale: -0.01 },
+  ERSC: { name: 'ERSC' }, ERTC: { name: 'ERTC' }, SPRC: { name: 'SPRC' },
+  PRIM: { name: 'QCflag' },
+};
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -88,9 +145,15 @@ function pad(n) {
 // SourceFileHFRRadials already does that for locally served files.
 class SourceGithubHFR extends Source {
 
-  constructor({ fetchManager, src }) {
+  // `provider`: on the HFR totals product, which of the HFR dashboard's
+  // choices this source can stand in for with its totals maps (see
+  // getField). `label`: how it is named when it does.
+  constructor({ fetchManager, src, provider, label }) {
     super({ fetchManager });
     this.src = src;
+    this.provider = provider;
+    this.label = label ?? 'GitHub';
+    this.totalsMaps = new Map();   // '<ISO hour>' -> Promise<VectorField | null>
     this.repo = REPO; // exposed so DataProducts.vue can label/link this source, same as SourceErddap's `dataset`
 
     // One entry per station-month directory request, keyed '<station>/<year>/<month>'.
@@ -107,14 +170,99 @@ class SourceGithubHFR extends Source {
     // (both leave startDate/endDate undefined).
     this.isRateLimited = false;
 
+    // A newer manifest, whichever source read it: this source has new data
+    manifestEvents.addEventListener('change', () => this.notifyUpdated());
+
     this.loadingPromise = this.load();
   }
 
-  // Discovers every station's earliest/latest timestamp, from the repo's
-  // file tree - fetched recursively in a SINGLE request (GitHub resolves a
-  // branch name straight to its root tree), rather than walking every
-  // station/month directory just to find out how fresh the data is.
+  // ICATMAR/data's manifest (see MANIFEST_URL), indexed by ISO hour:
+  // { generated, radials: { STA: Map(hour -> rows) }, totals: Map(hour -> rows) }
+  // - or null when it can't be had (then the API fallbacks below are used).
+  // Read again once MANIFEST_TTL_MINUTES have passed, so new hours appear -
+  // or now, with `force` (see refresh): then past FetchManager's copy and the
+  // Pages CDN's (max-age 600), with a stamp in the URL that changes every
+  // minute, so the products refreshing together share one request.
+  loadManifest({ force = false } = {}) {
+    if (!force && sharedManifest.promise && Date.now() - sharedManifest.at < MANIFEST_TTL_MINUTES * 60000) return sharedManifest.promise;
+    sharedManifest.at = Date.now();
+    const url = force ? `${MANIFEST_URL}?t=${Math.floor(Date.now() / 60000)}` : MANIFEST_URL;
+    sharedManifest.promise = this.fetchManager.fetch(url, force ? 1 : MANIFEST_TTL_MINUTES)
+      .then(res => res.json())
+      .then(json => {
+        // An hour is its file's row count - or [rows, sha] should the
+        // manifest also give each file's git blob SHA. Its version (see
+        // getVersions) is the SHA, or else the count: a file reprocessed
+        // keeping its count goes unnoticed without the SHA.
+        const rowsOf = value => Array.isArray(value) ? value[0] : value;
+        const versionOf = value => Array.isArray(value) ? value[1] ?? value[0] : value;
+        const index = hours => {
+          const rows = new Map(), versions = new Map();
+          Object.entries(hours ?? {}).forEach(([key, value]) => {
+            rows.set(manifestHour(key), rowsOf(value));
+            versions.set(manifestHour(key), String(versionOf(value)));
+          });
+          return { rows, versions };
+        };
+        const radials = {}, radialVersions = {};
+        Object.entries(json.radials ?? {}).forEach(([station, hours]) => {
+          ({ rows: radials[station], versions: radialVersions[station] } = index(hours));
+        });
+        const { rows: totals, versions: totalsVersions } = index(json.totals);
+        const newer = sharedManifest.value && json.generated !== sharedManifest.value.generated;
+        sharedManifest.value = { generated: json.generated, radials, totals, radialVersions, totalsVersions };
+        if (newer) manifestEvents.dispatchEvent(new Event('change'));
+        return sharedManifest.value;
+      })
+      .catch(error => {
+        // The last good one, when there is one: the repository didn't lose
+        // its files because Pages didn't answer this time
+        if (sharedManifest.value) {
+          console.warn('HF radar manifest: could not read it again, keeping the last one:', error.message ?? error);
+          return sharedManifest.value;
+        }
+        console.error('HF radar manifest unavailable - falling back to the GitHub API and asking for each file:', error);
+        sharedManifest.value = null;
+        return null;
+      });
+    return sharedManifest.promise;
+  }
+
+  // The manifest as last read (shared - see sharedManifest), or null
+  get manifest() {
+    return sharedManifest.value ?? null;
+  }
+
+  // The manifest read again now (see the data products' refresh): whether
+  // it changed since the last refresh - new hours, or files re-processed.
+  // The stations' coverage is worked out from it again (in memory).
+  async refresh() {
+    const manifest = await this.loadManifest({ force: true });
+    if (!manifest) return false;
+    await this.load();
+    const changed = manifest.generated !== this.refreshedGenerated;
+    this.refreshedGenerated = manifest.generated;
+    return changed;
+  }
+
+  // Every station's earliest/latest hour: from the manifest, or - without
+  // it - from the repository's file tree (one GitHub API request)
   async load() {
+    const manifest = await this.loadManifest();
+    if (manifest) {
+      Object.entries(manifest.radials).forEach(([station, hours]) => {
+        const times = [...hours.keys()].map(key => new Date(key).getTime());
+        if (times.length) this.stations[station] = { startDate: new Date(Math.min(...times)), endDate: new Date(Math.max(...times)) };
+      });
+    } else {
+      await this.loadTree();
+    }
+    this.finishLoad();
+  }
+
+  // The fallback: the repo's file tree, fetched recursively in a SINGLE
+  // request (GitHub resolves a branch name straight to its root tree)
+  async loadTree() {
     this.isRateLimited = false;
 
     const url = `${GITHUB_API_URL}/${REPO}/git/trees/${BRANCH}?recursive=1`;
@@ -144,6 +292,9 @@ class SourceGithubHFR extends Source {
       if (coverage.endDate == undefined || date > coverage.endDate) coverage.endDate = date;
     });
 
+  }
+
+  finishLoad() {
     if (this.stations['SCAL']) Object.assign(this.stations['SCAL'], SCAL_METADATA);
 
     // Earliest/latest across every station - same as SourceErddapEUHFR's
@@ -278,7 +429,22 @@ class SourceGithubHFR extends Source {
   // request per station-month instead of one per station, and it also covers
   // stations the EU HFR Node doesn't publish (SCAL), plus hours that are in
   // the repository but not yet ingested there.
+  //
+  // With the manifest: its exact counts (each file's %TableRows - the EU HFR
+  // Node's same count), no listing and no estimate.
   async getNumberOfValidPointsPerStations(stationIds, startDate, endDate) {
+    const manifest = await this.loadManifest();
+    if (manifest) {
+      const from = startDate.getTime(), to = (endDate ?? new Date()).getTime();
+      return Object.fromEntries(stationIds.map(id => {
+        const points = {};
+        manifest.radials[id]?.forEach((rows, key) => {
+          const t = new Date(key).getTime();
+          if (t >= from && t <= to && rows != undefined) points[key.replace('.000Z', 'Z')] = rows;
+        });
+        return [id, points];
+      }));
+    }
     const sizesPerStation = await this.getFileSizesPerStations(stationIds, startDate, endDate);
 
     const entries = Object.entries(sizesPerStation).map(([id, sizes]) => {
@@ -293,6 +459,287 @@ class SourceGithubHFR extends Source {
     return Object.fromEntries(entries);
   }
 
+
+  // TOTALS MAPS (see TOTALS_PATH)
+
+  totalsUrl(hour) {
+    const y = hour.getUTCFullYear(), m = pad(hour.getUTCMonth() + 1), d = pad(hour.getUTCDate()), h = pad(hour.getUTCHours());
+    return `${RAW_URL}/${REPO}/${BRANCH}/${TOTALS_PATH}/${y}/${m}/TOTL_CATS_${y}_${m}_${d}_${h}00.tuv`;
+  }
+
+  // The totals map for the hour `time` (files are on the hour), or null if
+  // the repository has none. Points the processing flagged (VFLG != 0) are
+  // left out; VELU/VELV are in cm/s.
+  // "No map" isn't kept: the hour may be in the next manifest (a map asked
+  // for before its file was published - the neighbour hours the map
+  // preloads - would otherwise stay empty all session). Not costly: an hour
+  // the manifest doesn't list is no request.
+  getField(time) {
+    const hour = new Date(Math.round(time.getTime() / 3600000) * 3600000);
+    const key = hour.toISOString();
+    if (!this.totalsMaps.has(key)) {
+      const promise = (async () => {
+        const file = await this.totalsFile(hour);
+        const field = file ? VectorField.fromPoints(tuvPoints(file.rows), hour, 'ICATMAR') : null;
+        // Which file it is from, and where
+        if (field) Object.assign(field, { dataset: this.originOf(this.totalsUrl(hour)).dataset, url: this.totalsUrl(hour) });
+        // No file (not in the manifest yet) or no points: not kept
+        else if (this.totalsMaps.get(key) === promise) this.totalsMaps.delete(key);
+        return field;
+      })().catch(error => { this.totalsMaps.delete(key); throw error; });
+      this.totalsMaps.set(key, promise);
+      if (this.totalsMaps.size > TOTALS_MAP_CACHE_SIZE) this.totalsMaps.delete(this.totalsMaps.keys().next().value);
+    }
+    return this.totalsMaps.get(key);
+  }
+
+  // One station's radials at `hour` (on the hour: CODAR's are hourly), from
+  // its .ruv on the repository's website - the same shape as
+  // SourceErddapEUHFR.getRadialField(), for when the EU HFR Node has none
+  // (SCAL, or hours it hasn't published yet). null when the file isn't there.
+  // The .ruv's VELO is positive TOWARDS the antenna; the field's velocity, as
+  // the EU HFR Node's RDVA, is positive away - so it is worked out from the
+  // vector itself (VELU/VELV, cm/s) along the bearing away from the site.
+  // qc is the primary QC flag (PRIM: 1 passed every test).
+  getRadialField(stationId, hour) {
+    const key = `${stationId}|${hour.toISOString()}`;
+    this.radialFields ??= new Map();
+    if (!this.radialFields.has(key)) {
+      // "No radials" isn't kept (see getField)
+      const promise = this.fetchRadialField(stationId, hour).then(field => {
+        if (!field && this.radialFields.get(key) === promise) this.radialFields.delete(key);
+        return field;
+      }, error => {
+        this.radialFields.delete(key);
+        throw error;
+      });
+      this.radialFields.set(key, promise);
+      if (this.radialFields.size > RADIAL_CACHE_SIZE) this.radialFields.delete(this.radialFields.keys().next().value);
+    }
+    return this.radialFields.get(key);
+  }
+
+  radialUrl(stationId, hour) {
+    const [y, m, d, h] = [hour.getUTCFullYear(), hour.getUTCMonth() + 1, hour.getUTCDate(), hour.getUTCHours()].map(n => String(n).padStart(2, '0'));
+    return `${PAGES_URL}/${PATH}/${stationId}/${y}/${m}/RDLm_${stationId}_${y}_${m}_${d}_${h}00_l2b.ruv`;
+  }
+
+  // A station's .ruv for an hour, parsed ({ metadata, rows }) - null when the
+  // repository doesn't have it. Shared by the radial maps and the Point view.
+  async radialFile(stationId, hour) {
+    // Not in the manifest: not in the repository - nothing to ask for
+    const manifest = await this.loadManifest();
+    if (manifest && !manifest.radials[stationId]?.has(hour.toISOString())) return null;
+    const key = `${stationId}|${hour.toISOString()}`;
+    this.radialFiles ??= new Map();
+    if (!this.radialFiles.has(key)) {
+      this.radialFiles.set(key, this.fetchManager.fetch(this.radialUrl(stationId, hour) + this.bustOf(key), RADIAL_TTL_MINUTES)
+        .then(res => res.text()).then(text => parseTuv(text))
+        .catch(error => {
+          if (error.name === 'HTTPError' && error.status === 404) return null;
+          this.radialFiles.delete(key);
+          throw error;
+        }));
+      if (this.radialFiles.size > RADIAL_FILE_CACHE_SIZE) this.radialFiles.delete(this.radialFiles.keys().next().value);
+    }
+    return this.radialFiles.get(key);
+  }
+
+  // One radial bin of a station's .ruv at an hour, for the Point view: its
+  // values under the EU HFR Node's names where it is the same quantity (in
+  // the same units: m/s) - see RUV_TO_STANDARD. The bin by its range (km) and
+  // bearing (deg). { values: { <name>: value }, origin } or null.
+  async getRadialBin(stationId, hour, range, bearing) {
+    const file = await this.radialFile(stationId, hour);
+    if (!file) return null;
+    const row = file.rows.find(r => Math.abs(r.RNGE - range) < 0.05 && Math.abs(r.BEAR - bearing) < 0.5);
+    if (!row) return null;
+    const [siteLat, siteLon] = String(file.metadata['Origin'] ?? '').trim().split(/\s+/).map(Number);
+    const values = {};
+    Object.entries(RUV_TO_STANDARD).forEach(([column, { name, scale }]) => {
+      if (Number.isFinite(row[column])) values[name] = row[column] * (scale ?? 1);
+    });
+    // RDVA: positive away from the antenna, from the vector itself (the .ruv's
+    // VELO is positive towards it)
+    if ([row.LATD, row.LOND, row.VELU, row.VELV].every(Number.isFinite) && Number.isFinite(siteLat)) {
+      const away = bearingAwayFrom({ lat: siteLat, lon: siteLon }, row.LATD, row.LOND) * Math.PI / 180;
+      values.RDVA = (row.VELU * Math.sin(away) + row.VELV * Math.cos(away)) / 100;
+    }
+    return { values, origin: this.originOf(this.radialUrl(stationId, hour)) };
+  }
+
+  // One grid cell of ICATMAR's totals .tuv at an hour, for the Point view and
+  // Compare: under the EU HFR Node's names where it is the same quantity (m/s,
+  // m2/s2). The cell nearest (lon, lat),
+  // within half a grid cell. { values, cell: { latitude, longitude }, origin } or null.
+  async getTotalsCell(hour, lon, lat) {
+    const file = await this.totalsFile(hour);
+    if (!file) return null;
+    const found = tuvCell(file.rows, lon, lat);
+    return found ? { ...found, origin: this.originOf(this.totalsUrl(hour)) } : null;
+  }
+
+  // ICATMAR's totals .tuv for an hour, parsed - shared by the maps and the
+  // cell reads, so a file the map already fetched costs nothing more
+  async totalsFile(hour) {
+    // Not in the manifest: not in the repository - nothing to ask for
+    const manifest = await this.loadManifest();
+    if (manifest && !manifest.totals.has(hour.toISOString())) return null;
+    const key = hour.toISOString();
+    this.totalsFiles ??= new Map();
+    if (!this.totalsFiles.has(key)) {
+      this.totalsFiles.set(key, this.fetchManager.fetch(this.totalsUrl(hour) + this.bustOf(key), TOTALS_TTL, 60)
+        .then(res => res.text()).then(text => parseTuv(text))
+        .catch(error => {
+          if (error.name === 'HTTPError' && error.status === 404) return null;
+          this.totalsFiles.delete(key);
+          throw error;
+        }));
+      if (this.totalsFiles.size > TOTALS_FILE_CACHE_SIZE) this.totalsFiles.delete(this.totalsFiles.keys().next().value);
+    }
+    return this.totalsFiles.get(key);
+  }
+
+  // REPROCESSING. ICATMAR re-processes hours already published: an hour's
+  // file can change. Its version per hour, from the manifest (no request):
+  // Map('<ISO hour>' -> token) for [startDate, endDate] - the totals, or a
+  // station's radials
+  async getVersions(startDate, endDate) {
+    return this.versionsIn((await this.loadManifest())?.totalsVersions, startDate, endDate);
+  }
+  async getRadialVersions(stationId, startDate, endDate) {
+    return this.versionsIn((await this.loadManifest())?.radialVersions?.[stationId], startDate, endDate);
+  }
+  versionsIn(versions, startDate, endDate) {
+    const found = new Map();
+    const from = startDate.getTime(), to = endDate.getTime();
+    versions?.forEach((token, key) => {
+      const t = new Date(key).getTime();
+      if (t >= from && t <= to) found.set(key, token);
+    });
+    return found;
+  }
+
+  // Hours whose file changed: what was kept of them is dropped, and they are
+  // read again past FetchManager's copy and the Pages CDN's (a query with
+  // the new version - Pages ignores it). `stationId`: a station's radials;
+  // without it, the totals.
+  invalidateHours(hours, stationId) {
+    this.bust ??= new Map();
+    hours.forEach(hour => {
+      if (stationId) {
+        const key = `${stationId}|${hour}`;
+        this.radialFiles?.delete(key);
+        this.radialFields?.delete(key);
+        this.bust.set(key, Date.now());
+      } else {
+        this.totalsFiles?.delete(hour);
+        this.totalsMaps?.delete(hour);
+        this.bust.set(hour, Date.now());
+      }
+    });
+  }
+  bustOf(key) {
+    const stamp = this.bust?.get(key);
+    return stamp ? `?v=${stamp}` : '';
+  }
+
+  // The hours in [startDate, endDate] the repository has a totals .tuv /
+  // a station's .ruv for, from the manifest (ISO strings, oldest first) - none
+  // without it
+  async totalsHours(startDate, endDate) {
+    return this.hoursIn((await this.loadManifest())?.totals, startDate, endDate);
+  }
+  async radialHours(stationId, startDate, endDate) {
+    return this.hoursIn((await this.loadManifest())?.radials[stationId], startDate, endDate);
+  }
+  // How many vectors each totals .tuv holds in [startDate, endDate], from the
+  // manifest (its %TableRows): { 'YYYY-MM-DDTHH:00:00Z': rows } - none
+  // without it
+  async totalsCounts(startDate, endDate) {
+    const totals = (await this.loadManifest())?.totals;
+    const counts = {};
+    this.hoursIn(totals, startDate, endDate).forEach(key => {
+      const rows = totals.get(key);
+      if (rows != undefined) counts[key.replace('.000Z', 'Z')] = rows;
+    });
+    return counts;
+  }
+  hoursIn(hours, startDate, endDate) {
+    if (!hours) return [];
+    const from = startDate.getTime(), to = Math.min(endDate.getTime(), Date.now());
+    return [...hours.keys()].filter(key => { const t = new Date(key).getTime(); return t >= from && t <= to; }).sort();
+  }
+
+  // Where a value read from the repository came from
+  originOf(url) {
+    return { label: 'ICATMAR GitHub', dataset: url.split('/').pop(), url };
+  }
+
+  async fetchRadialField(stationId, hour) {
+    const file = await this.radialFile(stationId, hour);
+    if (!file) return null;
+    const { metadata, rows } = file;
+    const [siteLat, siteLon] = String(metadata['Origin'] ?? '').trim().split(/\s+/).map(Number);
+    if (!Number.isFinite(siteLat) || !Number.isFinite(siteLon)) return null;
+    const site = { lat: siteLat, lon: siteLon };
+
+    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [], rangeCell = [];
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    rows.forEach(row => {
+      const { LATD: pLat, LOND: pLon, VELU: u, VELV: v } = row;
+      if (![pLat, pLon, u, v].every(Number.isFinite)) return;
+      const away = bearingAwayFrom(site, pLat, pLon);
+      const rad = away * Math.PI / 180;
+      lat.push(pLat); lon.push(pLon); direction.push(away);
+      velocity.push((u * Math.sin(rad) + v * Math.cos(rad)) / 100);
+      qc.push(row.PRIM ?? 1);
+      ax.push(row.RNGE); bx.push(row.BEAR);
+      // The spectra range cell: RNGE is SPRC range resolutions from the antenna
+      rangeCell.push(Number.isFinite(row.SPRC) ? row.SPRC : -1);
+      if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
+      if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
+    });
+    return {
+      source: 'GitHub',
+      origin: this.originOf(this.radialUrl(stationId, hour)),
+      time: hour,
+      layout: 'polar',
+      axisNames: ['RNGE', 'BEAR'], ax: Float32Array.from(ax), bx: Float32Array.from(bx),
+      // Each bin's range cell (SPRC; -1 where a row lacks it)
+      rangeCell: Int16Array.from(rangeCell),
+      site,
+      lat: Float32Array.from(lat), lon: Float32Array.from(lon),
+      velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),
+      dataExtent: lat.length ? [minLon, minLat, maxLon, maxLat] : [site.lon, site.lat, site.lon, site.lat],
+    };
+  }
+
+  // The newest hour with a totals file, from the manifest (undefined
+  // without it - no probing)
+  async getLatestTime() {
+    const manifest = await this.loadManifest();
+    if (!manifest?.totals.size) return undefined;
+    const now = Date.now();
+    const times = [...manifest.totals.keys()].map(key => new Date(key).getTime()).filter(t => t <= now);
+    return times.length ? new Date(Math.max(...times)) : undefined;
+  }
+
+  // Which hours have a totals file from `startDate` on, from the manifest
+  // (none without it - no probing). A file's points aren't comparable to the
+  // ERDDAPs' counts, so every hour found counts as a full one:
+  // [{ network, hours: { '<ISO hour>': 1 } }]
+  async getAvailability(bbox, startDate) {
+    const manifest = await this.loadManifest();
+    const found = {};
+    const from = startDate.getTime();
+    const now = Date.now();
+    manifest?.totals.forEach((rows, key) => {
+      const t = new Date(key).getTime();
+      if (t >= from && t <= now) found[key] = 1;
+    });
+    return [{ network: 'ICATMAR', hours: found }];
+  }
 }
 
 export default SourceGithubHFR;

@@ -11,27 +11,50 @@ class GUIManager {
   selectedTime = new Date();
 
   selectedLanguage = 'en';
+  // Only English is translated for now; the rest are shown as not available yet
   languages = [
-    { name: 'Català', id: 'ca' },
-    { name: 'Español', id: 'es' },
-    { name: 'Français', id: 'fr' },
-    { name: 'English', id: 'en' },
+    { name: 'Català', id: 'ca', isAvailable: false },
+    { name: 'Español', id: 'es', isAvailable: false },
+    { name: 'Français', id: 'fr', isAvailable: false },
+    { name: 'English', id: 'en', isAvailable: true },
   ]
 
 
-  _selectedDashboard = 'hfr';
+  // The dashboard - in the URL as #/<dashboard>, with the rest of what is
+  // shown (see urlState.js, which writes and reads it)
+  _selectedDashboard = 'platforms';
   get selectedDashboard() { return this._selectedDashboard; }
   set selectedDashboard(id) {
+    // A dashboard not available yet can't be opened (its menu tile is greyed out)
+    if (!this.isDashboardAvailable(id)) return;
     this._selectedDashboard = id;
     this.isDataTimelineOpen = false;
     this.isPlatformDetailOpen = false;
+  }
+  // The selected time came from the URL (t=): the HFR dashboard keeps it
+  // instead of opening on its newest map (see MapLayerHFRCurrents.goToLatest)
+  timeFromUrl = false;
+  // The hour the HFR dashboard put the time handle on by itself - its newest
+  // map (ms). The URL only carries the hour when the handle is elsewhere.
+  hfrDefaultHour = undefined;
+  // The dashboard a hash like #/<dashboard>?... points to, or 'platforms'
+  // when it names nothing that can be shown (see urlState.js)
+  // Whether a dashboard can be opened (the Buoys and Drifters dashboards
+  // aren't yet: their "Switch to dashboard" buttons are hidden meanwhile)
+  isDashboardAvailable(id) {
+    return !!this.dashboards.find(d => d.id === id)?.isAvailable;
+  }
+  dashboardFromHash(hash) {
+    const id = /^#\/([^/?&]+)/.exec(hash)?.[1];
+    const dashboard = this.dashboards.find(d => d.id === id && d.isAvailable);
+    return dashboard ? dashboard.id : 'platforms';
   }
   dashboards = [
     { name: 'All platforms', id: 'platforms', icon: './Assets/Icons/allPlatforms.png', image: './Assets/Images/dashboardIcons/allPlatforms.png', isAvailable: true },
 
     { name: 'HFR currents', type: 'platform', id: 'hfr', icon: './Assets/Icons/radar.svg', image: './Assets/Images/dashboardIcons/hfrCurrents.png', isAvailable: true, latestDaysRange: 4 },
-    { name: 'Buoys', type: 'platform', id: 'buoys', icon: './Assets/Icons/buoy.svg', image: './Assets/Images/dashboardIcons/buoys.png', isAvailable: true, latestDaysRange: 7 },
-    { name: 'Drifters', type: 'platform', id: 'drifters', icon: './Assets/Icons/drifter.svg', image: './Assets/Images/dashboardIcons/drifters.png', isAvailable: true, latestDaysRange: 15 },
+    { name: 'Buoys', type: 'platform', id: 'buoys', icon: './Assets/Icons/buoy.svg', image: './Assets/Images/dashboardIcons/buoys.png', isAvailable: false, latestDaysRange: 7 },
+    { name: 'Drifters', type: 'platform', id: 'drifters', icon: './Assets/Icons/drifter.svg', image: './Assets/Images/dashboardIcons/drifters.png', isAvailable: false, latestDaysRange: 15 },
     { name: 'Argos', type: 'platform', id: 'argos', icon: './Assets/Icons/argo.svg', image: './Assets/Images/dashboardIcons/example.jpg', isAvailable: false, latestDaysRange: 30 },
     { name: 'Remote sensing', type: 'platform', id: 'remoteSensing', icon: './Assets/Icons/smos.svg', image: './Assets/Images/dashboardIcons/example.jpg', isAvailable: false },
 
@@ -48,6 +71,250 @@ class GUIManager {
 
 
   ];
+
+  // ALL PLATFORMS DASHBOARD
+  // ICATMAR's platforms only (its HF radar network - other institutions'
+  // stations it uses included - and the buoys it runs), or other
+  // institutions' as well (bottom-right toggle)
+  platformsShowExternal = false;
+  // Whether All platforms shows a platform of these institutions (written
+  // 'A / B' for joint ownership)
+  isPlatformShown(institution) {
+    return this.platformsShowExternal
+      || String(institution ?? '').split('/').some(name => name.trim() === 'ICATMAR');
+  }
+
+  // HFR DASHBOARD
+  // Which provider's HF radar data the HFR dashboard shows: 'ICATMAR' (only
+  // ICATMAR's network) or 'EU' (every network on the EU HFR Node).
+  hfrSource = 'ICATMAR';
+  // Buoys can be overlaid on the HFR dashboard (bottom-right toggle), and
+  // their currents are loading while this is true
+  hfrShowBuoys = true;
+  hfrBuoysLoading = false;
+  // What the currents layer draws (bottom-right toggles): moving particles,
+  // and/or the totals' grid points - where the measurements are
+  hfrShowParticles = true;
+  hfrShowGridPoints = false;
+  // What the HFR main map shows (bottom-right): 'currents' (the totals) or
+  // 'radials' (each station's, see MapLayerHFRRadials)
+  hfrProduct = 'currents';
+  // Radials: all points, or (bottom-right toggle) only those no QC test
+  // flagged. Off by default: a flag doesn't always mean the point is wrong -
+  // finer QC choices may come later (configuration). On the main map and in
+  // a station's mini map alike.
+  hfrRadialsValidOnly = false;
+  // The stations whose radials the main map can draw - those of ICATMAR's
+  // network, or with the EU HFR Node those in view (MapLayerHFRRadials) - as
+  // [{ key: '<network>:<id>', id, network }], and what is switched off
+  // (bottom-right toggles): station keys, and 'net:<network>' for a whole
+  // network
+  hfrRadialStations = [];
+  hfrRadialHidden = [];
+  // What the radials layer is showing, for the bottom-right panel:
+  // { state: 'loading' | 'ok' | 'none', time, count }
+  hfrRadialStatus = { state: 'loading' };
+  // What the currents layer is showing, for the bottom-right panel to report:
+  // { state: 'loading' | 'ok' | 'none', time, label }
+  hfrFieldStatus = { state: 'loading' };
+  // Which hours have maps, one row per network in view, for the bottom
+  // timeline to draw: [{ network, hours: { '<ISO hour>': count } }]
+  hfrAvailability = [];
+  // The place the HFR dashboard's bottom section is about: a buoy or drifter
+  // chip that was clicked, or a point on the map -
+  // { lon, lat, kind: 'buoy' | 'drifter' | 'point', id, name }
+  hfrPoint = null;
+  // Which view the bottom section shows: about the stations ('Network' - the
+  // availability of the network's stations), or about hfrPoint ('Point' or
+  // 'Compare')
+  hfrTab = 'Network';
+  // What the Compare view has at the selected time, for the circle arrows on
+  // the map (MapOverlayPoint): [{ name, code, speed, direction, tag }]
+  hfrPointArrows = [];
+  // Whether the bottom section (Compare, Point) is still loading the data of
+  // the place it is about - MapOverlayPoint shows a spinner there meanwhile
+  hfrPointLoading = false;
+  // Whether the circle arrows are up at hfrPoint (MapOverlayPoint) - the
+  // clicked platform's own chip gives way to them, the circle saying all it
+  // did and more
+  get isHFRPointCircleShown() {
+    return this.selectedDashboard === 'hfr' && this.isDataTimelineOpen && this.hfrTab === 'Compare'
+      && this.hfrPoint != null && this.hfrPointArrows.length > 0;
+  }
+  // The current measured at the Point view's data point (a radial bin or a
+  // totals grid point) at the selected hour - { speed, direction }, or null
+  // when there is none. What its circle arrows show on the main map
+  // (MapOverlayPoint), standing in for the selection ring (MapLayerHFRSelection).
+  get hfrDataPointVelocity() {
+    const p = this.hfrDataPoint;
+    if (this.selectedDashboard !== 'hfr' || !this.isDataTimelineOpen || this.hfrTab !== 'Point') return null;
+    if (p?.kind !== 'radial' && p?.kind !== 'total') return null;
+    return this.hfrDataPointValues.find(item => item.speed != undefined) ?? null;
+  }
+  isHFRPointChip(kind, id) {
+    return this.isHFRPointCircleShown && this.hfrPoint.kind === kind && this.hfrPoint.id === id;
+  }
+  // Where each compared product's data comes from, for the comparison map
+  // (DTHFRPlatformDetail): [{ key, name, color, lat, lon, cells, distanceKm,
+  // speed, direction, origin, title }] - the product's grid point nearest
+  // the compared point and its value at the selected hour (see DTHFRCompare)
+  hfrComparePoints = [];
+  // The buoy reading behind the selected cell, for the platform detail:
+  // { sensor, instrument, depth, time }
+  hfrPointReading = null;
+  // A data source picked in the Compare view's names column, described in the
+  // info panel instead of the platform: { key, title, subtitle, icon, rows:
+  // [{ label, value, url, long }], loading } - null for the platform itself
+  hfrSourceInfo = null;
+  // Set by "Switch to dashboard" from the HFR buoy detail: which view the
+  // buoys timeline should open on ({ mode: 'variable', group: 'currents' })
+  buoysView = null;
+
+  // Opens the HFR bottom section on a buoy or drifter chip: Compare, on the
+  // hour of the reading that was clicked, with its detail panel
+  // `dataPoint`: the same place as a data point, for the Point view (see
+  // openHFRDataPoint) - so switching between Compare and Point keeps it. A
+  // buoy or drifter gets the nearest grid point of the map on screen.
+  openHFRPoint(point, time, dataPoint) {
+    this.hfrPoint = point;
+    const token = (this.hfrPointToken ?? 0) + 1;
+    this.hfrPointToken = token;
+    if (dataPoint !== undefined) this.hfrDataPoint = dataPoint;
+    else if (point.kind === 'buoy' || point.kind === 'drifter') {
+      this.hfrDataPoint = null;
+      const provider = this.hfrSource;
+      window.DataService?.hfrtotals.nearestGridPoint(time ?? new Date(this.selectedTime), provider, point.lon, point.lat)
+        .then(cell => {
+          if (cell && this.hfrPointToken === token)
+            this.hfrDataPoint = { kind: 'total', provider, network: cell.network, lon: cell.lon, lat: cell.lat };
+        })
+        .catch(() => {});
+    }
+    this.hfrTab = 'Compare';
+    if (time) this.selectedTime = new Date(Math.floor((time.getTime() + 1800000) / 3600000) * 3600000);
+    this.selectedPlatform = { stationId: point.id, kind: point.kind, date: time };
+    this.isDataTimelineOpen = true;
+    this.isPlatformDetailOpen = true;
+    this.isMenuOpen = false;
+  }
+
+  // A data point clicked on the HFR map, for the Point view: a grid point of
+  // the totals, or a radial bin - { kind: 'total' | 'radial', lon, lat,
+  // network, provider (totals), station, axisNames, a, b, direction (radial:
+  // its grid axes and the bearing away from the antenna) }
+  hfrDataPoint = null;
+  // Whether the Point view shows its whole technical table (every measure
+  // and QC flag of the data point), not only the sea water velocity - kept
+  // from one data point to the next
+  hfrPointShowTechnical = false;
+  // The Point view's selected hour's source, described in the info panel -
+  // the same shape as hfrSourceInfo (see DTHFRPoint.describeSource)
+  hfrDataPointSourceInfo = null;
+  // The Point view's values at the selected hour, and where they came from,
+  // for its detail: [{ label, value, speed, direction, title }]
+  hfrDataPointValues = [];
+  hfrDataPointOrigin = null;
+  // What a click on the HFR map opens: the Point view while it is the open
+  // timeline view, Compare otherwise
+  get hfrMapClickOpensPoint() {
+    return this.isDataTimelineOpen && this.hfrTab === 'Point';
+  }
+  // `comparePoint`: the same place for Compare (see openHFRPoint) - so
+  // switching between Point and Compare keeps it
+  openHFRDataPoint(point, time, comparePoint) {
+    this.hfrDataPoint = point;
+    if (comparePoint) { this.hfrPoint = comparePoint; this.hfrPointToken = (this.hfrPointToken ?? 0) + 1; }
+    this.hfrTab = 'Point';
+    if (time) this.selectedTime = new Date(Math.floor((time.getTime() + 1800000) / 3600000) * 3600000);
+    this.selectedPlatform = { stationId: 'datapoint', kind: 'datapoint' };
+    this.isDataTimelineOpen = true;
+    this.isPlatformDetailOpen = true;
+    this.isMenuOpen = false;
+  }
+
+  // What is under the cursor on the HFR map: { lon, lat, speed, direction,
+  // network } (speed and direction undefined where there is no data), or null
+  hfrCursor = null;
+  // Drifters can be overlaid on the HFR dashboard (bottom-right toggle)
+  hfrShowDrifters = false;
+  // Drifters aren't available yet (their data is still simulated): All
+  // platforms' Drifters view, the HFR drifters toggle and the drifter markers'
+  // clicks are off while this is false
+  driftersAvailable = false;
+
+  // Opening a platform, from its map marker or the menu's platform list.
+  // Inside the platform's own dashboard (hfr, buoys) it stays there and opens
+  // that dashboard's timeline; from anywhere else it goes to All platforms,
+  // on that platform's view. `details` adds to the selection - an HF radar
+  // station's network, since codes repeat across networks.
+  selectPlatform(dashboardId, stationId, details = {}) {
+    if (this.selectedDashboard !== dashboardId) {
+      // timelineDashboardId BEFORE selectedDashboard, so DTAllPlatforms can
+      // read it in created()
+      this.timelineDashboardId = dashboardId;
+      this.selectedPlatform = { stationId, ...details };
+      this.selectedDashboard = 'platforms';
+    } else {
+      this.selectedPlatform = { stationId, ...details };
+      // On the HFR dashboard a station opens its network's availability
+      if (dashboardId === 'hfr') this.hfrTab = 'Network';
+    }
+    this.isDataTimelineOpen = true;
+    this.isPlatformDetailOpen = true;
+    this.isMenuOpen = false;
+  }
+  // Whether a platform of dashboard `dashboardId` is the one selected: in its
+  // own dashboard, or in All platforms on its view.
+  isPlatformSelected(dashboardId, stationId) {
+    // A buoy or drifter chip selected on the HFR dashboard (openHFRPoint) is
+    // not a radar station, whatever its code (BEGU is both)
+    if (dashboardId === 'hfr' && this.selectedPlatform?.kind) return false;
+    const inView = this.selectedDashboard === dashboardId
+      || (this.selectedDashboard === 'platforms' && this.timelineDashboardId === dashboardId);
+    return inView && this.selectedPlatform?.stationId === stationId;
+  }
+
+  // SHORT SCREENS
+  // Below this window height the platform detail stops floating above the
+  // timeline as a 180px card and becomes a slim strip: no mini map (the main
+  // map zooms to the platform instead), info and readings in one row. The one
+  // number to tune; main.js keeps isShortScreen in step with it.
+  SHORT_SCREEN_MAX_HEIGHT = 820;
+  isShortScreen = false;
+
+  // How many pixels at the bottom of the main map the timeline and the
+  // platform detail cover - read off the panes themselves, at the moment it is
+  // asked, so it is right whichever layout (card or strip) is showing.
+  // offsetHeight rather than a bounding box: the panes slide in with a
+  // transform, which a bounding box would include.
+  bottomCoveredPx() {
+    const timeline = document.getElementById('dataTimelinePane');
+    const detail = document.getElementById('platformDetailPane');
+    return (timeline?.offsetHeight ?? 0) + (this.isPlatformDetailOpen ? detail?.offsetHeight ?? 0 : 0);
+  }
+
+  // Centres the main map on a point, two thirds of the way down the part of
+  // the map the bottom panes leave visible. Keeps the current zoom unless the
+  // map is zoomed far out.
+  centerMainMapOn(longitude, latitude, zoom) {
+    const map = this.olMap;
+    if (!map) return;
+    const view = map.getView();
+    const coords = ol.proj.fromLonLat([longitude, latitude]);
+    const targetZoom = zoom ?? (view.getZoom() < 7 ? 10 : view.getZoom());
+    const mapSize = map.getSize();
+    const visibleHeight = mapSize[1] - this.bottomCoveredPx();
+    const targetY = Math.max(50, visibleHeight * 0.66);
+    const resolution = view.getResolutionForZoom(targetZoom);
+    const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
+    view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
+  }
+
+  // Fits the main map to an extent (map projection) within the part of it the
+  // bottom panes leave visible.
+  fitMainMapTo(extent, maxZoom) {
+    this.olMap?.getView().fit(extent, { padding: [40, 60, this.bottomCoveredPx() + 40, 60], maxZoom, duration: 600 });
+  }
 
   defaultTimelineDays = 4;
 

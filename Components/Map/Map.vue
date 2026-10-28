@@ -3,11 +3,37 @@
   <!-- OL map -->
   <div id="map" ref="OLMap" v-on:drop="onDropFile($event)" v-on:dragover="onDragOver($event)"></div>
 
+  <!-- Along the top, right of the map's (i) and +/- (which hold the top-left
+       corner, globalStyle.css): ICATMAR and its observational network, the
+       second overlapping the first and on top of it - each a link (new tab) -->
+  <div class="map-brand">
+    <div class="map-brand-badges">
+      <a href="https://www.icatmar.cat" target="_blank" rel="noopener" title="ICATMAR" class="map-brand-link">
+        <img src="../../Assets/Images/logos/logo-icatmar-mini.svg" alt="ICATMAR">
+      </a>
+      <!-- This viewer: back to its start -->
+      <a href="./" title="Visor oceà" class="map-brand-link map-brand-visor">
+        <img src="../../Assets/Images/logos/logo-icatmar-visor-ocea.svg" alt="Visor oceà">
+      </a>
+    </div>
+    <!-- The EU's co-funding -->
+    <img src="../../Assets/Images/logos/logo-EU.svg" alt="Cofinançat per la Unió Europea" class="map-brand-funding">
+  </div>
+
   <!-- OVERLAYS -->
   <!-- <MapOverlayMockup></MapOverlayMockup> -->
   <MapOverlayHFRStations></MapOverlayHFRStations>
   <MapOverlayBuoys></MapOverlayBuoys>
   <!-- <MapOverlayDrifters></MapOverlayDrifters> -->
+  <!-- HF radar currents, on the HFR dashboard only -->
+  <MapLayerHFRCurrents v-if="$gui.selectedDashboard === 'hfr'"></MapLayerHFRCurrents>
+  <MapLayerHFRRadials v-if="$gui.selectedDashboard === 'hfr'"></MapLayerHFRRadials>
+  <MapLayerHFRSelection v-if="$gui.selectedDashboard === 'hfr'"></MapLayerHFRSelection>
+  <MapOverlayHFRDrifters v-if="$gui.selectedDashboard === 'hfr' && $gui.hfrShowDrifters"></MapOverlayHFRDrifters>
+  <!-- HFR dashboard: circle arrows at the place the Compare view is about -->
+  <MapOverlayPoint v-if="$gui.selectedDashboard === 'hfr'"></MapOverlayPoint>
+  <!-- Short screens: the selected buoy's circle arrows -->
+  <MapOverlayPlatformArrows></MapOverlayPlatformArrows>
 </template>
 
 
@@ -17,6 +43,12 @@ import MapOverlayHFRStations from './MapOverlayHFRStations.vue';
 import MapOverlayMockup from './MapOverlayMockup.vue';
 import MapOverlayBuoys from './MapOverlayBuoys.vue';
 import MapOverlayDrifters from './MapOverlayDrifters.vue';
+import MapOverlayPlatformArrows from './MapOverlayPlatformArrows.vue';
+import MapLayerHFRCurrents from './MapLayerHFRCurrents.vue';
+import MapLayerHFRRadials from './MapLayerHFRRadials.vue';
+import MapLayerHFRSelection from './MapLayerHFRSelection.vue';
+import MapOverlayHFRDrifters from './MapOverlayHFRDrifters.vue';
+import MapOverlayPoint from './MapOverlayPoint.vue';
 
 export default {
   name: "Map",
@@ -41,7 +73,11 @@ export default {
         zoom: 8
       })
     });
-    this.$gui.olMap = this.map;
+    // markRaw: GUIManager is reactive, and without it every read of olMap
+    // would hand back the map wrapped in a Vue proxy. OpenLayers compares
+    // layers and overlays by identity, so through a proxy removeLayer() finds
+    // nothing to remove (and every call pays for the proxy).
+    this.$gui.olMap = Vue.markRaw(this.map);
   },
   methods: {
     onDragOver(e) {
@@ -60,6 +96,12 @@ export default {
     MapOverlayHFRStations,
     MapOverlayBuoys,
     MapOverlayDrifters,
+    MapOverlayPlatformArrows,
+    MapLayerHFRCurrents,
+    MapLayerHFRRadials,
+    MapLayerHFRSelection,
+    MapOverlayHFRDrifters,
+    MapOverlayPoint,
   }
 }
 
@@ -67,6 +109,52 @@ export default {
 
 
 <style scoped>
+/* ICATMAR's badges along the top, right of the map controls' column (see
+   the template). Their size follows the screen's width, 35 to 70 px. */
+.map-brand {
+  position: fixed;
+  top: 8px;
+  left: 48px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: auto;
+}
+.map-brand-badges {
+  display: flex;
+  align-items: center;
+}
+.map-brand-link {
+  display: block;
+  line-height: 0;
+  border-radius: 50%;
+  transition: transform 0.2s ease-in-out;
+}
+.map-brand-link:hover {
+  transform: scale(1.08);
+}
+.map-brand-link img {
+  width: var(--brand-size);
+  height: var(--brand-size);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+}
+/* The viewer's badge: over ICATMAR's, a bit overlapping */
+.map-brand-visor {
+  margin-left: calc(var(--brand-size) * -0.27);
+  position: relative;
+  z-index: 1;
+}
+/* As wide as the two badges together, shaded so the white logo reads on the map */
+.map-brand-funding {
+  width: calc(var(--brand-size) * 1.73);
+  height: auto;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+  pointer-events: none;
+}
+
 
 #map {
   width: 100%;

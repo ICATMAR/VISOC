@@ -25,11 +25,6 @@
       </div>
     </span>
 
-    <!-- Providers -->
-    <div class="providers-container" v-show="!$gui.isDataTimelineOpen">
-      <span>ICATMAR</span>
-    </div>
-
     <!-- Bottom right -->
     <span class="bottom-right-section" v-show="!$gui.isDataTimelineOpen">
         <BottomRight></BottomRight>
@@ -105,12 +100,6 @@ export default {
   margin-bottom: 20px;
   margin-right: 0px;
   height: calc(100% - 30px);
-}
-
-.providers-container {
-  height: 40px;
-  width: 220px;
-  margin-right: 110px;
 }
 
 .bottom-right-section {

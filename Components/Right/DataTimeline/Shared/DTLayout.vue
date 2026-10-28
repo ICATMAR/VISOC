@@ -1,5 +1,5 @@
 <template>
-  <!-- Data and timeline section -->
+  <!-- Data and timeline section: [names] [timeline, scrolls both ways] [info, fixed] -->
   <div class="horizontal data-timeline-container">
     <!-- Variables -->
     <div class="vertical variable-names-container">
@@ -16,26 +16,39 @@
       <div class="horizontal interval-picker">
         <span class="clickable" style="text-decoration: underline;" @click="$gui.timelineUseLocalTime = !$gui.timelineUseLocalTime">{{ $gui.timelineTimezoneLabel }}</span>
       </div>
-      <!-- Variable names and units -->
-      <div class="horizontal variable-names-row">
+      <!-- Variable names and units. Clipped rather than scrolled: its
+           scrollTop follows the timeline's (see onTableScroll), so the names
+           stay level with their rows. A wheel over the names scrolls the
+           timeline, which brings the names along. -->
+      <div class="horizontal variable-names-row" ref="namesScroller" @wheel="onNamesWheel">
         <!-- Also what the per-row spinners are positioned against: these
              names line up with the grid's rows, so measuring them is how the
              overlay knows where each row sits (see measureRows). -->
         <div class="vertical variable-names-subcontainer" ref="namesColumn">
           <span v-for="v in variables" :key="v.name"
             :class="{ 'active-var': v.name === activeVar || v.name === selectedVar, 'var-name-clickable': true }"
+            :title="v.title"
             @click="$emit('varClick', v)"><span v-if="v.loading" class="spinner-border name-spinner"></span>{{ $t(v.name) }}</span>
         </div>
         <div class="vertical variable-names-subcontainer" v-if="hasUnits">
-          <span v-for="v in variables" :key="v.name" class="clickable" style="text-decoration: underline;">{{ v.unit }}</span>
+          <!-- A row that names its variable (`code`) switches that quantity's
+               unit app-wide on a click (GUIManager.cycleUnit), and is
+               underlined only where there is another unit to go to -->
+          <span v-for="v in variables" :key="v.name" class="clickable unit-cell"
+            :class="{ 'unit-switchable': !v.code || $gui.isUnitSwitchable(v.code) }"
+            :title="v.code && $gui.isUnitSwitchable(v.code) ? $t('Click to change units') : ''"
+            @click.stop="v.code && $gui.cycleUnit(v.code)">{{ v.unit }}</span>
         </div>
       </div>
     </div>
 
-    <!-- Data timeline and info -->
-    <div class="horizontal table-and-info-container" ref="tableSlidingContainer"
+    <!-- Data timeline. Scrolls horizontally by dragging and vertically by the
+         wheel, a drag or its scrollbar; the day and hour rows stick to the
+         top (see DTTimelineGrid). -->
+    <div class="horizontal table-scroll-container" ref="tableSlidingContainer"
       @mousedown="startDragging"
-      @touchstart="startDragging">
+      @touchstart="startDragging"
+      @scroll="onTableScroll">
 
       <!-- Load previous days -->
       <div class="button-next-prev-container">
@@ -59,21 +72,20 @@
       <div class="button-next-prev-container">
         <button class="clickable button-next-previous-days button-next-days"><span> <i class="fa-solid fa-angle-up" style="padding-top: 10px;"></i> {{ $t('3 days after') }}</span></button>
       </div>
-
-      <!-- Info section -->
-      <DTInfoSection></DTInfoSection>
     </div>
 
-    <!-- One spinner per row still waiting on its data, each sitting on its own
-         row and centred on what the user can see.
-         Deliberately a sibling of the scrolling container rather than a child
-         of it: anything inside .table-and-info-container is laid out against
-         the CONTENT, so it slides away as the timeline is scrolled - at the
-         hourly zoom the grid is thousands of pixels wide, which is why a
-         spinner in a colspan cell is never actually on screen. -->
-    <!-- <div v-if="loadingRows.length" class="timeline-loading"> -->
-        <div  class="timeline-loading">
+    <!-- Info section: outside the scroller, so it stays put while the
+         timeline moves under the user's hand -->
+    <DTInfoSection class="dt-info-fixed"></DTInfoSection>
 
+    <!-- One spinner per row still waiting on its data, each sitting on its own
+         row and centred on the visible timeline.
+         Deliberately a sibling of the scrolling container rather than a child
+         of it: anything inside the scroller is laid out against the CONTENT,
+         so it slides away as the timeline is scrolled - at the hourly zoom the
+         grid is thousands of pixels wide. Rows are re-measured on a vertical
+         scroll instead, and the ones scrolled out of view are left out. -->
+    <div class="timeline-loading">
       <span v-for="row in loadingRows" :key="row.name"
         class="spinner-border row-spinner" :style="{ top: row.top + 'px' }"></span>
     </div>
@@ -100,7 +112,7 @@ export default {
   name: "DTLayout",
   emits: ['varClick'],
   props: {
-    variables: Array, // [{ name, unit }]
+    variables: Array, // [{ name, unit, code }] - `code` makes the unit switchable
     activeVar: String,   // name of the variable to highlight in bold (hover)
     selectedVar: String, // name of the selected station — kept bold while selected
     // Time steps the zoom buttons step through, coarse → fine. A view whose
@@ -123,24 +135,30 @@ export default {
     // Rows shift when the pane is resized, and nothing else tells us
     this.onResize = () => { this.measureCell(); this.measureRows(); };
     window.addEventListener('resize', this.onResize);
-    this.nowTimer = setInterval(() => { this.now = Date.now(); }, NOW_TICK_MS);
+    // On the app's one clock (scheduler.js): right again on coming back to a
+    // hidden tab, whose own timers stall
+    this.nowTaskId = `DTLayout:now:${Math.random().toString(36).slice(2)}`;
+    window.scheduler.every(this.nowTaskId, NOW_TICK_MS, () => { this.now = Date.now(); });
   },
   // Clean up global listeners if component is destroyed
   beforeUnmount() {
     this.stopDragging();
     window.removeEventListener('resize', this.onResize);
-    clearInterval(this.nowTimer);
+    window.scheduler.cancel(this.nowTaskId);
   },
   data() {
     return {
       // Dragging variables
       isDragging: false,
       startX: 0,
+      startY: 0,
       scrollLeft: 0,
+      scrollTop: 0,
       // Now-line
       now: Date.now(),
       cellWidth: CELL_WIDTH_PX,
       rowTops: [], // middle of each row, in px - see measureRows
+      visibleRowBand: [0, Infinity], // [top, bottom] rows can be seen in, same frame
     }
   },
   methods: {
@@ -167,13 +185,34 @@ export default {
     measureRows() {
       this.$nextTick(() => {
         const names = this.$refs.namesColumn;
-        if (!names || !this.$el?.getBoundingClientRect) return;
+        const scroller = this.$refs.namesScroller;
+        if (!names || !scroller || !this.$el?.getBoundingClientRect) return;
         const top = this.$el.getBoundingClientRect().top;
+        // The band rows are visible in - anything scrolled above or below it
+        // gets no spinner
+        const band = scroller.getBoundingClientRect();
+        this.visibleRowBand = [band.top - top, band.bottom - top];
         this.rowTops = [...names.children].map(row => {
           const box = row.getBoundingClientRect();
           return box.top - top + box.height / 2;
         });
       });
+    },
+    // The names column has no scroll of its own: it mirrors the timeline's
+    onTableScroll() {
+      const scroller = this.$refs.tableSlidingContainer;
+      const names = this.$refs.namesScroller;
+      if (!scroller || !names) return;
+      if (names.scrollTop !== scroller.scrollTop) {
+        names.scrollTop = scroller.scrollTop;
+        this.measureRows();
+      }
+    },
+    onNamesWheel(e) {
+      const scroller = this.$refs.tableSlidingContainer;
+      if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return;
+      scroller.scrollTop += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      e.preventDefault();
     },
     currentIntervalIdx() {
       const idx = this.intervalOptions.findIndex(o => o.minutes === this.$gui.timelineEffectiveIntervalMinutes);
@@ -194,11 +233,36 @@ export default {
       }
     },
     resetScroll() {
-      // Reset scroll position so the latest time is visible
+      // On the HFR dashboard, the selected hour in the middle; elsewhere the
+      // latest time in view
+      if (this.centersOnSelected) { this.scrollToSelected(false); return; }
       this.$nextTick(() => {
-        const infoAndTableContainer = this.$refs.tableSlidingContainer;
-        const tableContainer = this.$refs.tableContainer;
-        infoAndTableContainer.scrollLeft = Math.max(0, 20 + tableContainer.offsetWidth - infoAndTableContainer.offsetWidth);
+        const scroller = this.$refs.tableSlidingContainer;
+        if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+      });
+    },
+    // The selected time's column in the middle of the view. With
+    // `onlyIfHidden`, only when it is off screen (or at its very edge) - a
+    // click on a cell in view doesn't move the timeline under the mouse.
+    scrollToSelected(onlyIfHidden) {
+      this.$nextTick(() => {
+        const scroller = this.$refs.tableSlidingContainer;
+        const table = this.$refs.tableContainer;
+        if (!scroller || !table || !scroller.clientWidth) return;
+        const cell = table.querySelector('.dt-table td.hourCell');
+        const cellWidth = cell?.offsetWidth || this.cellWidth;
+        const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+        // The column ending at the selected hour (see the views' cells)
+        const elapsed = new Date(this.$gui.selectedTime).getTime() - this.$gui.timelineStartDate.getTime();
+        // Where the grid starts within the scrolled content (past the
+        // "days before" button), whatever element positions it
+        const gridLeft = table.getBoundingClientRect().left - scroller.getBoundingClientRect().left + scroller.scrollLeft;
+        const x = gridLeft + (elapsed / stepMs) * cellWidth - cellWidth / 2;
+        if (onlyIfHidden) {
+          const margin = cellWidth * 2;
+          if (x >= scroller.scrollLeft + margin && x <= scroller.scrollLeft + scroller.clientWidth - margin) return;
+        }
+        scroller.scrollLeft = Math.max(0, x - scroller.clientWidth / 2);
       });
     },
 
@@ -206,12 +270,15 @@ export default {
     startDragging(e) {
       this.isDragging = true;
 
-      // Get the initial X position (support both Mouse and Touch)
+      // Get the initial position (support both Mouse and Touch)
       const pageX = e.type === 'touchstart' ? e.touches[0].pageX : e.pageX;
+      const pageY = e.type === 'touchstart' ? e.touches[0].pageY : e.pageY;
 
       const container = this.$refs.tableSlidingContainer;
       this.startX = pageX - container.offsetLeft;
+      this.startY = pageY;
       this.scrollLeft = container.scrollLeft;
+      this.scrollTop = container.scrollTop;
 
       // Add global listeners so dragging continues even if mouse leaves the div
       window.addEventListener('mousemove', this.onDragging);
@@ -226,12 +293,16 @@ export default {
       if (e.cancelable) e.preventDefault();
 
       const pageX = e.type === 'touchmove' ? e.touches[0].pageX : e.pageX;
+      const pageY = e.type === 'touchmove' ? e.touches[0].pageY : e.pageY;
       const container = this.$refs.tableSlidingContainer;
 
       const x = pageX - container.offsetLeft;
       // Multiplier makes the scroll speed feel more responsive
       const walk = (x - this.startX) * 1.5;
       container.scrollLeft = this.scrollLeft - walk;
+      // Vertically one to one: rows are short, and the pane rarely holds more
+      // than a screenful of them
+      container.scrollTop = this.scrollTop - (pageY - this.startY);
     },
     stopDragging() {
       this.isDragging = false;
@@ -250,7 +321,8 @@ export default {
     loadingRows() {
       return (this.variables ?? [])
         .map((variable, index) => ({ name: variable.name, loading: variable.loading, top: this.rowTops[index] }))
-        .filter(row => row.loading && row.top != undefined);
+        .filter(row => row.loading && row.top != undefined
+          && row.top >= this.visibleRowBand[0] && row.top <= this.visibleRowBand[1]);
     },
     isNowInRange() {
       return this.now >= this.$gui.timelineStartDate.getTime()
@@ -281,6 +353,10 @@ export default {
     },
     isComponentVisible() {
       return this.$gui.isDataTimelineOpen && !this.$gui.isMenuOpen;
+    },
+    // The HFR dashboard's views open on the selected hour, and keep it in view
+    centersOnSelected() {
+      return this.$gui.selectedDashboard === 'hfr';
     }
   },
   watch: {
@@ -297,6 +373,11 @@ export default {
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.measureCell();
     },
+    // A selected time out of view (the time handle, a click on the map at
+    // another hour) is brought to the middle
+    '$gui.selectedTime'() {
+      if (this.centersOnSelected) this.scrollToSelected(true);
+    },
     // Rows appearing or disappearing move everything below them
     variables() {
       this.measureRows();
@@ -311,18 +392,26 @@ export default {
 
 
 <style scoped>
+/* --dt-max-height caps the timeline (header rows included); taller content
+   scrolls inside it. --dt-info-width is the fixed info column. */
 .data-timeline-container {
-  min-width: 100%;
+  --dt-max-height: min(400px, 45vh);
+  --dt-info-width: min(620px, 45vw);
+  width: 100vw;
   background: var(--lightBlue);
   position: relative; /* what .timeline-loading is centred against */
+  align-items: stretch;
 }
 
 /* Centred on the visible timeline, above everything (the now-line is 3, the
-   drifters' sticky labels go to 6). Transparent to the mouse so the timeline
-   underneath can still be dragged while it loads. */
+   sticky header 4, the drifters' sticky labels go to 6). Transparent to the
+   mouse so the timeline underneath can still be dragged while it loads. */
 .timeline-loading {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 125px;
+  right: var(--dt-info-width);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,17 +432,21 @@ export default {
   border-radius: 50%;
 }
 
-.table-and-info-container {
-  height: 100%;
-  overflow: hidden;
+/* Horizontal overflow is hidden (it is scrolled by dragging), vertical shows
+   a thin scrollbar so it is clear there are more rows. */
+.table-scroll-container {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: var(--dt-max-height);
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-items: flex-start;
   cursor: grab;
   user-select: none;
   scroll-behavior: auto;
-  width: calc(100vw - 125px);
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  scrollbar-width: thin;
 }
-.table-and-info-container:active {
+.table-scroll-container:active {
   cursor: grabbing;
 }
 
@@ -387,13 +480,13 @@ export default {
 }
 
 .table-container {
-  height: 100%;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.85);
 }
 
 .variable-names-container {
   width: 125px;
+  flex-shrink: 0;
   font-size: 0.7rem;
   height: 100%;
   background: var(--lightBlue);
@@ -433,15 +526,31 @@ export default {
   background: rgba(0, 0, 0, 0.1);
 }
 
+/* 44px: the two header rows above (interval picker and timezone) */
+/* Never wider than the column: the names give way (with an ellipsis, see
+   below) so the units beside them always fit. Without the width cap the row
+   overflowed to the LEFT - right-aligned - and the clipping cut off the start
+   of a long name instead of its end. */
 .variable-names-row {
   padding-right: 10px;
   text-align: right;
   align-self: flex-end;
+  max-height: calc(var(--dt-max-height) - 44px);
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .variable-names-subcontainer {
   align-self: flex-start;
   padding-top: 3px;
+  flex-shrink: 0;
+}
+
+/* The names column shrinks, the units one doesn't */
+.variable-names-subcontainer:first-child {
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .variable-names-subcontainer > span {
@@ -452,12 +561,20 @@ export default {
   align-items: flex-end;
   align-content: center;
   padding-left: 5px;
-  max-width: 110px;
+  max-width: min(110px, 100%);
+  box-sizing: border-box;
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
 }
 
+
+.unit-cell {
+  font-style: italic;
+}
+.unit-switchable {
+  text-decoration: underline;
+}
 
 .active-var {
   font-weight: bold;
@@ -470,8 +587,11 @@ export default {
   text-decoration: underline;
 }
 
+/* Full height of the visible timeline, and kept there while the rows scroll */
 .button-next-prev-container {
-  height: 100%;
+  align-self: stretch;
+  position: sticky;
+  top: 0;
   display: flex;
   align-items: center;
   background: #b3b3b3;

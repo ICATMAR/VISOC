@@ -20,3 +20,22 @@
 tr.row-selected .dt-col {
   box-shadow: inset 0 0 0 9999px rgba(var(--redRGB), 0.4);
 }
+
+/* The info panel as a fixed column beside a timeline (DTLayout, DTAPDrifters)
+   rather than at the end of its horizontal scroll. Narrower than the panel's
+   own 620px minimum on small screens, where the photo goes first. */
+div.info-section.dt-info-fixed {
+  min-width: 0;
+  width: var(--dt-info-width, min(620px, 45vw));
+  flex-shrink: 0;
+  height: auto;
+  align-self: stretch;
+  /* Sized by the timeline beside it, never the other way round: a long
+     description (a dataset's license text) scrolls inside the panel
+     (.info-col) rather than making the whole bottom section taller */
+  contain: size;
+}
+
+@media (max-width: 900px) {
+  .info-section.dt-info-fixed .photo-col { display: none; }
+}

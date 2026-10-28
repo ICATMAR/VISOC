@@ -171,6 +171,25 @@
 }
 .pd-values-scroll.is-dragging { cursor: grabbing; }
 
+/* More chips than fit: the edge they are hidden behind fades out (the
+   chips themselves, so it works over any background without recolouring
+   them). Which edges: v-scroll-fade (Assets/Scripts/scrollFade.js). */
+.pd-values-scroll {
+  --fade: 18px;
+}
+.pd-values-scroll.can-scroll-right {
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - var(--fade)), transparent);
+}
+.pd-values-scroll.can-scroll-left {
+  -webkit-mask-image: linear-gradient(to left, black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to left, black calc(100% - var(--fade)), transparent);
+}
+.pd-values-scroll.can-scroll-left.can-scroll-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, black var(--fade), black calc(100% - var(--fade)), transparent);
+}
+
 .pd-value-item {
   display: flex;
   flex-direction: column;
@@ -215,17 +234,50 @@
 /* ---- Switch-to-dashboard button ---- */
 /* Layout: [●icon circle] [blue label body] */
 /* The circle is 4px taller than the label body */
+/* Where the selected value came from - at the bottom, above the switch
+   button when there is one */
+.pd-source {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 100%;
+  /* Several sources wrap onto more lines rather than being cut */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+.pd-source > span {
+  display: inline;
+}
+/* Each source opens on its own; commas between them */
+.pd-source-item + .pd-source-item::before {
+  content: ', ';
+}
+.pd-source-link {
+  color: inherit;
+  text-decoration: none;
+}
+.pd-source-link:hover {
+  text-decoration: underline;
+}
+.pd-source + .pd-switch-btn {
+  margin-top: 4px;
+}
+
+/* "Switch to dashboard [icon]" on the card's top-right corner - the icon
+   over the corner itself, mirroring the close button on the top-left */
 .pd-switch-btn {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  z-index: 10;
   display: flex;
-  flex-direction: row;
+  flex-direction: row-reverse;
   align-items: center;
-  margin-top: auto;    /* stick to bottom of pd-info */
-  margin-bottom: 10px;
+  margin: 0;
   padding: 0;
   background: none;
   border: none;
   cursor: pointer;
-  align-self: flex-start;
   gap: 0;
 }
 
@@ -252,14 +304,15 @@
   background: var(--blue);
   color: white;
   text-shadow: none;
-  border-radius: 0 8px 8px 0;
-  padding: 0 10px 0 12px;
+  border-radius: 8px 0 0 8px;
+  padding: 0 12px 0 10px;
   font-size: 0.7rem;
   height: 24px;          /* 4px less than the 28px circle */
   display: flex;
   align-items: center;
-  margin-left: -6px;     /* slide under the circle */
+  margin-right: -6px;    /* slide under the circle */
   white-space: nowrap;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 }
 
 /* ---- Media column (right) – circular image / gif ---- */
@@ -299,4 +352,100 @@
   z-index: 10;
   top: -9px;
   left: -9px;
+}
+
+/* ================================================================
+   Compact strip (short screens - see GUIManager.SHORT_SCREEN_MAX_HEIGHT)
+   .pd-compact is set on the pane around whichever detail is showing, so every
+   detail component gets the same strip layout from the same classes:
+   - no mini map: the main map zooms to the platform instead
+   - the info and the readings in one row, the readings taking what is left
+   - the circular gif floats bottom-left, just above the strip
+   ================================================================ */
+.pd-compact .pd-container {
+  height: auto;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  /* Room on the left for the timeline's own close button below */
+  padding: 6px 12px 6px 56px;
+}
+
+.pd-compact .pd-container > .map-container {
+  display: none;
+}
+
+.pd-compact .pd-info {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  overflow: visible;
+}
+
+.pd-compact .pd-info > * {
+  flex-shrink: 0;
+}
+
+.pd-compact .pd-station-name {
+  max-width: 180px;
+}
+
+/* The sources (every detail's strip): 380px at most, on as many lines as
+   they need, scrolling vertically past three */
+.pd-compact .pd-source {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 380px;
+  max-height: calc(3 * 1.35em);
+  overflow-y: auto;
+}
+
+.pd-compact .pd-values-wrapper {
+  flex: 1 1 auto;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.pd-compact .pd-values-scroll {
+  padding-bottom: 0;
+}
+
+/* In the strip: back in line, at its end, icon first */
+.pd-compact .pd-switch-btn {
+  position: static;
+  flex-direction: row;
+  margin: 0;
+  align-self: center;
+}
+.pd-compact .pd-switch-btn-label {
+  border-radius: 0 8px 8px 0;
+  padding: 0 10px 0 12px;
+  margin-right: 0;
+  margin-left: -6px;
+}
+
+/* The strip is closed with the timeline's own button, below it */
+.pd-compact .pd-close-btn {
+  display: none;
+}
+
+.pd-compact .pd-media-container {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
+  pointer-events: none;
+}
+
+.pd-compact .pd-circular-media,
+.pd-compact .pd-circular-fallback {
+  width: 110px;
+  height: 110px;
+  margin: 0;
+}
+
+/* Shown while the mini map's tiles load: the dark gray canvas' own sea (see
+   Assets/Scripts/mapLayers.js) */
+.pd-map {
+  background: #262629;
 }

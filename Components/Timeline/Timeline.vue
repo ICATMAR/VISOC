@@ -8,7 +8,7 @@
         <div class="vertical">
           <!-- Swith to full timeline -->
           <Transition name="scale-fade" mode="out-in">
-            <button class="full-timeline-switch clickable" key="fulltime" v-if="!isFullTimeline" @click="isFullTimeline = !isFullTimeline"><span>2018 - {{$t('now')}}</span></button>
+            <button class="is-unavailable full-timeline-switch clickable" key="fulltime" v-if="!isFullTimeline" @click="isFullTimeline = !isFullTimeline"><span>2018 - {{$t('now')}}</span></button>
             <button class="full-timeline-switch clickable" key="lastweek" v-else @click="isFullTimeline = !isFullTimeline"><span>{{ $t('Lastest week') }}</span></button>
           </Transition>
           <!-- Play button -->

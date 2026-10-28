@@ -10,11 +10,6 @@ import fr from './lang/fr.js';
 window.eventBus = window.mitt();
 
 
-// Utils for hash and routing
-import {setHashValue, getHashValue, removeHash} from './Assets/Scripts/utils.js';
-window.location.setHashValue = setHashValue;
-window.location.getHashValue = getHashValue;
-window.location.removeHash = removeHash;
 
 // Load scripts
 import GUIManager from './Assets/Scripts/GUIManager.js';
@@ -25,6 +20,37 @@ import DataService from './Assets/Scripts/data/DataService.js';
 // Vue mixin to poll for data and update the GUI, common for several .vue components
 import pollMixin from './Assets/Scripts/pollMixin.js';
 window.pollMixin = pollMixin;
+// The app's one clock for everything periodic (refreshes, the "now" line):
+// due times on the real clock, so a hidden tab catches up on return
+import scheduler from './Assets/Scripts/scheduler.js';
+window.scheduler = scheduler;
+// Vue mixin: a component reacts to a data product's new data (see DataProduct.changed)
+import dataProductMixin from './Assets/Scripts/dataProductMixin.js';
+window.dataProductMixin = dataProductMixin;
+// Vue mixin for the platform details: short screens move the map focus to the main map
+import pdFocusMixin from './Assets/Scripts/pdFocusMixin.js';
+window.pdFocusMixin = pdFocusMixin;
+// What MapCircleArrows draws for a selected buoy reading
+import { buoyCircleArrows } from './Assets/Scripts/circleArrows.js';
+window.buoyCircleArrows = buoyCircleArrows;
+// Base map and zoom helper for the platform-detail mini maps
+import { createDetailMapLayers, zoomToShowCoast } from './Assets/Scripts/mapLayers.js';
+window.createDetailMapLayers = createDetailMapLayers;
+window.zoomToShowCoast = zoomToShowCoast;
+
+// How the HFR dashboard describes a data source in the info panel
+import * as hfrSourceInfo from './Assets/Scripts/hfrSourceInfo.js';
+window.hfrSourceInfo = hfrSourceInfo;
+// Spherical-earth helpers - a radial bin's range and bearing from its antenna
+import { radialRangeBearing } from './Assets/Scripts/data/geo.js';
+window.radialRangeBearing = radialRangeBearing;
+
+import RadialParticles from './Assets/Scripts/RadialParticles.js';
+import { scrollFade } from './Assets/Scripts/scrollFade.js';
+import { dragScroll } from './Assets/Scripts/dragScroll.js';
+// What is shown, in the URL (shareable, Back / Forward)
+import { startUrlState } from './Assets/Scripts/urlState.js';
+window.RadialParticles = RadialParticles;
 
 // Globals
 window.MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
@@ -34,6 +60,20 @@ window.WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
 window.GUIManager = Vue.reactive(new GUIManager());
 window.RequestsManager = new RequestsManager(); // Probably will delete, for now no use
 window.DataService = new DataService(FetchManager);
+
+// The first dashboard comes from the URL, before anything mounts; the rest of
+// the URL (the selection, the view, the hour, the map - see urlState.js) is
+// applied once the app is mounted, and kept in step from then on
+window.GUIManager._selectedDashboard = window.GUIManager.dashboardFromHash(window.location.hash);
+
+
+// Short screens (see GUIManager.SHORT_SCREEN_MAX_HEIGHT). Set here rather than
+// in GUIManager's constructor so the listener writes through the reactive proxy.
+{
+  const query = window.matchMedia(`(max-height: ${window.GUIManager.SHORT_SCREEN_MAX_HEIGHT}px)`);
+  window.GUIManager.isShortScreen = query.matches;
+  query.addEventListener('change', e => { window.GUIManager.isShortScreen = e.matches; });
+}
 
 
 // Declare translations
@@ -46,10 +86,74 @@ const i18n = VueI18n.createI18n({
 });
 
 
+// The loading screen's bar (index.html): how far the start has got, measured
+// rather than timed, in three stages -
+//   up to 60%: the app's files compiled in the browser (the .vue components
+//              and what they import), of as many as the last start needed;
+//   65%:       the map created;
+//   to 100%:   the tiles of the map's first frame, of those it has asked for.
+// It never goes back (a stage's total can grow as it goes), and the screen
+// fills it before fading (see below).
+const startupProgress = {
+  EXPECTED_FILES_KEY: 'visoc.startupFiles',
+  files: 0,
+  expectedFiles: 70, // replaced by the last start's count, when known
+  mapCreated: false,
+  tilesAsked: 0,
+  tilesDone: 0,
+  shown: 0,
+  done: false,
+  bar: document.querySelector('#loading-screen .loading-bar'),
+
+  init() {
+    try {
+      const last = Number(localStorage.getItem(this.EXPECTED_FILES_KEY));
+      if (last > 0) this.expectedFiles = last;
+    } catch (e) { /* storage blocked: the default stands */ }
+  },
+  fraction() {
+    if (this.done) return 1;
+    if (!this.mapCreated) return 0.6 * Math.min(this.files / this.expectedFiles, 0.95);
+    const tiles = this.tilesAsked ? this.tilesDone / this.tilesAsked : 0;
+    return 0.65 + 0.35 * Math.min(tiles, 0.95);
+  },
+  update() {
+    const shown = Math.max(this.shown, this.fraction());
+    if (shown === this.shown || !this.bar) return;
+    this.shown = shown;
+    this.bar.firstElementChild.style.transform = `scaleX(${shown})`;
+    this.bar.setAttribute('aria-valuenow', Math.round(shown * 100));
+  },
+  fileLoaded() {
+    this.files++;
+    this.update();
+  },
+  // The map exists: follow its tile sources' loads
+  watchMap(map) {
+    this.mapCreated = true;
+    map.getAllLayers().forEach(layer => {
+      const source = layer.getSource();
+      if (!source?.on) return;
+      source.on('tileloadstart', () => { this.tilesAsked++; this.update(); });
+      source.on(['tileloadend', 'tileloaderror'], () => { this.tilesDone++; this.update(); });
+    });
+    this.update();
+  },
+  finish() {
+    if (this.done) return;
+    this.done = true;
+    this.update();
+    try { localStorage.setItem(this.EXPECTED_FILES_KEY, String(this.files)); } catch (e) { /* not kept: the default next time */ }
+  },
+};
+startupProgress.init();
+
+
 const options = {
   moduleCache: { vue: Vue },
   async getFile(url) {
     const res = await fetch(url);
+    if (!startupProgress.done) startupProgress.fileLoaded();
     if (!res.ok)
       throw Object.assign(new Error(res.statusText + ' ' + url), { res });
     return {
@@ -70,7 +174,9 @@ const options = {
   }, // https://github.com/FranckFreiburger/vue3-sfc-loader/discussions/88
   handleModule: async (type, getContentData, path, options) => {
     switch (type) {
-      case '.svg': return 'data:image/svg+xml,' + await getContentData(false);
+      // Encoded: an SVG with a '#' (fill="#003399") is cut there otherwise -
+      // a URL's fragment starts at '#'
+      case '.svg': return 'data:image/svg+xml,' + encodeURIComponent(await getContentData(false));
       case '.webp':
       case '.png': {
         const data = await getContentData(true); // Assuming this returns a Uint8Array or Buffer
@@ -99,9 +205,47 @@ i18n.global.mergeLocaleMessage('en', en);
 i18n.global.mergeLocaleMessage('es', es);
 i18n.global.mergeLocaleMessage('fr', fr);
 app.use(i18n);
+app.directive('scroll-fade', scrollFade);
+app.directive('drag-scroll', dragScroll);
 
 // Global properties
 app.config.globalProperties.$gui = window.GUIManager;
 app.config.globalProperties.$requests = window.RequestsManager;
 app.config.globalProperties.$dataService = window.DataService;
+// The loading screen (index.html) is in the body the app is mounted on, which
+// the mount replaces: held aside and put back on top
+const loadingScreen = document.getElementById('loading-screen');
+loadingScreen?.remove();
 app.mount(document.body);
+if (loadingScreen) document.body.appendChild(loadingScreen);
+startUrlState(window.GUIManager, window.DataService);
+
+// Faded out once the map has drawn its first frame, but never before
+// LOADING_SCREEN_MIN_MS from the page's start - and after LOADING_SCREEN_MAX_MS
+// whatever happens, so a slow tile server never keeps the app hidden
+{
+  const LOADING_SCREEN_MIN_MS = 2000;
+  const LOADING_SCREEN_MAX_MS = 15000;
+  let hidden = false;
+  const hide = () => {
+    if (hidden || !loadingScreen) return;
+    startupProgress.finish(); // the bar full, while the screen waits out its minimum
+    // performance.now() counts from the page's start
+    const wait = LOADING_SCREEN_MIN_MS - performance.now();
+    if (wait > 0) { setTimeout(hide, wait); return; }
+    hidden = true;
+    loadingScreen.classList.add('is-hidden');
+    loadingScreen.addEventListener('transitionend', () => loadingScreen.remove(), { once: true });
+  };
+  setTimeout(hide, LOADING_SCREEN_MAX_MS);
+  const waitForMap = () => {
+    if (hidden) return;
+    const map = window.GUIManager.olMap;
+    if (map) {
+      startupProgress.watchMap(map);
+      map.once('rendercomplete', hide);
+    }
+    else setTimeout(waitForMap, 100);
+  };
+  waitForMap();
+}

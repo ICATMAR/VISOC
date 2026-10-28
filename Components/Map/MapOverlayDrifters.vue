@@ -121,6 +121,8 @@ export default {
     },
     platformClicked(e, drifter) {
       e.stopPropagation();
+      // Drifters aren't available yet (GUIManager.driftersAvailable)
+      if (!this.$gui.driftersAvailable) return;
       this.$gui.timelineDashboardId = 'drifters';
       this.$gui.selectedPlatform = { stationId: drifter.id };
       this.$gui.selectedDashboard = 'platforms';

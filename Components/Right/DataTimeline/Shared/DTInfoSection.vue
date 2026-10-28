@@ -1,11 +1,47 @@
 <template>
   <div class="info-section horizontal">
 
+    <!-- HFR Compare: a data source picked in the names column, described as
+         its own metadata says (GUIManager.hfrSourceInfo, see DTHFRCompare);
+         HFR Point: the selected hour's source (see DTHFRPoint) -->
+    <template v-if="sourceInfo">
+      <!-- Models and other data products have no photo; a platform's shows
+           when there is one (see photoURL) -->
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
+      </div>
+      <div class="info-col vertical">
+        <div class="info-header">
+          <span class="info-abbr">{{ $t(sourceInfo.title) }}</span>
+          <template v-if="sourceInfo.subtitle">
+            <span class="info-sep">·</span>
+            <span class="info-name">{{ sourceInfo.subtitle }}</span>
+          </template>
+        </div>
+        <div class="info-rows">
+          <div class="info-row" v-for="(row, index) in sourceInfo.rows" :key="index">
+            <span class="info-label">{{ $t(row.label) }}</span>
+            <a v-if="row.url" :href="row.url" target="_blank" rel="noopener" class="info-link">{{ row.value }}</a>
+            <!-- A measure ({ code, value }, standard unit): shown in the unit
+                 picked for its quantity, the unit clicked to switch it -->
+            <span v-else-if="row.amount" class="info-value">{{ amount(row.amount.code, row.amount.value, row.amount.decimals) }}
+              <span class="info-unit" :class="{ clickable: $gui.isUnitSwitchable(row.amount.code) }"
+                :title="$gui.isUnitSwitchable(row.amount.code) ? $t('Change units') : ''"
+                @click="cycleUnit(row.amount.code)">{{ unitOf(row.amount.code) }}</span></span>
+            <span v-else class="info-value" :class="{ 'info-ack': row.long }">{{ row.value }}</span>
+          </div>
+          <div class="info-row" v-if="sourceInfo.loading">
+            <span class="info-label"></span>
+            <span class="info-value"><span class="spinner-border source-spinner"></span> {{ $t('Loading') }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- HFR individual station -->
-    <template v-if="hfrStation">
-      <div class="photo-col">
-        <div class="photo-fallback"><img :src="radarIconURL" class="fallback-icon" alt=""></div>
-        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + stationPhotoURL + '\')' }"></div>
+    <template v-else-if="hfrStation">
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -47,7 +83,7 @@
     </template>
 
     <!-- HFR totals / network (no specific station selected) -->
-    <template v-else-if="isHFRContext">
+    <template v-else-if="isHFRNetworkCard">
       <div class="info-col vertical" :style="[{ paddingLeft: '12px' }, institutionBgStyle]">
         <div class="info-header">
           <span class="info-abbr">TOTALS</span>
@@ -85,9 +121,8 @@
 
     <!-- Buoy individual station -->
     <template v-else-if="buoyStation">
-      <div class="photo-col">
-        <div class="photo-fallback"><img :src="buoyIconURL" class="fallback-icon" alt=""></div>
-        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + buoyStationPhotoURL + '\')' }"></div>
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -161,9 +196,8 @@
 
     <!-- Drifter -->
     <template v-else-if="drifterStation">
-      <div class="photo-col">
-        <div class="photo-fallback"><img :src="drifterIconURL" class="fallback-icon" alt=""></div>
-        <div class="station-photo" :style="{ backgroundImage: 'url(\'' + drifterStationPhotoURL + '\')' }"></div>
+      <div class="photo-col" v-if="hasPhoto">
+        <div class="station-photo" :style="{ backgroundImage: `url('${photoURL}')` }"></div>
       </div>
       <div class="info-col vertical" :style="institutionBgStyle">
         <div class="info-header">
@@ -253,10 +287,17 @@ const LICENSE_URLS = {
 
 export default {
   name: "DTInfoSection",
+  // New data found while the page is open: the buoys' and the HF radar
+  // stations' last updates (DPBuoys / DPHFRStations refresh)
+  mixins: [window.dataProductMixin({ buoys: 'onBuoysChanged', hfrstations: 'onStationsChanged' })],
   // The buoy catalogue, static first (synchronous, so a buoy already selected
   // resolves immediately) then refined once the live sources merge in - the
   // same two-step every other buoy view uses.
   created() {
+    // Shared with the map (memoized): for another network's stations
+    this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations)
+      .then(networks => { this.hfrNetworks = networks; })
+      .catch(error => console.error('Error loading HFR networks for the info section:', error));
     this.buoys = this.$dataService.buoys.getBuoys();
     this.$dataService.buoys.loadBuoys()
       .then(buoys => { this.buoys = buoys; })
@@ -270,9 +311,28 @@ export default {
       codeIconURL: './Assets/Icons/code.svg',
       svpIconURL: './Assets/Icons/svp.svg',
       buoys: [],
+      hfrNetworks: [],
+      // Photo URL -> true once it has loaded, false if there is none
+      photoFound: {},
     }
   },
   computed: {
+    // The photo of the platform on show, if it is a platform: by its type and
+    // code under Assets/Images/platforms/ - there for ICATMAR's, Puertos del
+    // Estado's and CEFREM's buoys and stations and for the drifters. A data
+    // product (a model, a network's totals) has none.
+    photoURL() {
+      if (this.sourceInfo) return this.sourceInfo.photo;
+      if (this.hfrStation) return this.stationPhotoURL;
+      if (this.isHFRNetworkCard) return undefined;
+      if (this.buoyStation) return this.buoyStationPhotoURL;
+      if (this.drifterStation) return this.drifterStationPhotoURL;
+      return undefined;
+    },
+    // Shown only once it has loaded: no empty frame for a platform without one
+    hasPhoto() {
+      return !!this.photoURL && this.photoFound[this.photoURL] === true;
+    },
     stationPhotoURL() {
       return './Assets/Images/platforms/HFR/' + (this.hfrStation?.id ?? '') + '.jpg';
     },
@@ -282,13 +342,90 @@ export default {
     drifterStationPhotoURL() {
       return './Assets/Images/platforms/Drifters/' + (this.drifterStation?.type ?? '') + '.jpg';
     },
+    // On the HFR dashboard a buoy or drifter chip can be the selection too
+    // (GUIManager.openHFRPoint) - told apart by its kind, since codes clash:
+    // BEGU is both the Begur radar station and the Mar Begur buoy
+    // ICATMAR's network: for its TOTALS, and in All platforms' HFR view until
+    // a station is picked. On the HFR dashboard only once something is - with
+    // nothing selected there, the panel stays empty.
+    isHFRNetworkCard() {
+      if (!this.isHFRContext) return false;
+      return this.$gui.selectedDashboard !== 'hfr' || !!this.$gui.selectedPlatform?.stationId;
+    },
+    hfrPlatformKind() {
+      return this.$gui.selectedDashboard === 'hfr' ? this.$gui.selectedPlatform?.kind : undefined;
+    },
+    // The HF radar station (or a network's TOTALS) the panel is about:
+    // { id, network } - the selected platform, or, in the HFR Point view, a
+    // radial bin's station. null for anything else (a buoy, a grid point...).
+    hfrSelection() {
+      const selection = this.$gui.selectedPlatform;
+      if (this.hfrPlatformKind === 'datapoint') {
+        const point = this.$gui.hfrDataPoint;
+        return point?.kind === 'radial' ? { id: point.station, network: point.network } : null;
+      }
+      if (this.hfrPlatformKind || !selection?.stationId) return null;
+      return { id: selection.stationId, network: selection.network };
+    },
+    // A data source picked in the HFR Compare view (see GUIManager.hfrSourceInfo),
+    // or the source of the HFR Point view's selected hour
+    // (GUIManager.hfrDataPointSourceInfo)
+    sourceInfo() {
+      if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Compare' && this.$gui.hfrSourceInfo)
+        return this.$gui.hfrSourceInfo;
+      if (this.$gui.selectedDashboard === 'hfr' && this.$gui.hfrTab === 'Point' && this.$gui.hfrDataPointSourceInfo)
+        return this.$gui.hfrDataPointSourceInfo;
+      return this.euNetworkInfo;
+    },
+    // A station or the Total of another network than ICATMAR's, as the EU HFR
+    // Node describes it - the static catalogue only knows ICATMAR's
+    euNetworkInfo() {
+      const { id, network: code } = this.hfrSelection ?? {};
+      if (!this.isHFRContext || !id || !code || code === 'HFR-ICATMAR') return null;
+      const network = this.hfrNetworks.find(n => this.$dataService.hfrnetwork.networkCode(n) === code);
+      if (!network) return null;
+      const row = (label, value, extra = {}) => value ? [{ label, value: String(value).replace(/\s+/g, ' ').trim(), ...extra }] : [];
+      if (id === 'TOTALS') {
+        const total = network.total ?? {};
+        return {
+          title: 'TOTALS', subtitle: code,
+          rows: [
+            { label: 'Platform type', value: 'High-frequency radar network' },
+            ...row('Institution', total.institution),
+            { label: 'Stations', value: network.stations.filter(s => !s.notOnEUNode).map(s => s.id).join(', ') },
+            ...row('License', total.license),
+            ...row('Summary', total.summary, { long: true }),
+          ],
+        };
+      }
+      const station = network.stations.find(s => s.id === id);
+      if (!station) return null;
+      const meta = station.metadata ?? {};
+      return {
+        title: id, subtitle: code, photo: `./Assets/Images/platforms/HFR/${id}.jpg`,
+        rows: [
+          { label: 'Platform type', value: 'High-frequency radar station' },
+          ...row('Institution', meta.institution),
+          { label: 'Position', value: `${Math.abs(station.latitude).toFixed(2)}° ${station.latitude < 0 ? 'S' : 'N'}, `
+            + `${Math.abs(station.longitude).toFixed(2)}° ${station.longitude < 0 ? 'W' : 'E'}` },
+          // Many stations write the same string in both
+          ...row('Sensor', [...new Set([meta.manufacturer, meta.sensor_model].filter(Boolean))].join(' · ')),
+          ...row('Method', meta.doa_estimation_method),
+          ...row('Last calibration', meta.last_calibration_date && this.formatInstallDate(meta.last_calibration_date.slice(0, 10))),
+          ...row('Data', meta.time_coverage_start && `${meta.time_coverage_start.slice(0, 10)} – ${meta.time_coverage_end?.slice(0, 10) ?? ''}`),
+        ],
+      };
+    },
     isHFRContext() {
+      // A buoy, drifter or compared point isn't a station; a radial bin's
+      // station is (the Point view)
+      if (this.hfrPlatformKind && !(this.hfrPlatformKind === 'datapoint' && this.hfrSelection)) return false;
       return this.$gui.selectedDashboard === 'hfr'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'hfr');
     },
     hfrStation() {
       if (!this.isHFRContext) return null;
-      const id = this.$gui.selectedPlatform?.stationId;
+      const id = this.hfrSelection?.id;
       if (!id || id === 'TOTALS') return null;
       return this.$requests.getHFRStation(id);
     },
@@ -306,7 +443,7 @@ export default {
       return this.$requests.hfrStations.length;
     },
     isBuoyContext() {
-      return this.$gui.selectedDashboard === 'buoys'
+      return this.$gui.selectedDashboard === 'buoys' || this.hfrPlatformKind === 'buoy'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'buoys');
     },
     // The real catalogue (DPBuoys), not RequestsManager's mock list - that one
@@ -341,7 +478,7 @@ export default {
       return text ? String(text).replace(/\s+/g, ' ').trim() : '';
     },
     isDrifterContext() {
-      return this.$gui.selectedDashboard === 'drifters'
+      return this.$gui.selectedDashboard === 'drifters' || this.hfrPlatformKind === 'drifter'
         || (this.$gui.selectedDashboard === 'platforms' && this.$gui.timelineDashboardId === 'drifters');
     },
     drifterStation() {
@@ -392,7 +529,38 @@ export default {
       };
     },
   },
+  watch: {
+    photoURL: {
+      immediate: true,
+      handler(url) { this.lookForPhoto(url); },
+    },
+  },
   methods: {
+    async onBuoysChanged() {
+      try {
+        this.buoys = await this.$dataService.buoys.loadBuoys();
+      } catch (error) {
+        console.error('Could not refresh the buoys for the info section:', error);
+      }
+    },
+    async onStationsChanged() {
+      try {
+        // The same networks, their stations' ends moved on in place (see
+        // DPHFRNetwork.applyStationEnds): a new array, so the panel re-reads them
+        this.hfrNetworks = [...await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations)];
+      } catch (error) {
+        console.error('Could not refresh the HF radar networks for the info section:', error);
+      }
+    },
+    // Whether a photo exists, asked once per URL
+    lookForPhoto(url) {
+      if (!url || url in this.photoFound) return;
+      this.photoFound = { ...this.photoFound, [url]: undefined };
+      const image = new Image();
+      image.onload = () => { this.photoFound = { ...this.photoFound, [url]: true }; };
+      image.onerror = () => { this.photoFound = { ...this.photoFound, [url]: false }; };
+      image.src = url;
+    },
     // A measurement in whatever unit the user has picked for its quantity.
     //
     // Precision comes from the MAGNITUDE, not from the unit group. The groups
@@ -493,6 +661,18 @@ export default {
   align-items: center;
   justify-content: center;
   background: var(--blue);
+}
+
+.fallback-fa {
+  font-size: 48px;
+  color: white;
+  opacity: 0.3;
+}
+
+.source-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
 }
 
 .fallback-icon {

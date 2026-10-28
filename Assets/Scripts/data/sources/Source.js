@@ -10,6 +10,15 @@ class Source {
     this.variables = undefined; // { rawName: { unit } }, discovered from the data itself
     this.startDate = undefined; // Date, discovered from the data itself
     this.endDate = undefined;   // Date, discovered from the data itself
+
+    // 'updated' when this source finds it has new data - its server's index
+    // (an ERDDAP's dataset list, ICATMAR/data's manifest) says so, whichever
+    // product read it. Its data products refresh then (see DataProduct).
+    this.updates = new EventTarget();
+  }
+
+  notifyUpdated() {
+    this.updates.dispatchEvent(new Event('updated'));
   }
 
   // Subclasses implement: fetch + parse (if not already loaded), and return the

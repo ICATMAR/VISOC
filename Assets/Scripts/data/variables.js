@@ -67,9 +67,11 @@ const UNIT_GROUPS = {
     { unit: 'm',  decimals: 1, toDisplay: value => value },
     { unit: 'ft', decimals: 1, toDisplay: value => value * 3.28084 },
   ],
-  // How far offshore something is, which is the one horizontal distance the
-  // app shows - and the only quantity here whose standard unit isn't the SI
-  // base one, because the catalogue already records it in km.
+  // Horizontal distances - how far offshore a buoy is (DISTCOAST), how far a
+  // model's or a radar's grid point is from the place compared, a model's
+  // grid spacing (HDIST) - and the only quantity here whose standard unit
+  // isn't the SI base one, because the catalogue already records them in km.
+  // One group, so switching to nautical miles anywhere switches them all.
   coastDistance: [
     { unit: 'km', decimals: 0, toDisplay: value => value },
     { unit: 'NM', decimals: 0, toDisplay: value => value / 1.852 },
@@ -89,6 +91,7 @@ const VARIABLES = {
   // distanceToCoast in Data/buoys/buoys.js), kept here so it can be named and
   // switched like everything else.
   DISTCOAST: { longName: 'Distance to the coast', unit: 'km', unitGroup: 'coastDistance' },
+  HDIST: { longName: 'Horizontal distance', unit: 'km', unitGroup: 'coastDistance' },
 
   // WAVES - significant or average height
   VHM0:  { longName: 'Spectral significant wave height (Hm0)',      standardName: 'sea_surface_wave_significant_height',            unit: 'm', unitGroup: 'waveHeight' },

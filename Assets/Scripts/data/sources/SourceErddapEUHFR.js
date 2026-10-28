@@ -1,5 +1,8 @@
 import Source from './Source.js';
 import SourceErddap from './SourceErddap.js';
+import ErddapServer from './ErddapServer.js';
+import { readNetCDF3 } from '../parsers/netcdf3.js';
+import { destination, bearingAwayFrom } from '../geo.js';
 
 
 // Kept from the network's (the 'Total' dataset's) NC_GLOBAL attributes - shared
@@ -12,9 +15,36 @@ const NETWORK_METADATA_KEYS = ['acknowledgement', 'institution', 'site_code','ci
 // ago have since drifted (AREN/PBCN/GNST were recalibrated in May 2026).
 const STATION_METADATA_KEYS = ['doa_estimation_method', 'institution', 'network', 'title', 'sensor_model', 'manufacturer', 'summary', 'wmo_platform_code', 'last_calibration_date', 'time_coverage_start', 'time_coverage_end'];
 
+// The node serves some text double-encoded - 'DirecciÃ³' where 'Direcció'
+// belongs. Undone where that pattern shows; left alone otherwise.
+const repairEncoding = text => {
+  if (typeof text !== 'string' || !/[\u00c0-\u00ff][\u0080-\u00bf]/.test(text)) return text;
+  try { return decodeURIComponent(escape(text)); } catch { return text; }
+};
+
+// Variables a radial bin's series leaves out (see getRadialBinSeries):
+// coordinates, the velocity's direction/components, distances, and
+// per-record QC
+const RADIAL_SKIP = ['time', 'depth', 'latitude', 'longitude', 'RNGE', 'BEAR', 'crs', 'RDVA', 'DRVA',
+  'EWCT', 'NSCT', 'XDST', 'YDST', 'TIME_QC', 'POSITION_QC', 'DEPTH_QC'];
+const NUMERIC_TYPES = ['double', 'float', 'int', 'short', 'byte', 'long'];
+
+// What griddapEntry() reads off a dataset's info
+const GRIDDAP_ENTRY_KEYS = ['time_coverage_start', 'time_coverage_end', 'site_lat', 'site_lon',
+  'geospatial_lat_min', 'geospatial_lat_max', 'geospatial_lon_min', 'geospatial_lon_max'];
+
+// Radial maps: how many (station, hour) to keep, and for how long the
+// requests themselves are cached
+const RADIAL_CACHE_SIZE = 300;
+const RADIAL_TTL_MINUTES = 10;
+// How long an hour found without radials waits before it is asked again
+// past the HTTP cache (see getRadialField)
+const EMPTY_RECHECK_MS = 2 * 60 * 1000;
+const HALF_HOUR_MS = 30 * 60 * 1000;
+
 function pick(metadata, keys) {
   const picked = {};
-  keys.forEach(key => { if (metadata[key] !== undefined) picked[key] = metadata[key]; });
+  keys.forEach(key => { if (metadata[key] !== undefined) picked[key] = repairEncoding(metadata[key]); });
   return picked;
 }
 
@@ -44,7 +74,21 @@ class SourceErddapEUHFR extends Source {
     // Per-station results, keyed by station code (e.g. 'CREU').
     this.stations = {};
 
+    this.watchServer();
     this.loadingPromise = this.load();
+  }
+
+  // New data for a station this source knows, on the server's shared list
+  // (see ErddapServer), read by whichever product: its product refreshes
+  // (refreshEnds moves the station's end on). A station's dataset gone: the
+  // entry is marked unavailable - nothing new to show, so nobody is told.
+  watchServer() {
+    const entryOf = id => Object.values(this.stations).find(entry => entry.dataset === id);
+    ErddapServer.for(this.fetchManager, this.baseUrl).changes.addEventListener('change', ({ detail }) => {
+      detail.removed.map(entryOf).filter(Boolean).forEach(entry => { entry.unavailable = true; });
+      detail.added.map(entryOf).filter(Boolean).forEach(entry => { entry.unavailable = false; });
+      if ([...detail.updated, ...detail.added].some(entryOf)) this.notifyUpdated();
+    });
   }
 
   // e.g. 'EUHFR_NRTcurrent_HFR-ICATMAR-CREU_v3_table' -> 'CREU'
@@ -89,6 +133,26 @@ class SourceErddapEUHFR extends Source {
     const { startDate, endDate } = this.dateRange();
     this.startDate = startDate;
     this.endDate = endDate;
+  }
+
+  // The stations' newest data, read again now (see DPHFRStations.refresh):
+  // one request - the server's dataset list, which has every dataset's
+  // maxTime - rather than each station's info page again. Moves on the end
+  // of every station already known (its entry and its time_coverage_end);
+  // whether any moved.
+  async refreshEnds() {
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const ends = new Map(allDatasets.filter(d => d['maxTime']).map(d => [d['datasetID'], new Date(d['maxTime'])]));
+    let moved = false;
+    Object.values(this.stations).forEach(entry => {
+      const end = ends.get(entry.dataset);
+      if (!end || (entry.endDate && end <= entry.endDate)) return;
+      entry.endDate = end;
+      if (entry.metadata) entry.metadata['time_coverage_end'] = end.toISOString().replace('.000Z', 'Z');
+      moved = true;
+    });
+    if (moved) Object.assign(this, this.dateRange());
+    return moved;
   }
 
   // Earliest start and latest end across all stations - each one may have
@@ -185,10 +249,19 @@ class SourceErddapEUHFR extends Source {
       if (parsed.isTable === preferTable) entry.stationDatasets.push(d['datasetID']);
     });
 
-    return Promise.all([...byNetwork.entries()].map(async ([networkName, { totalDataset, stationDatasets }]) => {
-      const total = totalDataset ? await this.fetchMetadata(totalDataset, NETWORK_METADATA_KEYS) : undefined;
+    // A dataset that fails to answer (the node or the proxy erroring now and
+    // then) costs only itself, not every network
+    const skipFailed = dataset => error => {
+      console.warn(`EU HFR Node: skipping ${dataset}:`, error);
+      return undefined;
+    };
 
-      const stations = await Promise.all(stationDatasets.map(async dataset => {
+    return Promise.all([...byNetwork.entries()].map(async ([networkName, { totalDataset, stationDatasets }]) => {
+      const total = totalDataset
+        ? await this.fetchMetadata(totalDataset, NETWORK_METADATA_KEYS).catch(skipFailed(totalDataset))
+        : undefined;
+
+      const stations = await Promise.all(stationDatasets.map(dataset => (async () => {
         const infoUrl = `${this.baseUrl}/info/${dataset}/index.jsonlKVP`;
         const infoText = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
         const { variables, metadata } = this.parseERDDAPMetadata(infoText);
@@ -208,12 +281,45 @@ class SourceErddapEUHFR extends Source {
           latitude: Number(metadata['site_lat']),
           longitude: Number(metadata['site_lon']),
           coverage: coverageFrom(metadata),
-          metadata: pick(metadata, STATION_METADATA_KEYS),
+          metadata: {
+            ...pick(metadata, STATION_METADATA_KEYS),
+            // The network's code, from the dataset id - what identifies the
+            // station's network everywhere (getAllNetworks()' groups, the
+            // selection). The station's own `network` attribute is free text
+            // each operator writes its own way ('HFR_Galicia', 'GULF OF
+            // TRIESTE (GOT)'), kept as network_name.
+            network: `HFR-${networkName}`,
+            ...(metadata['network'] && metadata['network'] !== `HFR-${networkName}` ? { network_name: repairEncoding(metadata['network']) } : {}),
+          },
         };
-      }));
+      })().catch(skipFailed(dataset))));
 
-      return { total, stations: stations.filter(s => !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
+      return { total, stations: stations.filter(s => s && !Number.isNaN(s.latitude) && !Number.isNaN(s.longitude)) };
     }));
+  }
+
+  // A station's dataset on the node, as an entry ({ dataset, startDate,
+  // endDate, ... }): ICATMAR's _table, another network's griddap, or the
+  // copy a station of ICATMAR's network has under another network
+  // (Puertos del Estado's, HFR-DeltaEbro's). undefined when it has none.
+  async stationEntry(network, stationId) {
+    await this.loadingPromise;
+    const code = network.replace(/^HFR-/, '');
+    return this.stations[`${code}-${stationId}`]
+      ?? (code === 'ICATMAR' ? this.stations[stationId] : undefined)
+      ?? await this.otherNetworkStation(stationId);
+  }
+
+  // A dataset's whole NC_GLOBAL, for describing it (the HFR Point view's info
+  // panel), with the link to its ERDDAP page - read once per dataset
+  async getDatasetMetadata(dataset) {
+    this.datasetMetadata ??= {};
+    this.datasetMetadata[dataset] ??= (async () => {
+      const infoUrl = `${this.baseUrl}/info/${dataset}/index.jsonlKVP`;
+      const text = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
+      return this.parseERDDAPMetadata(text).metadata;
+    })().catch(error => { delete this.datasetMetadata[dataset]; throw error; });
+    return { ...(await this.datasetMetadata[dataset]), infoUrl: `${this.baseUrl}/info/${dataset}/index.html` };
   }
 
   async fetchMetadata(dataset, keys) {
@@ -300,10 +406,318 @@ class SourceErddapEUHFR extends Source {
   // Per-hour count of valid (QC-passing, non-NaN RDVA) radial vectors for ONE
   // station, within [startDate, endDate] (endDate defaults to now).
   async getNumberOfValidPointsPerStation(id, startDate, endDate) {
-    const station = this.stations[id];
+    const station = this.stations[id] ?? await this.otherNetworkStation(id);
     if (!station) return { id, points: undefined };
-    const points = await this.fetchValidPointsCount(station, 'RDVA', startDate, endDate);
-    return { id, points };
+    const points = station.isGriddap
+      ? await this.fetchGriddapValidPointsCount(station, startDate, endDate)
+      : await this.fetchValidPointsCount(station, 'RDVA', startDate, endDate);
+    return { id, points, source: this.originOf(station.dataset) };
+  }
+
+  // Where a count came from, for the platform detail to say
+  originOf(dataset) {
+    return { label: 'EU HFR Node ERDDAP', dataset, url: `${this.baseUrl}/info/${dataset}/index.html` };
+  }
+
+  // A station of ICATMAR's network that the node publishes under another
+  // network rather than HFR-ICATMAR - Puertos del Estado's ALFA, SALO and VINA
+  // are HFR-DeltaEbro's there. Its plain (griddap) dataset, as a station
+  // entry like load()'s; undefined if no network has the code. Looked up once.
+  otherNetworkStation(id) {
+    this.otherNetworkStations ??= {};
+    this.otherNetworkStations[id] ??= (async () => {
+      const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+      const dataset = allDatasets.map(d => d['datasetID'])
+        .find(datasetID => { const parsed = this.parseDatasetId(datasetID); return parsed?.station === id && !parsed.isTable; });
+      return dataset ? this.griddapEntry(dataset) : undefined;
+    })().catch(error => {
+      console.warn(`EU HFR Node: no dataset for ${id}:`, error);
+      return undefined;
+    });
+    return this.otherNetworkStations[id];
+  }
+
+  // A plain (griddap) dataset as an entry fetchGriddapValidPointsCount() can
+  // count and cache into - its time coverage read from its info. One per
+  // dataset.
+  griddapEntry(dataset) {
+    this.griddapEntries ??= {};
+    this.griddapEntries[dataset] ??= this.fetchMetadata(dataset, GRIDDAP_ENTRY_KEYS)
+      .then(metadata => ({
+        dataset,
+        isGriddap: true,
+        startDate: metadata['time_coverage_start'] ? new Date(metadata['time_coverage_start']) : undefined,
+        endDate: metadata['time_coverage_end'] ? new Date(metadata['time_coverage_end']) : undefined,
+        // Where the antenna is - what a polar grid's ranges and bearings
+        // count from - and, where the station publishes it, the box its
+        // radials cover
+        site: { lat: Number(metadata['site_lat']), lon: Number(metadata['site_lon']) },
+        coverage: coverageFrom(metadata),
+      }))
+      .catch(error => { delete this.griddapEntries[dataset]; throw error; });
+    return this.griddapEntries[dataset];
+  }
+
+  // One station's radials at `hour` (a Date on the hour), from its griddap
+  // dataset: the map in [hour - 30 min, hour + 30 min) closest to the hour,
+  // never one from another hour - null when there is none, undefined when
+  // the node has no dataset for the station at all (SCAL).
+  //   { time, layout: 'polar' | 'grid', site: { lat, lon },
+  //     lat, lon, velocity, direction: Float32Array (one entry per bin with
+  //     data; velocity in m/s, positive away from the antenna; direction the
+  //     bearing pointing away from it, degrees true),
+  //     qc: Int8Array (QCflag, 1 = good), source: 'EU HFR Node',
+  //     dataExtent: the box of its bins, coverage: the station's published
+  //     radial extent [minLon, minLat, maxLon, maxLat], where it has one }
+  // `network` is the station's network code; a station ICATMAR's network
+  // takes in from another (Puertos del Estado's, HFR-DeltaEbro's here) is
+  // found by its code.
+  async getRadialField(network, stationId, hour) {
+    const code = network.replace(/^HFR-/, '');
+    const known = this.stations[`${code}-${stationId}`];
+    const entry = known
+      ? await this.griddapEntry(known.dataset.replace(/_table$/, ''))
+      : await this.otherNetworkStation(stationId);
+    if (!entry) return undefined;
+
+    const key = `${entry.dataset}|${hour.toISOString()}`;
+    this.radialFields ??= new Map();
+    if (!this.radialFields.has(key)) {
+      // "No radials that hour" isn't kept: the station may publish it later.
+      // Asked again past the HTTP cache - but no more than every
+      // EMPTY_RECHECK_MS, so panning over an empty hour doesn't re-ask
+      this.radialEmptyAt ??= new Map();
+      const emptyAt = this.radialEmptyAt.get(key);
+      const fresh = emptyAt != undefined && Date.now() - emptyAt > EMPTY_RECHECK_MS;
+      const promise = this.fetchRadialField(entry, hour, fresh).then(field => {
+        if (field) this.radialEmptyAt.delete(key);
+        else {
+          if (emptyAt == undefined || fresh) this.radialEmptyAt.set(key, Date.now());
+          if (this.radialFields.get(key) === promise) this.radialFields.delete(key);
+        }
+        return field;
+      }, error => {
+        this.radialFields.delete(key);
+        throw error;
+      });
+      this.radialFields.set(key, promise);
+      // Least recently added out first
+      if (this.radialFields.size > RADIAL_CACHE_SIZE) this.radialFields.delete(this.radialFields.keys().next().value);
+    }
+    const field = await this.radialFields.get(key);
+    if (!field) return null;
+    const c = entry.coverage;
+    return { ...field, origin: this.originOf(entry.dataset), coverage: c ? [c.minLon, c.minLat, c.maxLon, c.maxLat] : undefined };
+  }
+
+  async fetchRadialField(entry, hour, fresh = false) {
+    const from = new Date(hour.getTime() - HALF_HOUR_MS);
+    const to = new Date(hour.getTime() + HALF_HOUR_MS);
+    if (entry.startDate && to <= entry.startDate) return null;
+    // Up to the window's end - or the dataset's last map, should that be
+    // earlier: asking past it is an error. ERDDAP snaps both ends to the
+    // nearest map, so what comes back is filtered to the window below.
+    const stop = entry.endDate && to < entry.endDate ? `(${to.toISOString()})` : 'last';
+    const selectors = encodeURIComponent(`[(${from.toISOString()}):1:${stop}][0][0:1:last][0:1:last]`);
+    const url = `${this.baseUrl}/griddap/${entry.dataset}.nc?RDVA${selectors},QCflag${selectors}`;
+    let buffer;
+    try {
+      buffer = await this.fetchManager.fetch(url, fresh ? 0 : RADIAL_TTL_MINUTES).then(res => res.arrayBuffer());
+    } catch (error) {
+      if (error.name === 'HTTPError') return null; // nothing from that hour on
+      throw error;
+    }
+
+    const file = readNetCDF3(buffer);
+    const times = file.variables['time'].read(); // seconds since 1970
+    // The map closest to the hour, inside the window
+    let best = -1;
+    times.forEach((seconds, k) => {
+      const ms = seconds * 1000;
+      if (ms < from.getTime() || ms >= to.getTime()) return;
+      if (best < 0 || Math.abs(ms - hour) < Math.abs(times[best] * 1000 - hour)) best = k;
+    });
+    if (best < 0) return null;
+
+    const rdva = file.variables['RDVA'];
+    const [, , dimA, dimB] = rdva.dimensions; // RNGE, BEAR - or latitude, longitude
+    const isPolar = dimA === 'RNGE';
+    const axisA = file.variables[dimA].read();
+    const axisB = file.variables[dimB].read();
+    const perMap = axisA.length * axisB.length;
+    const velocities = rdva.read().subarray(best * perMap, (best + 1) * perMap);
+    const flags = file.variables['QCflag'].read().subarray(best * perMap, (best + 1) * perMap);
+    const fill = rdva.attributes['_FillValue'];
+
+    const site = entry.site;
+    // A polar grid's range cells: its RNGE axis counts them from the antenna
+    // (0 km, then one range resolution each - 1.66 km for ICATMAR's), the
+    // same numbers as a .ruv's SPRC
+    const spacing = isPolar && axisA.length > 1 ? (axisA[axisA.length - 1] - axisA[0]) / (axisA.length - 1) : undefined;
+    const lat = [], lon = [], velocity = [], direction = [], qc = [], ax = [], bx = [], rangeCell = [];
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    for (let a = 0; a < axisA.length; a++) {
+      for (let b = 0; b < axisB.length; b++) {
+        const v = velocities[a * axisB.length + b];
+        if (Number.isNaN(v) || v === fill) continue;
+        const [pLat, pLon] = isPolar ? destination(site, axisB[b], axisA[a]) : [axisA[a], axisB[b]];
+        lat.push(pLat); lon.push(pLon); velocity.push(v); qc.push(flags[a * axisB.length + b]);
+        ax.push(axisA[a]); bx.push(axisB[b]);
+        if (spacing) rangeCell.push(Math.round(axisA[a] / spacing));
+        direction.push(bearingAwayFrom(site, pLat, pLon));
+        if (pLon < minLon) minLon = pLon; if (pLon > maxLon) maxLon = pLon;
+        if (pLat < minLat) minLat = pLat; if (pLat > maxLat) maxLat = pLat;
+      }
+    }
+    return {
+      source: 'EU HFR Node',
+      time: new Date(times[best] * 1000),
+      layout: isPolar ? 'polar' : 'grid',
+      // Each bin by its grid axes, to ask for its series (getRadialBinSeries):
+      // RNGE (km) / BEAR (deg), or latitude / longitude
+      axisNames: [dimA, dimB], ax: Float32Array.from(ax), bx: Float32Array.from(bx),
+      // Each bin's range cell (SPRC), for a polar grid - undefined otherwise
+      rangeCell: spacing ? Int16Array.from(rangeCell) : undefined,
+      site,
+      lat: Float32Array.from(lat), lon: Float32Array.from(lon),
+      velocity: Float32Array.from(velocity), direction: Float32Array.from(direction), qc: Int8Array.from(qc),
+      dataExtent: lat.length ? [minLon, minLat, maxLon, maxLat] : [site.lon, site.lat, site.lon, site.lat],
+    };
+  }
+
+  // One radial bin's every variable, hour by hour over [startDate, endDate] -
+  // RDVA and its quality measures and QC flags - for the HFR dashboard's
+  // Point view. The bin is given by the station's grid axes (`axisNames`:
+  // RNGE/BEAR, or latitude/longitude) and its values on them. From the
+  // station's griddap dataset (its _table copy can't be read per bin); one
+  // request. An hour is the map closest to it within ±30 min, as the maps.
+  //   { source, dataset, velocity: 'RDVA', variables: [{ name, attributes }],
+  //     data: { <name>: { '<ISO hour>': value } } } - or undefined when the
+  //   node has no dataset for the station (SCAL)
+  async getRadialBinSeries(network, stationId, axisNames, a, b, startDate, endDate) {
+    const known = await this.stationEntry(network, stationId);
+    if (!known) return undefined;
+    const entry = known.isGriddap ? known : await this.griddapEntry(known.dataset.replace(/_table$/, ''));
+    this.variableInfo ??= {};
+    this.variableInfo[entry.dataset] ??= (async () => {
+      const infoUrl = `${this.baseUrl}/info/${entry.dataset}/index.jsonlKVP`;
+      const text = await this.fetchManager.fetch(SourceErddap.proxied(infoUrl)).then(res => res.text());
+      return this.parseERDDAPMetadata(text).variables;
+    })().catch(error => { delete this.variableInfo[entry.dataset]; throw error; });
+    const info = await this.variableInfo[entry.dataset];
+    const skip = new Set([...RADIAL_SKIP.filter(name => name !== 'RDVA'), ...axisNames]);
+    const names = Object.keys(info).filter(name => !skip.has(name) && !name.startsWith('SDN_') && NUMERIC_TYPES.includes(info[name].dataType));
+
+    const end = endDate ?? new Date();
+    const from = entry.startDate && entry.startDate > startDate ? entry.startDate : startDate;
+    const to = entry.endDate && entry.endDate < end ? `(${entry.endDate.toISOString()})` : `(${end.toISOString()})`;
+    if (entry.endDate && from > entry.endDate) return { source: 'EU HFR Node ERDDAP', dataset: entry.dataset, velocity: 'RDVA', variables: [], data: {} };
+    const selectors = encodeURIComponent(`[(${from.toISOString()}):1:${to}][0][(${a})][(${b})]`);
+    const url = `${this.baseUrl}/griddap/${entry.dataset}.csv?${names.map(name => name + selectors).join(',')}`;
+    const text = await this.fetchManager.fetch(url, 1).then(res => res.text()).catch(err => {
+      if (err.name === 'HTTPError') return '';
+      throw err;
+    });
+    const lines = text.trim().split(/\r?\n/);
+    const header = (lines[0] ?? '').split(',');
+    const at = name => header.indexOf(name);
+    const data = Object.fromEntries(names.map(name => [name, {}]));
+    const closeness = {}; // hour -> how far its kept map is from it
+    lines.slice(2).forEach(line => {
+      const cells = line.split(',');
+      const time = new Date(cells[at('time')]).getTime();
+      const hour = Math.floor((time + HALF_HOUR_MS) / 3600000) * 3600000;
+      const key = new Date(hour).toISOString();
+      const off = Math.abs(time - hour);
+      if (closeness[key] != undefined && closeness[key] <= off) return;
+      closeness[key] = off;
+      names.forEach(name => {
+        const raw = cells[at(name)];
+        const value = Number(raw);
+        if (raw !== 'NaN' && raw !== '' && Number.isFinite(value)) data[name][key] = value;
+        else delete data[name][key];
+      });
+    });
+    return {
+      source: 'EU HFR Node ERDDAP', dataset: entry.dataset, velocity: 'RDVA',
+      variables: names.map(name => ({ name, attributes: info[name] })), data,
+    };
+  }
+
+  // Valid points per hour for one network as the node publishes it -
+  // `network` its site code ('HFR-DeltaEbro') - its Total ('TOTALS') and each
+  // of `stationIds`: an array of promises of { id, points }, one per entity,
+  // like getNumberOfValidPointsPerStations(). A station's _table dataset is
+  // counted with orderByCount (ICATMAR's), any other on its griddap QCflag.
+  // points is undefined for a dataset the node doesn't have.
+  getNumberOfValidPointsForNetwork(network, stationIds, startDate, endDate) {
+    const code = network.replace(/^HFR-/, '');
+    const count = async (id, dataset) => {
+      try {
+        const known = this.stations[`${code}-${id}`]; // from getAllNetworks()
+        const entry = known?.dataset.endsWith('_table') ? known : await this.griddapEntry(known?.dataset ?? dataset);
+        const points = entry.isGriddap
+          ? await this.fetchGriddapValidPointsCount(entry, startDate, endDate)
+          : await this.fetchValidPointsCount(entry, 'RDVA', startDate, endDate);
+        return { id, points, source: this.originOf(entry.dataset) };
+      } catch (error) {
+        console.warn(`EU HFR Node: no valid points for ${network} ${id}:`, error);
+        return { id, points: undefined };
+      }
+    };
+    return [
+      count('TOTALS', `EUHFR_NRTcurrent_HFR-${code}-Total_v3`),
+      ...stationIds.map(id => count(id, `EUHFR_NRTcurrent_HFR-${code}-${id}_v3`)),
+    ];
+  }
+
+  // fetchValidPointsCount() for a dataset with no _table variant: the
+  // radials' QCflag grid as .nc, counting the cells with a radial in each map
+  // - the same number orderByCount gives on a _table (QC-good and -bad
+  // alike). Straight from the node, which allows CORS: binary is better kept
+  // off the proxy. Cached into `entry` the same way.
+  async fetchGriddapValidPointsCount(entry, startDate, endDate) {
+    const end = endDate ?? new Date();
+    const rangeStart = entry.startDate && entry.startDate > startDate ? entry.startDate : startDate;
+    const rangeEnd = entry.endDate && entry.endDate < end ? entry.endDate : end;
+
+    if (!entry.validPoints) entry.validPoints = {};
+    if (rangeStart > rangeEnd) return entry.validPoints;
+    const range = entry.validPointsRange;
+    if (range && rangeStart >= range.start && rangeEnd <= range.end) return entry.validPoints;
+
+    const selectors = `[(${rangeStart.toISOString()}):1:(${rangeEnd.toISOString()})][0][0:1:last][0:1:last]`;
+    const url = `${this.baseUrl}/griddap/${entry.dataset}.nc?QCflag${encodeURIComponent(selectors)}`;
+    const buffer = await this.fetchManager.fetch(url, 1)
+      .then(res => res.arrayBuffer())
+      .catch(err => {
+        if (err.name === 'HTTPError' && err.status === 404) return null; // no map in the range
+        throw err;
+      });
+
+    if (buffer) {
+      const file = readNetCDF3(buffer);
+      const values = file.variables['QCflag'].read();
+      const fill = file.variables['QCflag'].attributes['_FillValue'];
+      const times = file.variables['time'].read(); // seconds since 1970
+      const perTime = values.length / times.length;
+      times.forEach((seconds, k) => {
+        let count = 0;
+        for (let i = k * perTime; i < (k + 1) * perTime; i++) {
+          if (values[i] === fill || Number.isNaN(values[i])) continue;
+          count++;
+        }
+        // Keyed as the _table counts are: '2026-10-21T01:00:00Z'
+        const time = new Date(seconds * 1000).toISOString().replace('.000Z', 'Z');
+        if (count > 0) entry.validPoints[time] = count;
+      });
+    }
+
+    entry.validPointsRange = {
+      start: range ? new Date(Math.min(range.start, rangeStart)) : rangeStart,
+      end: range ? new Date(Math.max(range.end, rangeEnd)) : rangeEnd,
+    };
+    return entry.validPoints;
   }
 
   // Array of per-station promises (NOT a single Promise<object> resolved via
@@ -325,7 +739,7 @@ class SourceErddapEUHFR extends Source {
     await this.loadTotal();
     if (!this.total) return { id: 'TOTALS', points: undefined };
     const points = await this.fetchValidPointsCount(this.total, 'EWCT', startDate, endDate);
-    return { id: 'TOTALS', points };
+    return { id: 'TOTALS', points, source: this.originOf(this.total.dataset) };
   }
 
 }

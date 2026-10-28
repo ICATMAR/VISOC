@@ -107,6 +107,11 @@ class SourcePuertosBuoys extends SourceBuoys {
   // Nothing to re-ask - the coverage is the catalogue's, and the end is
   // assumed (see load). Moving the assumed end forward keeps a long-running
   // session from deciding this source stops at the moment the page opened.
+  // The API doesn't say when a buoy last reported: its coverage is "now"
+  // (see refreshCoverage), so a refresh can't tell new readings from none -
+  // DPBuoys.refresh counts its buoys as changed every time
+  get coverageUnknown() { return true; }
+
   async refreshCoverage() {
     const now = new Date();
     this.buoys.forEach(buoy => {

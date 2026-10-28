@@ -11,6 +11,8 @@ import SourcePuertosBuoys from '../sources/SourcePuertosBuoys.js';
 import SourceOpenMeteo from '../sources/SourceOpenMeteo.js';
 import SourceErddapWaveForecast from '../sources/SourceErddapWaveForecast.js';
 import SourceErddapSeaSurfaceForecast from '../sources/SourceErddapSeaSurfaceForecast.js';
+import SourceErddapHFRadars from '../sources/SourceErddapHFRadars.js';
+import SourceCMEMS from '../sources/SourceCMEMS.js';
 
 import DPDrifters from './DPDrifters.js';
 import DPHFRNetwork from './DPHFRNetwork.js';
@@ -26,6 +28,8 @@ import DPSeaSurfaceForecast from './DPSeaSurfaceForecast.js';
 const MEDBBOX = {minLat: 30, minLon: -11, maxLat: 46, maxLon: 37}
 const NWMEDBBOX = {minLat: 38.5, minLon: -0.4, maxLat: 44, maxLon: 6.2}
 const WESTMEDBBOX = {minLat: 34.6, minLon: -5.8, maxLat: 44.6, maxLon: 16.5}
+// CMEMS IBI (Iberia-Biscay-Ireland) model domain - reaches the Catalan coast
+const IBIBBOX = {minLat: 26, minLon: -19.1, maxLat: 56.1, maxLon: 5.1}
 
 
 const KelvinToCelsius = (value) => {
@@ -119,30 +123,47 @@ const dataProducts = [
     Class: DPHFRTotals,
     description: "Surface currents from the ICATMAR's high-frequency radar network (combined stations)",
     type: 'near-real-time',
+    // In order of preference: for ICATMAR's network an hour (of the map, a
+    // point's series, the Point view, the network timeline's TOTALS count)
+    // comes from the first of these that has it - ICATMAR's ERDDAP (recent,
+    // then historic), the EU HFR Node, ICATMAR's GitHub, and the static files
+    // when every external service fails. See DPHFRTotals.
     sources: [
-      // Recent
+      // ICATMAR's ERDDAP, recent: a rolling window of the last ~2 weeks, up
+      // to the latest hour ICATMAR has processed
       {
-        Class: SourceErddap,
+        Class: SourceErddapHFRadars,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
-        dataset: 'HF_radar_L3B_recent',
+        provider: 'ICATMAR',
+        label: 'ICATMAR ERDDAP',
+        datasets: ['HF_radar_L3B_recent'],
+        // ICATMAR re-processes the recent hours it has published (see
+        // SourceErddapHFRadars.getVersions); its historic datasets and the
+        // EU HFR Node never are
+        reprocessed: true,
+        network: 'ICATMAR',
+        eastward: 'u',
+        northward: 'v',
+        countVariable: 'qcflag',
         institution: 'ICATMAR',
-        mapping: {
-          u: {code: 'EWCT'},
-          v: {code: 'NSCT'},
-        }
       },
-      // Historical
+      // ICATMAR's ERDDAP, historic: one dataset per processing version (v1
+      // 2023-04 to 2026-03, v2 to 2026-09); a new version is picked up on its
+      // own, the newest preferred where they overlap
       {
-        Class: SourceErddap,
+        Class: SourceErddapHFRadars,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
-        dataset: 'HF_Radar_L3B_Historic',
+        provider: 'ICATMAR',
+        label: 'ICATMAR ERDDAP',
+        datasetPattern: '^HF_Radar_L3B_Historic_v\\d+$',
+        network: 'ICATMAR',
+        eastward: 'u',
+        northward: 'v',
+        countVariable: 'qcflag',
         institution: 'ICATMAR',
-        mapping: {
-          u: {code: 'EWCT'},
-          v: {code: 'NSCT'},
-        }
       },
-      // EU HFR Node
+      // EU HFR Node: the count of the network's Total (its _table), for the
+      // network timeline - not a map source
       {
         Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
@@ -151,15 +172,43 @@ const dataProducts = [
           'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
         ],
       },
-      // Github
+      // EU HFR Node: its copy of ICATMAR's network, gridded
+      {
+        Class: SourceErddapHFRadars,
+        src: 'https://erddap.hfrnode.eu/erddap/index.html',
+        provider: 'ICATMAR',
+        label: 'EU HFR Node',
+        datasets: ['EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3'],
+        network: 'ICATMAR',
+        useProxy: false,
+        institution: 'EU HFR Node',
+      },
+      // EU: every network on the node
+      {
+        Class: SourceErddapHFRadars,
+        src: 'https://erddap.hfrnode.eu/erddap/index.html',
+        provider: 'EU',
+        label: 'EU HFR Node',
+        // Every network's gridded totals; the group names the network
+        datasetPattern: '^EUHFR_NRTcurrent_HFR-(.+)-Total_v3$',
+        preferNetwork: 'ICATMAR',
+        useProxy: false,
+        institution: 'EU HFR Node',
+      },
+      // Github - the newest hours, before either ERDDAP has them
       {
         Class: SourceGithubHFR,
         institution: 'ICATMAR',
-        src: 'https://github.com/ICATMAR/data/'
+        src: 'https://github.com/ICATMAR/data/',
+        provider: 'ICATMAR',
+        label: 'GitHub',
       },
-      // Static file
+      // Static files - the last resort, so the dashboard still shows
+      // something (these hours) when every external service fails
       {
         Class: SourceFileHFRTotals,
+        provider: 'ICATMAR',
+        label: 'Static files',
         paths: [
           './Data/hfr/totals/TOTL_CATS_2026_07_25_0900.tuv',
           './Data/hfr/totals/TOTL_CATS_2026_07_25_1000.tuv',
@@ -253,6 +302,7 @@ const dataProducts = [
       {
         Class: SourceErddapBuoys,
         src: 'https://erddap.icatmar.cat/erddap/index.html',
+        label: "ICATMAR's ERDDAP",
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
         mapping: {
@@ -264,6 +314,7 @@ const dataProducts = [
       {
         Class: SourceErddapBuoys,
         src: 'https://hebe.icm.csic.es/erddap/index.html',
+        label: "ICM-CSIC's ERDDAP (hebe)",
         institution: 'ICATMAR',
         datasetCommonKey: 'BUOY_',
         mapping: {
@@ -275,6 +326,7 @@ const dataProducts = [
       {
         Class: SourceMSMAPI,
         src: 'https://api.icatmar.cat/MSM_fast_api/',
+        label: "ICATMAR's MSM API",
         institution: 'ICATMAR',
         // The API already names most parameters by their standard code, so
         // what this mapping is really for is the scaling: they arrive as
@@ -328,6 +380,7 @@ const dataProducts = [
       {
         Class: SourceGithubSOMO,
         src: 'https://github.com/ICATMAR/data/',
+        label: "ICATMAR's GitHub (SOMO logger files)",
         institution: 'ICATMAR',
         // Raw CR1000X logger columns. No unit transforms: the logger writes
         // physical units already (°C, hPa, m/s, S/m, dbar, PSU).
@@ -362,6 +415,7 @@ const dataProducts = [
       {
         Class: SourcePuertosBuoys,
         src: 'https://portus.puertos.es/',
+        label: 'Puertos del Estado (PORTUS)',
         institution: 'Puertos del Estado',
         mapping: {
           Hm0: {code: 'VHM0'},
@@ -543,7 +597,7 @@ const dataProducts = [
   {
     name: 'Sea surface forecast',
     Class: DPSeaSurfaceForecast,
-    description: 'High-resolution short-term forecast of sea surface temperature and currents of the Catalan Sea',
+    description: 'Short-term forecast of sea surface temperature and currents of the Catalan Sea (high resolution) and the Mediterranean',
     type: 'forecast',
     sources: [
       {
@@ -562,7 +616,46 @@ const dataProducts = [
           SST: {code: 'TEMP', unitTransform: KelvinToCelsius},
           SSS: {code: 'PSAL'},
         }
-      }
+      },
+      // Copernicus Marine's Mediterranean physics (MedFS, 4.2 km): the whole
+      // Mediterranean and ~10 days ahead, for whatever ROMS doesn't cover.
+      // Which of the product's datasets serves each variable at each time
+      // step is found in its STAC metadata (see SourceCMEMS).
+      {
+        Class: SourceCMEMS,
+        src: 'https://data.marine.copernicus.eu/product/MEDSEA_ANALYSISFORECAST_PHY_006_013/description',
+        product: 'MEDSEA_ANALYSISFORECAST_PHY_006_013',
+        variables: ['uo', 'vo'],
+        // In order of preference - a variable not served hourly is read daily
+        intervals: ['PT1H', 'P1D'],
+        institution: 'Copernicus Marine Service',
+        model: 'CMEMS-MEDSEA',
+        label: 'CMEMS Mediterranean Sea physics (MedFS)',
+        resolution: '4.2 km',
+        bbox: MEDBBOX,
+        mapping: {
+          uo: {code: 'EWCT'},
+          vo: {code: 'NSCT'},
+        }
+      },
+      // Copernicus Marine's Iberia-Biscay-Ireland physics (NEMO, 1/36°): the
+      // Atlantic side of Iberia and the western Mediterranean up to 5°E
+      {
+        Class: SourceCMEMS,
+        src: 'https://data.marine.copernicus.eu/product/IBI_ANALYSISFORECAST_PHY_005_001/description',
+        product: 'IBI_ANALYSISFORECAST_PHY_005_001',
+        variables: ['uo', 'vo'],
+        intervals: ['PT1H', 'P1D'],
+        institution: 'Copernicus Marine Service',
+        model: 'CMEMS-IBI',
+        label: 'CMEMS Iberia-Biscay-Ireland physics (NEMO)',
+        resolution: '2.8 km',
+        bbox: IBIBBOX,
+        mapping: {
+          uo: {code: 'EWCT'},
+          vo: {code: 'NSCT'},
+        }
+      },
     ]
   },
 
@@ -603,8 +696,8 @@ const dataProducts = [
 
   
 
-  // Dynamic generation of other forecast models (CMEMS)
-  // Check HFRadar and VISAP codes
+  // Other CMEMS products (MED/IBI waves, biogeochemistry) - one SourceCMEMS
+  // entry each, in the product they belong to (see SourceCMEMS)
 ]
 
 

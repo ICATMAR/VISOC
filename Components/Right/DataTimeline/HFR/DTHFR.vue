@@ -1,35 +1,101 @@
 <template>
   <!-- Selected view -->
-  <component :is="currentView"></component>
+  <!-- Network: the availability of a network's stations, as All platforms
+       draws ICATMAR's -->
+  <DTAPHFR v-if="$gui.hfrTab === 'Network'" :network="euNetwork"></DTAPHFR>
+  <DTHFRCompare v-else-if="$gui.hfrTab === 'Compare' && $gui.hfrPoint"></DTHFRCompare>
+  <!-- Point: a data point clicked on the map, hour by hour -->
+  <DTHFRPoint v-else-if="$gui.hfrTab === 'Point'"></DTHFRPoint>
+  <div v-else class="horizontal hfr-placeholder">
+    <span>{{ $t(placeholder) }}</span>
+  </div>
 
-  <!-- Bottom options -->
+  <!-- Bottom options: the station views, then the views about a point -->
   <div class="horizontal wrap button-group bottom-bar">
-    <button v-for="opt in bottomOptions" :key="opt" class="clickable" :class="{ 'selectedOption': selectedOption == opt }"
-      @click="selectedOption = opt"><span>{{ $t(opt) }}</span></button>
+    <template v-for="(group, groupIndex) in tabGroups" :key="groupIndex">
+      <span v-if="groupIndex > 0" class="tab-group-gap"></span>
+      <button v-for="tab in group" :key="tab" class="clickable" :class="{ 'selectedOption': $gui.hfrTab == tab }"
+        @click="$gui.hfrTab = tab"><span>{{ $t(tab) }}</span></button>
+    </template>
   </div>
 </template>
 
 
 <script>
-import DTHFRDefault from './DTHFRDefault.vue';
-import DTHFRModels from './DTHFRModels.vue';
+import DTAPHFR from '../AllPlatforms/DTAPHFR.vue';
+import DTHFRCompare from './DTHFRCompare.vue';
+import DTHFRPoint from './DTHFRPoint.vue';
 
+// The HFR dashboard's bottom section. About the stations: the availability
+// of a network's stations (Network).
+// About a place (GUIManager.hfrPoint): what the radars measured there (Point)
+// and how the radars, the platforms and the models compare (Compare).
 export default {
   name: "DTHFR",
+  created() {
+    this.loadNetworks();
+  },
   data() {
     return {
-      bottomOptions: ['Default view', 'Compare with models', 'Detail currents'],
-      selectedOption: 'Default view',
+      tabGroups: [['Network'], ['Point', 'Compare']],
+      networks: [], // getAllNetworks()' groups, once loaded
     }
+  },
+  methods: {
+    async loadNetworks() {
+      try {
+        this.networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
+      } catch (error) {
+        console.error('Error loading the HF radar networks:', error);
+      }
+    },
   },
   computed: {
-    currentView() {
-      return this.selectedOption == 'Compare with models' ? 'DTHFRModels' : 'DTHFRDefault';
-    }
+    // With the EU HFR Node: the network of the station picked, as the node
+    // publishes it - HFR-ICATMAR until one is. With ICATMAR: null, ICATMAR's
+    // own network (DTAPHFR's default).
+    euNetwork() {
+      if (this.$gui.hfrSource !== 'EU') return null;
+      const code = this.$gui.selectedPlatform?.network || 'HFR-ICATMAR';
+      return this.$dataService.hfrnetwork.networkOf(this.networks, code);
+    },
+    placeholder() {
+      if (this.$gui.hfrTab === 'Compare') return 'Click on the map, a buoy or a drifter to compare it with the HF radars and the models';
+      return 'Coming soon: click a point on the map to see the currents there';
+    },
+  },
+  watch: {
+    // A buoy, drifter or point picked on the map belongs to Compare, a data
+    // point to Point: in any other view it is no longer selected - no
+    // detail, nothing in the info panel
+    '$gui.hfrTab'(tab) {
+      const kind = this.$gui.selectedPlatform?.kind;
+      // Between Compare and Point the same place stays selected: each view
+      // its own form of it (see GUIManager.openHFRPoint / openHFRDataPoint)
+      if (kind && tab === 'Point' && kind !== 'datapoint' && this.$gui.hfrDataPoint) {
+        this.$gui.selectedPlatform = { stationId: 'datapoint', kind: 'datapoint' };
+        return;
+      }
+      if (kind === 'datapoint' && tab === 'Compare' && this.$gui.hfrPoint) {
+        const point = this.$gui.hfrPoint;
+        this.$gui.selectedPlatform = { stationId: point.id, kind: point.kind };
+        return;
+      }
+      // Network: the point is let go of altogether - on the map
+      // and in Point / Compare, which ask for a new click
+      if (tab === 'Network') {
+        this.$gui.hfrPoint = null;
+        this.$gui.hfrDataPoint = null;
+      }
+      if (!kind || tab === (kind === 'datapoint' ? 'Point' : 'Compare')) return;
+      this.$gui.selectedPlatform = null;
+      this.$gui.isPlatformDetailOpen = false;
+    },
   },
   components: {
-    DTHFRDefault,
-    DTHFRModels
+    DTAPHFR,
+    DTHFRCompare,
+    DTHFRPoint,
   }
 }
 
@@ -46,4 +112,21 @@ export default {
   font-size: small;
 }
 
+/* Sets the station views apart from the views about a point */
+.tab-group-gap {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 6px 4px 10px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.hfr-placeholder {
+  width: 100vw;
+  height: 90px;
+  align-items: center;
+  justify-content: center;
+  background: var(--lightBlue);
+  font-size: small;
+}
 </style>

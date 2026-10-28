@@ -1,7 +1,8 @@
 <template>
   <Transition name="slideBottom-fade">
     <!-- Vertical container -->
-    <div class="vertical datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
+    <!-- The ids are what GUIManager.bottomCoveredPx measures -->
+    <div id="dataTimelinePane" class="vertical datatimeline-pane-section" v-show="$gui.isDataTimelineOpen && !$gui.isMenuOpen">
 
       <!-- Cross and top-left icons -->
       <div><i class="clickable close-x close-x-position fa fa-xmark" v-on:click="() => { $gui.isDataTimelineOpen = false; $gui.isPlatformDetailOpen = false; $gui.selectedPlatform = null; }"></i></div>
@@ -9,9 +10,10 @@
       <!-- Data, timeline and bottom options (per dashboard) -->
       <DTContent></DTContent>
 
-      <!-- Platform detail -->
+      <!-- Platform detail: a card floating above the timeline, or on short
+           screens a slim full-width strip (pd-compact, see platformDetails.css) -->
       <Transition name="fade">
-        <section class="platform-pane-container" v-show="$gui.isPlatformDetailOpen">
+        <section id="platformDetailPane" class="platform-pane-container" :class="{ 'pd-compact': $gui.isShortScreen }" v-show="$gui.isPlatformDetailOpen">
           <DTPlatformDetail></DTPlatformDetail>
         </section>
       </Transition>
@@ -64,6 +66,15 @@ export default {
   box-shadow: 0px -10px 10px -5px rgba(0, 0, 0, 0.5), /* Top shadow */
               -10px 0px 10px -5px rgba(0, 0, 0, 0.5), /* Left shadow */
               10px 0px 10px -5px rgba(0, 0, 0, 0.5);  /* Right shadow */
+}
+
+/* The strip spans the whole timeline. Square-cornered and shadowed only
+   upward, since it sits flush on the timeline below. */
+.platform-pane-container.pd-compact {
+  left: 0;
+  width: 100%;
+  border-radius: 0;
+  box-shadow: 0px -6px 8px -4px rgba(0, 0, 0, 0.5);
 }
 
 .close-x-position {

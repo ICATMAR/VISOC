@@ -26,6 +26,10 @@
   <script src="lib/openlayers/ol.js"></script>
   <link rel="stylesheet" href="lib/openlayers/ol.css">
 
+  <!-- Particle layer for OpenLayers (HF radar currents) -->
+  <!-- https://github.com/sakitam-fdd/wind-layer - ol-wind v1.1.9 -->
+  <script src="lib/ol-wind/ol-wind.js"></script>
+
   <!-- Font Awesome -->
   <!-- https://github.com/FortAwesome/Font-Awesome -->
   <link rel="stylesheet" type="text/css" href="lib/font-awesome/css/all.min.css">
@@ -33,6 +37,20 @@
   <!-- Font poppins -->
   <!-- https://fonts.google.com/specimen/Poppins -->
   <link rel="stylesheet" type="text/css" href="lib/font-poppins/font-poppins.css" />
+
+  <!-- Partner logos look the same size whatever their shape: each gets the
+       same AREA (a wide logo wider and shorter, a narrow one taller), not the
+       same box - in a box, the narrow ones look big and the wide ones small.
+       Used by the loading screen below and by the menu (Menu.vue), ICATMAR's
+       logo included. -->
+  <script>
+    window.sizeLogo = function (img, area) {
+      var ratio = img.naturalWidth / img.naturalHeight;
+      if (!ratio) return;
+      img.style.width = Math.round(Math.sqrt(area * ratio)) + 'px';
+      img.style.height = Math.round(Math.sqrt(area / ratio)) + 'px';
+    };
+  </script>
 
   <!-- Global Style -->
   <link rel="stylesheet" type="text/css" href="styles/globalStyle.css" media="screen" />
@@ -42,6 +60,28 @@
 </head>
 
 <body>
+  <!-- Loading screen: shown from the first paint, while Vue compiles the app
+       in the browser; main.js fades it out once the map has drawn -->
+  <div id="loading-screen" aria-busy="true" aria-label="Loading">
+    <div class="loading-title">
+      <h1>VISOC</h1>
+      <p>Visor<br>oceanogràfic</p>
+    </div>
+    <img class="loading-main-logo" onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-icatmar-negatiu-short.svg" alt="ICATMAR">
+    <!-- How far the start has got (main.js) -->
+    <div class="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="loading-bar-fill"></div>
+    </div>
+    <div class="loading-logos">
+      <img onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-ICM.svg" alt="Institut de Ciències del Mar">
+      <img onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-CSIC.png" alt="CSIC">
+      <img onload="sizeLogo(this, 6000)" src="Assets/Images/logos/generalitat.webp" alt="Generalitat de Catalunya">
+      <img onload="sizeLogo(this, 6000)" src="Assets/Images/logos/logo-EU.svg" alt="Cofinançat per la Unió Europea">
+      <img onload="sizeLogo(this, 6000)" class="logo-white" src="Assets/Images/logos/logo-interreg-poctefa-text.svg" alt="Interreg POCTEFA">
+      <img onload="sizeLogo(this, 6000)" class="logo-white" src="Assets/Images/logos/logo-opale.svg" alt="Opale">
+      <img onload="sizeLogo(this, 6000)" class="logo-white" src="Assets/Images/logos/logo-PdE.svg" alt="Puertos del Estado">
+    </div>
+  </div>
   <!-- Vue component -->
   <div id="vue-app">
   </div>

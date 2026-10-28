@@ -10,6 +10,13 @@ import buoys from '../../../../Data/buoys/buoys.js'
 // arrive hours after the fact and cause the totals to be regenerated.
 const REREQUEST_HOUR_WINDOW_FROM_NOW = 1;
 
+// How long loadBuoys() waits for the buoy sources before merging the ones that
+// have answered. A server that is down takes FetchManager's whole timeout (30 s)
+// to fail, and every buoy - even one another source serves in under a second -
+// would wait for it. A source that answers later joins in then (see
+// watchSources).
+const SOURCE_WAIT_MS = 4000;
+
 // Fields that are merged one for one across sources - everything else on a
 // buoy (its id, its sensors, its dates) is merged by rules of its own below.
 const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth',
@@ -99,20 +106,108 @@ class DPBuoys extends DP {
     this.providers = new Map();
   }
 
+  // REFRESH (see DataProduct). What the views were told: each buoy's newest
+  // reading as its sources know it (id -> ms), taken when the refresh starts
+  // and at every change since.
+  startRefresh(minutes) {
+    super.startRefresh(minutes);
+    this.announcedEnds ??= this.loadBuoys().then(() => this.buoyEnds());
+  }
+
+  // Each buoy's newest reading, from the sources that can tell (id -> ms):
+  // a source whose coverage is unknown (Puertos - see coverageUnknown) is
+  // left out, its "end" is only ever "now"
+  buoyEnds() {
+    const ends = new Map();
+    this.providers.forEach((sources, id) => {
+      const newest = Math.max(...sources.filter(s => !s.coverageUnknown)
+        .map(s => s.buoys?.find(b => b.id === id)?.endDate).filter(Boolean).map(Number));
+      if (Number.isFinite(newest)) ends.set(id, newest);
+    });
+    return ends;
+  }
+
+  // Every source re-reads how far it reaches (past its 5-minute trust); a
+  // buoy whose newest reading moved on is a change: { buoys: [ids] }. A buoy
+  // with a source that can't say (Puertos) is always in it: its views then
+  // re-ask the newest block, what their own polling did before.
+  async refresh() {
+    await this.loadBuoys();
+    const sources = [...new Set([...this.providers.values()].flat())].filter(source => source.servesData);
+    await Promise.all(sources.map(source => {
+      source.coverageCheckedAt = undefined;
+      return source.getEndDate().catch(error => console.error(`Could not check how fresh ${source.src} is:`, error));
+    }));
+    await this.loadBuoys();
+    const before = await this.announcedEnds;
+    const now = this.buoyEnds();
+    this.announcedEnds = Promise.resolve(now);
+    const moved = [...now].filter(([id, end]) => before?.has(id) && before.get(id) !== end).map(([id]) => id);
+    const unknown = [...this.providers].filter(([, sources]) => sources.some(s => s.coverageUnknown)).map(([id]) => id);
+    const buoys = [...new Set([...moved, ...unknown])];
+    if (buoys.length) this.changed({ buoys });
+  }
+
+  // A read found a buoy's reading at `timestamp`: past what the views were
+  // told, refresh now rather than at the next tick
+  async noteReading(buoyId, timestamp) {
+    if (!timestamp || !this.announcedEnds) return;
+    const known = (await this.announcedEnds)?.get(buoyId);
+    if (known != undefined && new Date(timestamp).getTime() > known) this.requestRefresh();
+  }
+
   // Get buoys
   getBuoys() {
     // Return static buoy data
     return buoys;
   }
 
+  // Each buoy source's load, followed once: 'pending', 'loaded' or 'failed'.
+  // A source that loads after the first merge (see SOURCE_WAIT_MS) is a
+  // change: the buoys it knows were planned without it, so their cached blocks
+  // go (an empty block from another source must not stay frozen over data this
+  // one has) and the views are told, to ask again. One that fails late is a
+  // change too - with every source settled, a buoy still without a date is
+  // offline rather than loading (see allSourcesSettled).
+  watchSources() {
+    if (this.sourceStates) return;
+    this.sourceStates = new Map();
+    this.sources.filter(s => s instanceof SourceBuoys).forEach(source => {
+      this.sourceStates.set(source, 'pending');
+      source.loadingPromise.then(() => {
+        this.sourceStates.set(source, 'loaded');
+        if (!this.merged) return;
+        const ids = source.buoys.map(buoy => buoy.id);
+        ids.forEach(id => this.cache.forget(`${id}|`));
+        this.changed({ buoys: ids, sources: [source.label ?? source.src] });
+      }, error => {
+        this.sourceStates.set(source, 'failed');
+        console.error('Error loading buoys source:', error);
+        if (this.merged) this.changed({ buoys: [], sources: [source.label ?? source.src] });
+      });
+    });
+  }
+
+  // Whether every buoy source has loaded or failed - until then, a buoy no
+  // source has dated yet may still get a date
+  get allSourcesSettled() {
+    return Boolean(this.sourceStates) && [...this.sourceStates.values()].every(state => state !== 'pending');
+  }
+
   // Get start-end dates per buoy
   // Maybe later will be updateBuoys?
   async loadBuoys() {
-    // Iterate sources and wait until they are all loaded
-    const sources = this.sources.filter(s => s instanceof SourceBuoys);
-    await Promise.all(sources.map(s => s.loadingPromise.catch(error => {
-      console.error('Error loading buoys source:', error);
-    })));
+    // Wait for the sources - but not past SOURCE_WAIT_MS from the first call;
+    // whatever hasn't answered by then is left out until it does
+    this.watchSources();
+    const all = this.sources.filter(s => s instanceof SourceBuoys);
+    this.sourcesWaited ??= Promise.race([
+      Promise.allSettled(all.map(s => s.loadingPromise)),
+      new Promise(resolve => setTimeout(resolve, SOURCE_WAIT_MS)),
+    ]);
+    await this.sourcesWaited;
+    this.merged = true;
+    const sources = all.filter(source => this.sourceStates.get(source) !== 'pending');
 
     // Then merge datasets into one - the same buoy is usually covered by
     // several sources, each knowing a different part of it: the ERDDAP servers
@@ -251,6 +346,12 @@ class DPBuoys extends DP {
   // SOMO repository's declared table (see each source). Undefined where the
   // source doesn't say, which is a fine answer: the sensor id still
   // identifies it, the instrument only names it more precisely.
+  // The sources that serve a buoy's measurements, by name, in the order they
+  // are asked (the first with data for an hour wins, per variable)
+  sourcesOf(buoyId) {
+    return (this.providers?.get(buoyId) ?? []).filter(source => source.servesData).map(source => source.label ?? source.src);
+  }
+
   sensorInstrument(source, buoyId, sensorId) {
     return source.getBuoy?.(buoyId)?.sensors?.find(sensor => sensor.id === sensorId)?.instrument;
   }
@@ -293,6 +394,8 @@ class DPBuoys extends DP {
         if (!buoy) return;
 
         buoy.sensors.forEach(sensor => {
+          // Its dataset(s) gone from the server's list (see SourceErddapBuoys)
+          if (sensor.unavailable) return;
           // A source that dates the buoy but not its sensors (the MSM API)
           // still has usable coverage - fall back to the buoy's own.
           const coverage = {
@@ -456,7 +559,9 @@ class DPBuoys extends DP {
     // Read back from the cache rather than from what was just fetched: the
     // window asked for usually spans blocks that were already held, and this
     // is the one place that knows how to put both halves together.
-    return { ...this.collectFromCache(buoyId, codes, startDate, endDate), errors };
+    const collected = this.collectFromCache(buoyId, codes, startDate, endDate);
+    this.noteReading(buoyId, Object.keys(collected.data).sort().pop());
+    return { ...collected, errors };
   }
 
   // Everything the block cache already holds for [startDate, endDate], with no
@@ -566,6 +671,9 @@ class DPBuoys extends DP {
               if (value == undefined) return;
               if (points[code] == undefined) points[code] = {};
               points[code][timestamp] = { value, sensor: sensorId, source: source.src, instrument, rawName };
+              // How deep it was measured, where the dataset says (ADCP bins;
+              // see SourceErddapBuoys.parseCSV) - metres, negative downward
+              if (standardized.DEPTH != undefined) points[code][timestamp].depth = standardized.DEPTH;
               delivered.add(code);
             });
           });

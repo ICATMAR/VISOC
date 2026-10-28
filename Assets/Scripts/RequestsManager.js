@@ -11,11 +11,17 @@ class RequestsManager {
     { id: 'PBCN', name: 'Port de Barcelona',    lon: 2.1711,  lat: 41.3344, range: 'R23', owner: 'ICATMAR', installed: '2023-12-05', lastCalibration: '2024-02-29' },
     { id: 'GNST', name: 'Port Ginesta',         lon: 1.9221,  lat: 41.2560, range: 'R23', owner: 'ICATMAR', installed: '2023-11-16', lastCalibration: '2024-03-01' },
     { id: 'SCAL', name: 'Segur de Calafell',    lon: 1.6073,  lat: 41.1862, range: 'R24', owner: 'ICATMAR', installed: 'unknown',    lastCalibration: 'unknown'    },
+    // Puertos del Estado's, used in ICATMAR's totals (see Data/hfr/hfr-icatmar.js).
+    // Calibration: the antenna pattern date in their .ruv headers (%PatternDate).
+    { id: 'SALO', name: 'Salou',                lon: 1.1717,  lat: 41.0555, range: 'unknown', owner: 'Puertos del Estado', installed: 'unknown', lastCalibration: '2025-10-21' },
+    { id: 'ALFA', name: 'Els Alfacs',           lon: 0.8270,  lat: 40.6709, range: 'unknown', owner: 'Puertos del Estado', installed: 'unknown', lastCalibration: '2025-10-21' },
+    { id: 'VINA', name: 'Vinaròs',              lon: 0.4783,  lat: 40.4612, range: 'unknown', owner: 'Puertos del Estado', installed: 'unknown', lastCalibration: '2025-10-21' },
   ];
 
   hfrOwners = {
     ICATMAR: { name: 'ICATMAR', url: 'https://icatmar.cat' },
     CEFREM:  { name: 'CEFREM',  url: 'https://cefrem.univ-perp.fr/' },
+    'Puertos del Estado': { name: 'Puertos del Estado', url: 'https://www.puertos.es' },
   };
 
   hfrNetwork = {

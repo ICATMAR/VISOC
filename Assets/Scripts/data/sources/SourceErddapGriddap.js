@@ -176,7 +176,10 @@ class SourceErddapGriddap extends SourceErddap {
     // a 'no data' answer for a window inside it means the metadata is wrong -
     // e.g. a new run loaded without the dataset's metadata being refreshed -
     // and that is said once, plainly, instead of failing as a generic error.
-    const text = await this.fetchManager.fetch(this.proxied(url), DATA_TTL, DATA_TIMEOUT)
+    // Asked again when a new run came in after this answer was kept (see checkRun)
+    const fetchedAt = this.fetchManager.fetchedAt?.(this.proxied(url));
+    const ttl = this.runChangedAt && fetchedAt != undefined && fetchedAt < this.runChangedAt ? 0 : DATA_TTL;
+    const text = await this.fetchManager.fetch(this.proxied(url), ttl, DATA_TIMEOUT)
       .then(res => res.text())
       .catch(error => {
         if (error.name !== 'HTTPError' || error.status !== 404) throw error;
@@ -217,6 +220,42 @@ class SourceErddapGriddap extends SourceErddap {
       + `but ERDDAP answers that there is no data from ${range(from)} to ${range(to)}, a window inside that range. `
       + `The dataset's metadata is out of date with the data it serves (was a new run loaded without refreshing it?). `
       + `No forecast is read from this dataset until its metadata is corrected on ${this.baseUrl}.`);
+  }
+
+  // REFRESH (see DPForecast.refresh). The run this dataset holds, as a token:
+  // only the latest run is served, so a new one moves the dataset's time
+  // range in the server's dataset list (one request, shared with every source
+  // on the server). When it moved, the dataset's description is read again -
+  // its run (runInfo) - and the forecasts kept from the old run are asked
+  // again (see getPointSeries). undefined when the list can't say.
+  // The dataset's dates moved on the server's list (see SourceErddap.watchServer):
+  // a new run is checked the usual way - its description read again, the old
+  // run's forecasts dropped - before the product is told
+  datasetUpdated() {
+    this.checkRun()
+      .then(() => this.notifyUpdated())
+      .catch(error => console.error(`${this.label ?? this.dataset}: run check failed`, error));
+  }
+
+  async checkRun() {
+    await this.loadingPromise?.catch(() => {});
+    const iso = date => date && !isNaN(date) ? date.toISOString() : '';
+    const allDatasets = await SourceErddap.fetchAllDatasets(this.fetchManager, this.baseUrl);
+    const row = allDatasets.find(d => d['datasetID'] === this.dataset);
+    if (!row?.['minTime'] && !row?.['maxTime']) return undefined;
+    const token = `${iso(new Date(row['minTime']))}|${iso(new Date(row['maxTime']))}`;
+    // The run the views were first given: the one load() found
+    this.runToken ??= `${iso(this.startDate)}|${iso(this.endDate)}`;
+    if (token !== this.runToken) {
+      if (row['minTime']) this.startDate = new Date(row['minTime']);
+      if (row['maxTime']) this.endDate = new Date(row['maxTime']);
+      const infoUrl = `${this.baseUrl}/info/${this.dataset}/index.jsonlKVP`;
+      const infoText = await this.fetchManager.fetch(this.proxied(infoUrl), 0).then(res => res.text());
+      this.metadata = this.parseERDDAPMetadata(infoText).metadata;
+      this.runChangedAt = Date.now();
+      this.runToken = token;
+    }
+    return token;
   }
 
   // The run this dataset holds, from its NC_GLOBAL attributes: the

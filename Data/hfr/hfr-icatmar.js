@@ -128,6 +128,49 @@ const hfricatmar = {
         "time_coverage_start": "2025-06-06T13:00:00Z",
         "summary": "The data set consists of maps of radial velocity of the sea water surface current collected at Segur de Calafell (SCAL) site in the Catalan coast. High Frequency (HF)-RADAR measurements of ocean velocity are radial in direction relative to the radar location and representative of the upper 1.3 meters of the ocean."
       }
+    },
+    // Puertos del Estado's stations in the Ebro delta area. ICATMAR uses
+    // their radials in its own totals; the EU HFR Node's HFR-ICATMAR does not
+    // include them. Only in the ICATMAR data repository on GitHub
+    // (observational/hf_radar/currents/L2), like SCAL.
+    {
+      "id": "SALO",
+      "name": "Salou",
+      "latitude": 41.0555,
+      "longitude": 1.1717333,
+      "metadata": {
+        "doa_estimation_method": "Direction Finding",
+        "network": "HFR-ICATMAR",
+        "institution": "Puertos del Estado",
+        "sensor_model": "CODAR",
+        "summary": "Radial velocity of the sea water surface current collected at the Salou (SALO) site by Puertos del Estado, 13.5 MHz CODAR SeaSonde. Used in ICATMAR's own totals only - not part of HFR-ICATMAR on the EU HFR Node. Its radials are published in the ICATMAR data repository on GitHub (position read from the .ruv %Origin)."
+      }
+    },
+    {
+      "id": "ALFA",
+      "name": "Els Alfacs",
+      "latitude": 40.6708833,
+      "longitude": 0.82695,
+      "metadata": {
+        "doa_estimation_method": "Direction Finding",
+        "network": "HFR-ICATMAR",
+        "institution": "Puertos del Estado",
+        "sensor_model": "CODAR",
+        "summary": "Radial velocity of the sea water surface current collected at the Els Alfacs (ALFA) site by Puertos del Estado, 13.5 MHz CODAR SeaSonde. Used in ICATMAR's own totals only - not part of HFR-ICATMAR on the EU HFR Node. Its radials are published in the ICATMAR data repository on GitHub (position read from the .ruv %Origin)."
+      }
+    },
+    {
+      "id": "VINA",
+      "name": "Vinaròs",
+      "latitude": 40.46115,
+      "longitude": 0.4782833,
+      "metadata": {
+        "doa_estimation_method": "Direction Finding",
+        "network": "HFR-ICATMAR",
+        "institution": "Puertos del Estado",
+        "sensor_model": "CODAR",
+        "summary": "Radial velocity of the sea water surface current collected at the Vinaròs (VINA) site by Puertos del Estado, 13.5 MHz CODAR SeaSonde. Used in ICATMAR's own totals only - not part of HFR-ICATMAR on the EU HFR Node. Its radials are published in the ICATMAR data repository on GitHub (position read from the .ruv %Origin)."
+      }
     }
   ]
 }

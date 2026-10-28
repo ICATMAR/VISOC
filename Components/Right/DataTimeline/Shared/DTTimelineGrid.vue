@@ -110,4 +110,17 @@ export default {
 .hourCell-noon {
   left: 50% !important;
 }
+
+/* The day and hour rows stay on top while the data rows scroll under them
+   (DTLayout's scroller). Opaque, in the colour the translucent table shows
+   over the light blue, so rows sliding beneath don't show through; above the
+   now-line (3). */
+.dt-table .weekDayCell,
+.dt-table .hourCell {
+  position: sticky;
+  z-index: 4;
+  background: rgb(229, 244, 249);
+}
+.dt-table .weekDayCell { top: 0; }
+.dt-table .hourCell { top: 22px; }
 </style>

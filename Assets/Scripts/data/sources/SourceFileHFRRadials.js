@@ -21,8 +21,14 @@ class SourceFileHFRRadials extends Source {
     // Start/end are known immediately from the config - no fetch needed.
     this.startDate = this.parseHourString(fileStart);
     this.endDate = this.parseHourString(fileEnd);
+  }
 
-    this.loadingPromise = this.load();
+  // The files (one per station and hour), read the first time something
+  // needs them - the stations' last resort, when the EU HFR Node can't be
+  // reached (see DPHFRStations.loadICATMARHFRStations): nothing at start
+  get loadingPromise() {
+    this.loading ??= this.load();
+    return this.loading;
   }
 
   // 'yyyy-mm-ddThh' -> UTC Date at that hour.

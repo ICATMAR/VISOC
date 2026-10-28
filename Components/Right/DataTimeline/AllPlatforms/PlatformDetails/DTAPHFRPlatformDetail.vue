@@ -2,9 +2,18 @@
   <div class="horizontal pd-container" v-if="station">
     <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
-    <!-- Map (left) -->
-    <div class="map-container map-clickable" @click="centerMainMap" title="Click to center main map">
-      <div ref="stationMap" class="pd-map"></div>
+    <!-- Map (left): the station's radials at the selected hour, the legend
+         of their colours under it (both go on short screens) -->
+    <div class="map-container radial-map-container">
+      <div ref="stationMap" class="pd-map radial-map map-clickable" @click="centerMainMap" :title="$t('Click to center main map')"></div>
+      <!-- While the hour's radials load, nothing of the previous hour stays -->
+      <span class="radial-message radial-loading" v-if="radialState === 'loading'">
+        <span class="spinner-border radial-spinner"></span>{{ $t('Loading radials') }}
+      </span>
+      <span class="radial-message" v-else-if="radialMessage">{{ $t(radialMessage) }}</span>
+      <div class="radial-legend">
+        <DTColorLegend code="HCSP" :range="$gui.rangeFor('HCSP')" :showUnit="true" :fullWidth="true"></DTColorLegend>
+      </div>
     </div>
 
     <!-- Info (center) -->
@@ -21,7 +30,7 @@
       </div>
 
       <!-- Line 2: name + status -->
-      <span class="pd-station-name">{{ station.name }}</span>
+      <span class="pd-station-name">{{ station.name ?? station.id }}</span>
       <div class="pd-status">
         <div class="pd-status-dot" :class="status"></div>
         <span>{{ $t(statusLabel) }}</span>
@@ -38,7 +47,7 @@
 
       <!-- Line 4: values (drag to scroll) -->
       <div class="pd-values-wrapper" v-if="sp?.date">
-        <div class="pd-values-scroll" ref="valuesScroll"
+        <div class="pd-values-scroll" v-scroll-fade ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
           <template v-if="sp.value">
@@ -51,34 +60,32 @@
         </div>
       </div>
 
+      <!-- Where the selected bar's count came from -->
+      <PDSourceLine v-if="shownOrigins.length" :origins="shownOrigins" :sources="countSources"
+        :note="sourceNote"></PDSourceLine>
+
       <!-- Switch to HFR currents dashboard -->
-      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'hfr'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="switchToDashboard">
         <div class="pd-switch-btn-circle">
           <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
         <span class="pd-switch-btn-label">{{ $t('Switch to dashboard') }}</span>
       </button>
     </div>
-
-    <!-- Media (right): HFR station photo -->
-    <div class="pd-media-container">
-      <img v-if="!imgError"
-        class="pd-circular-media"
-        :src="`./Assets/Images/platforms/HFR/${station.id}.jpg`"
-        :alt="station.name"
-        @error="imgError = true">
-      <div v-else class="pd-circular-fallback">
-        <img :src="radarIconURL" style="width:45%; opacity:0.35; filter:invert(1)" alt="">
-        <span style="font-size:0.7rem; color:rgba(255,255,255,0.4)">{{ station.id }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
 
 <script>
+import DTColorLegend from '../../Shared/DTColorLegend.vue';
+import PDSourceLine from '../../Shared/PDSourceLine.vue';
+
+// The hour a time belongs to on the map: 9:30 up to (not including) 10:30 is 10:00
+const roundToHour = time => new Date(Math.floor((new Date(time).getTime() + 1800000) / 3600000) * 3600000);
+
 export default {
   name: "DTAPHFRPlatformDetail",
+  mixins: [window.pdFocusMixin],
   created() {
     this.map = undefined;
     this.markerOverlay = undefined;
@@ -89,20 +96,7 @@ export default {
     this.loadStations();
   },
   mounted() {
-    if (!this.station) return;
-    this.initMap();
-    const iconEl = document.createElement('div');
-    iconEl.className = 'pd-map-icon';
-    const markerImg = document.createElement('img');
-    markerImg.src = this.radarIconURL;
-    iconEl.appendChild(markerImg);
-    this.markerOverlay = new ol.Overlay({
-      element: iconEl,
-      positioning: 'center-center',
-      stopEvent: false,
-      position: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
-    });
-    this.map.addOverlay(this.markerOverlay);
+    this.showStationOnMap();
     this._onDocMouseMove = (e) => {
       if (!this.isDragging) return;
       if (this.$refs.valuesScroll)
@@ -113,55 +107,120 @@ export default {
     document.addEventListener('mouseup', this._onDocMouseUp);
   },
   beforeUnmount() {
+    this.particles?.destroy();
     document.removeEventListener('mousemove', this._onDocMouseMove);
     document.removeEventListener('mouseup', this._onDocMouseUp);
   },
   data() {
     return {
       radarIconURL: './Assets/Icons/radar.svg',
-      imgError: false,
+      // The radials on the mini map: 'loading', 'ok', 'none' (no map that
+      // hour) or 'unavailable' (no source has the station)
+      radialState: 'loading',
+      // The radials drawn on the mini map (SourceErddapEUHFR.getRadialField's;
+      // kept raw - big typed arrays, read whole), for the source line
+      radialField: null,
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
       stations: [],
+      networks: [], // every network on the EU HFR Node, for another network's station
     }
   },
   methods: {
-    initMap() {
+    // Over to the HF radar dashboard on this selection: another network than
+    // ICATMAR's is only there with the EU HFR Node as its source
+    switchToDashboard() {
+      const code = this.$gui.selectedPlatform?.network;
+      if (code && code !== 'HFR-ICATMAR') this.$gui.hfrSource = 'EU';
+      this.$gui.selectedDashboard = 'hfr';
+    },
+    // The mini map, on the selected station. Its element only exists while a
+    // station is (the template's v-if), and a station can arrive after this
+    // mounts - another network's, once the EU HFR Node's networks load - or
+    // go and come back, which renders a new element: so the map is created
+    // or moved onto whatever element is there now.
+    showStationOnMap() {
+      const target = this.$refs.stationMap;
+      if (!this.station || !target) return;
+      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
+      if (!this.map) {
+        this.initMap(target, coords);
+      } else if (this.map.getTargetElement() !== target) {
+        this.map.setTarget(target);
+        this.map.getView().setCenter(coords);
+      } else {
+        this.map.getView().animate({ center: coords, duration: 300 });
+      }
+      this.markerOverlay.setPosition(coords);
+    },
+    initMap(target, coords) {
       this.map = new ol.Map({
-        target: this.$refs.stationMap,
+        target,
         controls: [],
         interactions: [],
-        layers: [
-          new ol.layer.Tile({
-            source: new ol.source.XYZ({
-              url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-              attributions: '© Esri',
-              cacheSize: 500,
-              crossOrigin: 'anonymous',
-            }),
-          }),
-        ],
-        view: new ol.View({
-          center: ol.proj.fromLonLat([this.station.longitude, this.station.latitude]),
-          zoom: 11
-        })
+        layers: window.createDetailMapLayers(),
+        view: new ol.View({ center: coords, zoom: 11 }),
       });
+      const iconEl = document.createElement('div');
+      iconEl.className = 'pd-map-icon';
+      const markerImg = document.createElement('img');
+      markerImg.src = this.radarIconURL;
+      iconEl.appendChild(markerImg);
+      this.markerOverlay = new ol.Overlay({ element: iconEl, positioning: 'center-center', stopEvent: false });
+      this.map.addOverlay(this.markerOverlay);
+      this.particles = new window.RadialParticles(this.map, {
+        colorOf: speed => this.$gui.colorFor('HCSP', speed),
+        maxSpeed: this.$gui.rangeFor('HCSP')[1],
+        lineWidth: 1.5,
+      });
+      if (!this.$gui.isShortScreen) this.particles.start();
+      this.loadRadials();
+    },
+    // The selected station's radials at the selected hour - the EU HFR
+    // Node's, or ICATMAR's GitHub's - fitted into the mini map
+    async loadRadials() {
+      const station = this.station;
+      if (!station || !this.particles) return;
+      const network = station.metadata?.network ?? 'HFR-ICATMAR';
+      // The same station and hour as drawn: nothing to do (no flicker)
+      const key = `${network}:${station.id}|${this.hourMs}`;
+      if (key === this.radialKey && this.radialState !== 'loading') return;
+      this.radialKey = key;
+      const request = (this.radialRequest ?? 0) + 1; // a newer station or hour supersedes this
+      this.radialRequest = request;
+      // Another hour or station: the previous radials go at once, the
+      // spinner shows until these arrive
+      this.radialState = 'loading';
+      this.radialField = null;
+      this.particles.setFields([]);
+      let field;
+      try {
+        field = await this.$dataService.hfrstations.getRadials(network, station.id, this.hour);
+      } catch (error) {
+        console.error(`Error loading the radials of ${station.id}:`, error);
+        field = null;
+      }
+      if (request !== this.radialRequest) return;
+      this.radialState = field ? 'ok' : field === null ? 'none' : 'unavailable';
+      this.radialField = field ? Vue.markRaw(field) : null;
+      this.particles.setFields(field ? [field] : [], { showFlagged: !this.$gui.hfrRadialsValidOnly });
+      if (field) this.fitRadials(field.extent);
+    },
+    // The station's radial extent, with the station itself, filling the map -
+    // once per extent, which settles after the first hours (see getRadialField)
+    fitRadials([minLon, minLat, maxLon, maxLat]) {
+      const { longitude, latitude } = this.station;
+      const box = [Math.min(minLon, longitude), Math.min(minLat, latitude), Math.max(maxLon, longitude), Math.max(maxLat, latitude)];
+      const key = `${this.station.id}:${box.join()}`;
+      if (key === this.fittedKey) return;
+      this.fittedKey = key;
+      this.map.getView().fit(ol.proj.transformExtent(box, 'EPSG:4326', 'EPSG:3857'), { padding: [8, 8, 8, 8], maxZoom: 11 });
     },
     centerMainMap() {
-      const mainMap = this.$gui.olMap;
-      if (!mainMap || !this.station) return;
-      const view = mainMap.getView();
-      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
-      const targetZoom = view.getZoom() < 7 ? 11 : view.getZoom();
-      const mapSize = mainMap.getSize(); // [width, height]
-      const bottomCovered = 380; // data timeline + platform detail
-      const visibleHeight = mapSize[1] - bottomCovered;
-      const targetY = Math.max(50, visibleHeight * 0.66); // 35% from top of visible area
-      // Shift center so coords appear at targetY instead of canvas center
-      const resolution = view.getResolutionForZoom(targetZoom);
-      const centerY = coords[1] + (targetY - mapSize[1] / 2) * resolution;
-      view.animate({ center: [coords[0], centerY], zoom: targetZoom, duration: 600 });
+      if (!this.station) return;
+      const zoom = this.$gui.olMap?.getView().getZoom() < 7 ? 11 : undefined;
+      this.$gui.centerMainMapOn(this.station.longitude, this.station.latitude, zoom);
     },
     // Rounded on screen, exact on the clipboard: the panel is too narrow for
     // full precision, but a pasted position is meant to be used.
@@ -181,13 +240,14 @@ export default {
     async loadStations() {
       try {
         this.stations = await this.$dataService.hfrnetwork.getICATMARStations(this.$dataService.hfrstations);
+        this.networks = await this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations);
       } catch (error) {
         console.error('Error loading HFR stations:', error);
       }
     },
     formatTimeAgo(hours) {
       if (hours == null) return '';
-      if (hours < 1) return 'Less than 1h ago';
+      if (hours < 1) return Math.max(1, Math.floor(hours * 60)) + ' min ago';
       if (hours < 2) return '1h ago';
       if (hours < 24) return Math.floor(hours) + 'h ago';
       const days = Math.floor(hours / 24);
@@ -197,16 +257,55 @@ export default {
     },
   },
   computed: {
+    // Where what this detail shows came from, as the data products said: the
+    // selected hour's count and the
+    // mini map's radials - each named once
+    shownOrigins() {
+      const list = [];
+      const add = origin => {
+        if (origin && !list.some(o => o.label === origin.label && o.dataset === origin.dataset)) list.push(origin);
+      };
+      if (this.sp?.date) (this.sp.origins ?? [this.sp.origin]).forEach(add);
+      if (this.radialState === 'ok') add(this.radialField?.origin);
+      return list;
+    },
+    // Where this station's counts can come from: GitHub only has ICATMAR's
+    countSources() {
+      const network = this.$gui.selectedPlatform?.network;
+      return !network || network === 'HFR-ICATMAR' ? ['EU HFR Node ERDDAP', 'ICATMAR GitHub'] : ['EU HFR Node ERDDAP'];
+    },
+    // How the counts' sources are combined, for the source line's hover
+    sourceNote() {
+      return this.$t("ICATMAR's stations: the EU HFR Node's counts, with ICATMAR's GitHub for the hours the node hasn't published yet. Other networks: the EU HFR Node's.");
+    },
+    // See pdFocusMixin
+    mainMapFocusKey() { return this.station?.id; },
     station() {
-      const id = this.$gui.selectedPlatform?.stationId;
+      const { stationId: id, network } = this.$gui.selectedPlatform ?? {};
       if (!id) return null;
+      // Another network's, as the EU HFR Node publishes it - by its network,
+      // since codes repeat across networks
+      if (network && network !== 'HFR-ICATMAR') {
+        const group = this.networks.find(n => this.$dataService.hfrnetwork.networkCode(n) === network);
+        return group?.stations.find(station => station.id === id) ?? null;
+      }
       return this.stations.find(station => station.id === id) ?? null;
     },
     coordsLabel() {
       if (!this.station) return '';
-      return `${this.station.latitude.toFixed(2)}° N, ${this.station.longitude.toFixed(2)}° E`;
+      const { latitude, longitude } = this.station;
+      return `${Math.abs(latitude).toFixed(2)}° ${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(2)}° ${longitude < 0 ? 'W' : 'E'}`;
     },
     sp() { return this.$gui.selectedPlatform; },
+    // The selected time's hour, as a timestamp (a Date would change identity
+    // on every tick of the handle)
+    hourMs() { return roundToHour(this.$gui.selectedTime).getTime(); },
+    hour() { return new Date(this.hourMs); },
+    radialMessage() {
+      if (this.radialState === 'none') return 'No radials at this hour';
+      if (this.radialState === 'unavailable') return 'No radial data available';
+      return null;
+    },
     formattedDate() {
       const date = this.sp?.date;
       if (!date) return '';
@@ -254,14 +353,28 @@ export default {
     // The station object, not selectedPlatform: that also changes on every
     // bar click (same station, new date), and it fires again when the live
     // sources replace the static entry with one carrying the real position.
-    station() {
-      if (!this.map || !this.station) return;
-      this.imgError = false;
-      const coords = ol.proj.fromLonLat([this.station.longitude, this.station.latitude]);
-      this.markerOverlay?.setPosition(coords);
-      this.map.getView().animate({ center: coords, duration: 300 });
-    }
-  }
+    station(station, previous) {
+      this.$nextTick(() => {
+        this.showStationOnMap(); // once the v-if has rendered the element
+        // Another station (not the live copy of the same one): its radials
+        if (station && station.id !== previous?.id || station?.metadata?.network !== previous?.metadata?.network) {
+          this.fittedKey = null;
+          this.loadRadials();
+        }
+      });
+    },
+    hourMs() { this.loadRadials(); },
+    '$gui.hfrRadialsValidOnly'(validOnly) {
+      const showFlagged = !validOnly;
+      this.particles?.setFields(this.radialField ? [this.radialField] : [], { showFlagged });
+    },
+    // No map on short screens: no animation either
+    '$gui.isShortScreen'(isShort) {
+      if (isShort) this.particles?.stop();
+      else this.$nextTick(() => { this.map?.updateSize(); this.particles?.start(); });
+    },
+  },
+  components: { DTColorLegend, PDSourceLine },
 }
 </script>
 
@@ -270,6 +383,52 @@ export default {
 .map-container {
   position: relative;
   flex-shrink: 0;
+}
+
+/* The map over its legend, together the card's height */
+.radial-map-container {
+  display: flex;
+  flex-direction: column;
+  width: 210px;
+  height: 180px;
+}
+.pd-map.radial-map {
+  width: 210px;
+  height: 154px;
+}
+.radial-legend {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.pd-value-missing {
+  opacity: 0.5;
+}
+
+.radial-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.radial-spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 2px;
+}
+
+.radial-message {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 34px;
+  text-align: center;
+  font-size: 0.65rem;
+  color: white;
+  text-shadow: 0 0 3px black;
+  pointer-events: none;
 }
 
 .map-clickable {

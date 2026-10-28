@@ -20,6 +20,15 @@ const STATIC_STATION_FIELDS = ['name', 'latitude', 'longitude'];
 // render that way. The catalogue's copy is clean.
 const STATIC_METADATA_FIELDS = ['institution'];
 
+// Two entries for the same station code are the same site when within
+// SAME_SITE_KM of each other - codes alone can repeat across networks
+const SAME_SITE_KM = 2;
+function isSameSite(a, b) {
+  const dLat = (a.latitude - b.latitude) * 111.2;
+  const dLon = (a.longitude - b.longitude) * 111.2 * Math.cos(a.latitude * Math.PI / 180);
+  return Math.hypot(dLat, dLon) <= SAME_SITE_KM;
+}
+
 class DPHFRNetwork extends DP {
 
 
@@ -46,7 +55,30 @@ class DPHFRNetwork extends DP {
       this._allNetworksPromise = this.loadAllNetworks(stationsProduct)
         .catch(error => { this._allNetworksPromise = undefined; throw error; });
     }
-    return this._allNetworksPromise;
+    // Each station's newest data as its sources know it now - it moves on
+    // while the page is open (see DPHFRStations.refresh)
+    return this._allNetworksPromise.then(networks => {
+      this.applyStationEnds(networks, stationsProduct);
+      return networks;
+    });
+  }
+
+  // Moves each station's time_coverage_end on to the newest its sources
+  // know of: its EU HFR Node dataset, and for ICATMAR's network its last file
+  // on GitHub. Never back - only what a refresh found since the load.
+  applyStationEnds(networks, stationsProduct) {
+    const euHFRSource = stationsProduct.sources.find(s => s instanceof SourceErddapEUHFR);
+    const githubSource = stationsProduct.sources.find(s => s instanceof SourceGithubHFR);
+    networks.forEach(network => network.stations.forEach(station => {
+      if (!station.metadata) return;
+      const code = String(station.metadata.network ?? '').replace(/^HFR-/, '');
+      const ends = [euHFRSource?.stations[`${code}-${station.id}`]?.endDate];
+      if (code === 'ICATMAR') ends.push(euHFRSource?.stations[station.id]?.endDate, githubSource?.stations[station.id]?.endDate);
+      const newest = Math.max(...ends.filter(Boolean).map(Number));
+      if (!Number.isFinite(newest)) return;
+      const known = station.metadata.time_coverage_end ? new Date(station.metadata.time_coverage_end).getTime() : -Infinity;
+      if (newest > known) station.metadata.time_coverage_end = new Date(newest).toISOString().replace('.000Z', 'Z');
+    }));
   }
 
   // DPHFRNetwork has no sources of its own - station discovery belongs to
@@ -73,9 +105,9 @@ class DPHFRNetwork extends DP {
         // Merge hfrIcatmarNetwork from static file with data from euHFRSource -
         // static values are kept as-is, live ones only fill in what static is
         // missing. Replaces the live ICATMAR entry in-place with the merged one.
-        const liveIcatmarIndex = hfrNetworks.findIndex(net => net.stations.some(s => hfrIcatmarNetwork.stations.some(icatmarStation => icatmarStation.id === s.id)));
+        const liveIcatmarIndex = hfrNetworks.indexOf(this.findICATMARNetwork(hfrNetworks));
         if (liveIcatmarIndex !== -1) {
-          const { merged, notMatchingKeys } = this.mergeICATMARNetwork(hfrNetworks[liveIcatmarIndex]);
+          const { merged, notMatchingKeys } = this.mergeICATMARNetwork(hfrNetworks[liveIcatmarIndex], hfrNetworks);
           hfrNetworks[liveIcatmarIndex] = merged;
           this.notMatchingKeys = notMatchingKeys; // for debugging - not surfaced anywhere yet
         }
@@ -100,10 +132,18 @@ class DPHFRNetwork extends DP {
     return hfrNetworks;
   }
 
-  // The live ICATMAR group out of getAllNetworks()' networks - matched by its
-  // stations, since the groups carry the EU HFR Node's own network names.
+  // The live ICATMAR group out of getAllNetworks()' networks - by its code,
+  // HFR-ICATMAR. Not by sharing station codes with the static list: that list
+  // also holds Puertos del Estado's ALFA, SALO and VINA (ICATMAR uses them in
+  // its own totals), which the EU HFR Node publishes under HFR-DeltaEbro - so
+  // the DeltaEbro group would match first. Station codes are only the
+  // fallback, and only ICATMAR's own stations', for a node without site codes.
   findICATMARNetwork(networks) {
-    return networks.find(net => net.stations.some(s => hfrIcatmarNetwork.stations.some(icatmarStation => icatmarStation.id === s.id)));
+    const code = hfrIcatmarNetwork.total.site_code;
+    const byCode = networks.find(net => net.total?.site_code === code);
+    if (byCode) return byCode;
+    const own = hfrIcatmarNetwork.stations.filter(s => s.metadata?.institution !== 'Puertos del Estado').map(s => s.id);
+    return networks.find(net => net.stations.some(s => own.includes(s.id)));
   }
 
   // The ICATMAR stations as the app should show them: everything the live
@@ -151,30 +191,74 @@ class DPHFRNetwork extends DP {
   // listing every key that existed on both sides with a different value.
   // STATIC_STATION_FIELDS / STATIC_METADATA_FIELDS are the exceptions, where
   // the curated file wins instead.
-  mergeICATMARNetwork(liveGroup) {
+  mergeICATMARNetwork(liveGroup, allNetworks = []) {
     const notMatchingKeys = { total: {}, stations: [] };
 
     const total = this.mergePreferringLive(liveGroup?.total, hfrIcatmarNetwork.total, notMatchingKeys.total);
 
     const stations = hfrIcatmarNetwork.stations.map(staticStation => {
       const liveStation = liveGroup?.stations.find(s => s.id === staticStation.id);
-      // e.g. SCAL - not on the EU HFR Node. Copied rather than handed out
-      // as-is: callers (loadAllNetworks' own GitHub pass, for one) write to
-      // what they get back, and the static module is shared with everything
-      // else that reads it.
-      if (!liveStation) return { ...staticStation, metadata: { ...staticStation.metadata } };
-
-      const stationNotMatching = {};
-      const { metadata: liveMetadata, ...liveRest } = liveStation;
-      const { metadata: staticMetadata, ...staticRest } = staticStation;
-      const merged = this.mergePreferringLive(liveRest, staticRest, stationNotMatching, STATIC_STATION_FIELDS);
-      merged.metadata = this.mergePreferringLive(liveMetadata, staticMetadata, stationNotMatching, STATIC_METADATA_FIELDS);
-
-      if (Object.keys(stationNotMatching).length) notMatchingKeys.stations.push({ id: staticStation.id, ...stationNotMatching });
-      return merged;
+      if (!liveStation) {
+        // Not in the node's HFR-ICATMAR: ICATMAR's own processing takes in
+        // more stations than the node's does. Flagged, so a view of what the
+        // node publishes can leave it out.
+        // - Puertos del Estado's ALFA, SALO and VINA are on the node all the
+        //   same, under HFR-DeltaEbro: the same antenna at the same site, so
+        //   that copy gives its status and metadata - still shown as
+        //   ICATMAR's network, and as Puertos del Estado's.
+        // - SCAL is nowhere on it. Copied rather than handed out as-is:
+        //   callers (loadAllNetworks' own GitHub pass, for one) write to
+        //   what they get back, and the static module is shared with
+        //   everything else that reads it.
+        const elsewhere = allNetworks.filter(network => network !== liveGroup)
+          .flatMap(network => network.stations)
+          .find(s => s.id === staticStation.id && isSameSite(s, staticStation));
+        if (!elsewhere) return { ...staticStation, metadata: { ...staticStation.metadata }, notOnEUNode: true };
+        return { ...this.mergeStation(elsewhere, staticStation, notMatchingKeys, [...STATIC_METADATA_FIELDS, 'network']), notOnEUNode: true };
+      }
+      return this.mergeStation(liveStation, staticStation, notMatchingKeys, STATIC_METADATA_FIELDS);
     });
 
     return { merged: { total, stations }, notMatchingKeys };
+  }
+
+  // One of getAllNetworks()' groups by its code ('HFR-DeltaEbro'): the
+  // Total's site code, or its stations' network should the Total's metadata
+  // have failed to load
+  // One of getAllNetworks()' groups by its code ('HFR-Galicia'), or null
+  networkOf(networks, code) {
+    return networks.find(network => this.networkCode(network) === code) ?? null;
+  }
+
+  networkCode(network) {
+    return network?.total?.site_code ?? network?.stations[0]?.metadata?.network;
+  }
+
+  // getNumberOfValidPointsPerNetwork() for any network on the EU HFR Node,
+  // as the node publishes it: `network` is one of getAllNetworks()' groups.
+  // Without the static catalogue and GitHub that the ICATMAR network's own
+  // counts draw on - those are for ICATMAR's processing, not the node's.
+  getNumberOfValidPointsForEUNetwork(stationsProduct, network, startDate, endDate) {
+    const euHFRSource = stationsProduct.sources.find(s => s instanceof SourceErddapEUHFR);
+    const code = this.networkCode(network);
+    if (!euHFRSource || !code) return [];
+    const stationIds = network.stations.filter(s => !s.notOnEUNode).map(s => s.id);
+    // [TOTALS, ...stationIds], each station's shown loading on the map
+    return euHFRSource.getNumberOfValidPointsForNetwork(code, stationIds, startDate, endDate)
+      .map((promise, i) => i === 0 ? promise : stationsProduct.trackLoading(code, stationIds[i - 1], promise));
+  }
+
+  // One station: live winning, but for the static fields (see
+  // mergePreferringLive), and for `staticMetadata` within its metadata
+  mergeStation(liveStation, staticStation, notMatchingKeys, staticMetadata) {
+    const stationNotMatching = {};
+    const { metadata: liveMetadata, ...liveRest } = liveStation;
+    const { metadata: staticMetadataValues, ...staticRest } = staticStation;
+    const merged = this.mergePreferringLive(liveRest, staticRest, stationNotMatching, STATIC_STATION_FIELDS);
+    merged.metadata = this.mergePreferringLive(liveMetadata, staticMetadataValues, stationNotMatching, staticMetadata);
+
+    if (Object.keys(stationNotMatching).length) notMatchingKeys.stations.push({ id: staticStation.id, ...stationNotMatching });
+    return merged;
   }
 
   // Combines DPHFRStations' per-station promises with DPHFRTotals' one

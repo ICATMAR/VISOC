@@ -2,7 +2,7 @@
   <div class="horizontal pd-container">
     <i class="fa fa-xmark close-x pd-close-btn clickable" @click="$gui.isPlatformDetailOpen = false"></i>
 
-    <!-- Map (left) — shows all HFR stations -->
+    <!-- Map (left) — shows the network's stations -->
     <div class="map-container map-clickable" @click="centerMainMap" title="Click to center main map">
       <div ref="stationMap" class="pd-map"></div>
     </div>
@@ -15,8 +15,8 @@
         <span>{{ $t('Sea water velocities') }}</span>
       </div>
 
-      <!-- Line 2: network name -->
-      <span class="pd-station-name">{{ $t('HF radar network') }}</span>
+      <!-- Line 2: the network - another network's by its code -->
+      <span class="pd-station-name">{{ otherNetworkCode ?? $t('HF radar network') }}</span>
 
       <!-- Line 3: status -->
       <div class="pd-status">
@@ -33,7 +33,7 @@
       </div>
 
       <div class="pd-values-wrapper" v-if="sp?.date">
-        <div class="pd-values-scroll" ref="valuesScroll"
+        <div class="pd-values-scroll" v-scroll-fade ref="valuesScroll"
           :class="{ 'is-dragging': isDragging }"
           @mousedown="onScrollDragStart">
           <template v-if="sp.value">
@@ -50,8 +50,12 @@
         </div>
       </div>
 
+      <!-- Where the selected bar's count came from -->
+      <PDSourceLine v-if="sp?.date && sp.origin" :origins="[sp.origin]" :sources="['EU HFR Node ERDDAP']"
+        :note="sourceNote"></PDSourceLine>
+
       <!-- Switch to HFR currents dashboard -->
-      <button class="pd-switch-btn clickable" @click="$gui.selectedDashboard = 'hfr'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'hfr'" @click="switchToDashboard">
         <div class="pd-switch-btn-circle">
           <img :src="hfrDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
@@ -63,10 +67,19 @@
 
 
 <script>
+import PDSourceLine from '../../Shared/PDSourceLine.vue';
+
 export default {
   name: "DTAPHFRTotalsPlatformDetail",
+  mixins: [window.pdFocusMixin],
+  components: { PDSourceLine },
   created() {
     this.map = undefined;
+    this.stationOverlays = [];
+    // Another network's stations, as the EU HFR Node publishes them (memoized)
+    this.$dataService.hfrnetwork.getAllNetworks(this.$dataService.hfrstations)
+      .then(networks => { this.networks = networks; })
+      .catch(error => console.error('Error loading HFR networks for the totals detail:', error));
   },
   mounted() {
     this.initMap();
@@ -89,68 +102,67 @@ export default {
       isDragging: false,
       dragStartX: 0,
       dragScrollLeft: 0,
+      networks: [],
     }
   },
   methods: {
+    // Over to the HF radar dashboard on this selection: another network than
+    // ICATMAR's is only there with the EU HFR Node as its source
+    switchToDashboard() {
+      const code = this.$gui.selectedPlatform?.network;
+      if (code && code !== 'HFR-ICATMAR') this.$gui.hfrSource = 'EU';
+      this.$gui.selectedDashboard = 'hfr';
+    },
     initMap() {
       this.map = new ol.Map({
         target: this.$refs.stationMap,
         controls: [],
         interactions: [],
-        layers: [
-          new ol.layer.Tile({
-            source: new ol.source.XYZ({
-              url: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}.png',
-              attributions: '© Esri',
-              cacheSize: 500,
-              crossOrigin: 'anonymous',
-            }),
-          }),
-        ],
+        layers: window.createDetailMapLayers(),
         view: new ol.View({
           center: ol.proj.fromLonLat([2.4, 42.0]),
           zoom: 7
         })
       });
-      // Add a marker for each HFR station
-      for (const station of this.$requests.hfrStations) {
+      this.drawStations();
+      // Fitted again once the map has its size
+      this.map.once('rendercomplete', () => this.fitStations());
+    },
+    // A marker for each of the network's stations, and the view fitted to them
+    drawStations() {
+      if (!this.map) return;
+      this.stationOverlays.forEach(overlay => this.map.removeOverlay(overlay));
+      this.stationOverlays = this.stationPositions.map(([lon, lat]) => {
         const el = document.createElement('div');
         el.className = 'pd-map-icon';
         const img = document.createElement('img');
         img.src = this.radarIconURL;
         el.appendChild(img);
-        this.map.addOverlay(new ol.Overlay({
+        const overlay = new ol.Overlay({
           element: el,
           positioning: 'center-center',
           stopEvent: false,
-          position: ol.proj.fromLonLat([station.lon, station.lat]),
-        }));
-      }
-      // Fit view to all station locations after the map renders
-      this.map.once('rendercomplete', () => {
-        const ext = [Infinity, Infinity, -Infinity, -Infinity];
-        for (const s of this.$requests.hfrStations) {
-          const [x, y] = ol.proj.fromLonLat([s.lon, s.lat]);
-          if (x < ext[0]) ext[0] = x;
-          if (y < ext[1]) ext[1] = y;
-          if (x > ext[2]) ext[2] = x;
-          if (y > ext[3]) ext[3] = y;
-        }
-        this.map.getView().fit(ext, { padding: [25, 25, 25, 25], maxZoom: 9 });
+          position: ol.proj.fromLonLat([lon, lat]),
+        });
+        this.map.addOverlay(overlay);
+        return overlay;
       });
+      this.fitStations();
     },
-    centerMainMap() {
-      const mainMap = this.$gui.olMap;
-      if (!mainMap) return;
-      const view = mainMap.getView();
+    fitStations() {
+      if (this.map && this.stationPositions.length) this.map.getView().fit(this.stationsExtent(), { padding: [25, 25, 25, 25], maxZoom: 9 });
+    },
+    stationsExtent() {
       const ext = [Infinity, Infinity, -Infinity, -Infinity];
-      for (const s of this.$requests.hfrStations) {
-        const [x, y] = ol.proj.fromLonLat([s.lon, s.lat]);
+      for (const [lon, lat] of this.stationPositions) {
+        const [x, y] = ol.proj.fromLonLat([lon, lat]);
         if (x < ext[0]) ext[0] = x; if (y < ext[1]) ext[1] = y;
         if (x > ext[2]) ext[2] = x; if (y > ext[3]) ext[3] = y;
       }
-      // Large bottom padding pushes the network into the visible area above the UI
-      view.fit(ext, { padding: [40, 60, 420, 60], maxZoom: 9, duration: 600 });
+      return ext;
+    },
+    centerMainMap() {
+      if (this.stationPositions.length) this.$gui.fitMainMapTo(this.stationsExtent(), 9);
     },
     onScrollDragStart(e) {
       this.isDragging = true;
@@ -160,6 +172,29 @@ export default {
     },
   },
   computed: {
+    // How the counts' sources are combined, for the source line's hover
+    sourceNote() {
+      return this.$t("The valid points of ICATMAR's network totals, as the EU HFR Node counts them.");
+    },
+    // See pdFocusMixin - the network as a whole, so once per opening and
+    // network (once its stations are known)
+    mainMapFocusKey() { return this.stationPositions.length ? `TOTALS:${this.otherNetworkCode ?? 'HFR-ICATMAR'}` : null; },
+    // The selected Total's network when it isn't ICATMAR's: one of
+    // getAllNetworks()' groups
+    otherNetworkCode() {
+      const code = this.sp?.network;
+      return code && code !== 'HFR-ICATMAR' ? code : null;
+    },
+    otherNetwork() {
+      if (!this.otherNetworkCode) return null;
+      return this.networks.find(n => this.$dataService.hfrnetwork.networkCode(n) === this.otherNetworkCode) ?? null;
+    },
+    // [lon, lat] of each of the network's stations
+    stationPositions() {
+      if (this.otherNetworkCode)
+        return (this.otherNetwork?.stations ?? []).filter(s => !s.notOnEUNode).map(s => [s.longitude, s.latitude]);
+      return this.$requests.hfrStations.map(s => [s.lon, s.lat]);
+    },
     sp() { return this.$gui.selectedPlatform; },
     formattedDate() {
       const date = this.sp?.date;
@@ -179,8 +214,11 @@ export default {
       return this.$gui.dashboards.find(d => d.id === 'hfr') ?? { icon: './Assets/Icons/radar.svg', name: 'HFR currents' };
     },
     totalStations() {
-      return this.$requests.hfrStations.length;
+      return this.stationPositions.length;
     },
+  },
+  watch: {
+    stationPositions() { this.drawStations(); },
   },
 }
 </script>
