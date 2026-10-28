@@ -6,17 +6,20 @@ import SourceBuoys from './SourceBuoys.js';
 // ahead of the ERDDAP servers (which ingest from here) - which is exactly what
 // makes this source worth having when ERDDAP is stale or down.
 //
-// GitHub Pages serves them with `access-control-allow-origin: *` and an
-// exposed Last-Modified, so unlike the ERDDAP sources nothing here goes
-// through the ICATMAR proxy. Same files the boiasomorrostro wind display
-// reads.
+// GitHub Pages serves them with `access-control-allow-origin: *`, so unlike
+// the ERDDAP sources nothing here goes through the ICATMAR proxy. Same files
+// the boiasomorrostro wind display reads.
 //
 // The tables are TOA5: line 1 is the logger/table environment, line 2 the
 // column names, lines 3-4 their units and aggregation, then one quoted CSV row
-// per timestamp. They hold months of data (0.7-1.2 MB each), so load() only
-// HEADs them for freshness and the download+parse waits until someone actually
-// asks for measurements. Note the files' Last-Modified is a real instant,
-// unlike the row timestamps (see parseTimestamp).
+// per timestamp. They hold months of data (1-2 MB each), so load() only reads
+// the last row of each (the file's last few KB) for freshness, and the
+// download+parse waits until someone actually asks for measurements.
+//
+// Not the files' Last-Modified: GitHub Pages stamps every file of the site
+// with the time the site was last published, and ICATMAR/data publishes every
+// few minutes (the HF radar manifest), so a logger that stopped a week ago
+// would still look minutes old.
 
 const BASE_URL = 'https://icatmar.github.io/data/observational/insitu/Boies/SOMO/BoiaSomorrostro_cr1000xs_';
 const REPO = 'ICATMAR/data';
@@ -64,6 +67,8 @@ const KNOWN_VARIABLES = {
 
 const FILE_TTL = 5;      // minutes a downloaded table is cached for
 const FILE_TIMEOUT = 60;  // seconds - these are MB-sized files
+// How much of a table's end is read for its last row (rows are ~150-250 bytes)
+const TAIL_BYTES = 4096;
 
 const TIMESTAMP_COLUMN = 'TIMESTAMP';
 // The Meteo table carries the buoy's GPS fix, so the position is read from the
@@ -146,7 +151,7 @@ class SourceGithubSOMO extends SourceBuoys {
     this.buoys = [{
       id: BUOY_ID,
       // variables starts out as KNOWN_VARIABLES rather than empty: load() only
-      // HEADs the tables (see below), and getBuoyData() - which is what
+      // reads the tables' last rows (see below), and getBuoyData() - which is what
       // actually discovers the real columns, with their units - only runs when
       // someone asks for measurements. Without a placeholder, DPBuoys would
       // merge this sensor in with zero known variables whenever it runs before
@@ -175,55 +180,86 @@ class SourceGithubSOMO extends SourceBuoys {
     return this.buoy().sensors.find(sensor => sensor.id === sensorId);
   }
 
-  // How fresh each table is, from a HEAD - not the MB-sized file itself. The
-  // rows are only downloaded when someone asks for measurements (loadTable),
-  // and endDate is replaced by the real last row when that happens: until
-  // then, Last-Modified is a good enough stand-in (the file is published a few
-  // minutes after the row it ends on).
+  // How fresh each table is, from its last row - read from the file's last
+  // few KB, not the MB-sized file itself. The rows are only downloaded when
+  // someone asks for measurements (loadTable).
   async load() {
     await Promise.all(this.buoy().sensors.map(async sensor => {
-      sensor.lastModified = await this.fetchLastModified(sensor.url).catch(err => {
+      sensor.lastRowDate = await this.fetchLastRowDate(sensor.url).catch(err => {
         console.error(`Could not reach ${sensor.url}:`, err);
         return undefined;
       });
-      if (sensor.endDate == undefined) sensor.endDate = sensor.lastModified;
+      if (sensor.endDate == undefined) sensor.endDate = sensor.lastRowDate;
     }));
 
     this.updateDates();
     this.coverageCheckedAt = Date.now(); // loading is itself a coverage check
   }
 
-  // Re-HEADs each table, which is the cheapest thing this source has that says
-  // how fresh it is (see SourceBuoys.getEndDate). Only moves endDate forward
-  // for a table that hasn't been parsed yet - once loadTable() has run, the
-  // last row's own timestamp is a better answer than Last-Modified.
+  // Re-reads each table's last row, which is the cheapest thing this source
+  // has that says how fresh it is (see SourceBuoys.getEndDate). Only moves
+  // endDate for a table that hasn't been parsed yet - once loadTable() has
+  // run, endDate is the parsed table's own last row, matching its rows.
   async refreshCoverage() {
     await Promise.all(this.buoy().sensors.map(async sensor => {
-      const lastModified = await this.fetchLastModified(sensor.url).catch(error => {
+      const lastRowDate = await this.fetchLastRowDate(sensor.url).catch(error => {
         console.error(`Could not reach ${sensor.url}:`, error);
         return undefined;
       });
-      if (!lastModified) return;
-      sensor.lastModified = lastModified;
-      if (!this.tables.has(sensor.id)) sensor.endDate = lastModified;
+      if (!lastRowDate) return;
+      sensor.lastRowDate = lastRowDate;
+      if (!this.tables.has(sensor.id)) sensor.endDate = lastRowDate;
     }));
 
     this.updateDates();
   }
 
+  // The date of a table's last row, from its last TAIL_BYTES. Two small
+  // requests: the file's size, then its end. The size can't come from a HEAD
+  // - its Content-Length is the gzipped size, while ranges count the plain
+  // file's bytes - nor from Content-Range (not exposed to the page), so it is
+  // the Content-Length of a range from byte 0, whose body is dropped unread.
+  // And not a suffix range (bytes=-N): that needs a CORS preflight, which
+  // GitHub Pages refuses (405).
+  async fetchLastRowDate(url) {
+    const probe = await this.fetchFrom(url, 0);
+    let text;
+    if (probe.status === 206) {
+      const size = Number(probe.headers.get('Content-Length'));
+      probe.body?.cancel();
+      text = await (await this.fetchFrom(url, Math.max(0, size - TAIL_BYTES))).text();
+    } else {
+      text = await probe.text(); // the server ignored the range: the whole file
+    }
+    return this.lastRowDateOf(text);
+  }
+
   // Deliberately NOT through the FetchManager: it caches by URL alone, so a
-  // HEAD cached here would later be handed to loadTable() as a response with
-  // an empty body.
-  async fetchLastModified(url) {
-    const res = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+  // partial response cached here would later be handed to loadTable() as if
+  // it were the whole file.
+  async fetchFrom(url, start) {
+    const res = await fetch(url, { headers: { Range: `bytes=${start}-` }, cache: 'no-cache' });
     if (!res.ok) {
       const error = new Error(`HTTP ${res.status} ${res.statusText}: ${url}`);
       error.name = 'HTTPError';
       error.status = res.status;
       throw error;
     }
-    const lastModified = res.headers.get('Last-Modified');
-    return lastModified ? new Date(lastModified) : undefined;
+    return res;
+  }
+
+  // The newest row's date in a table's tail. The tail's first line is
+  // usually cut mid-row, and a last line without its line break is a row
+  // still being written: neither counts. TIMESTAMP is a TOA5 table's first
+  // column.
+  lastRowDateOf(text) {
+    const lines = text.split(/\r?\n/);
+    lines.pop(); // '' after the final line break, or a row still being written
+    for (let i = lines.length - 1; i > 0; i--) {
+      const date = parseTimestamp(splitCSV(lines[i])[0]);
+      if (date) return date;
+    }
+    return undefined;
   }
 
   // Buoy- and source-level coverage always follow the sensors', so this is
@@ -256,7 +292,7 @@ class SourceGithubSOMO extends SourceBuoys {
         sensor.variables = table.variables;
         sensor.metadata = table.metadata;
         sensor.startDate = table.startDate;
-        sensor.endDate = table.endDate ?? sensor.lastModified;
+        sensor.endDate = table.endDate ?? sensor.lastRowDate;
         // Only the Meteo table carries a GPS fix; the others leave it alone.
         if (table.position) Object.assign(this.buoy(), table.position);
         this.updateDates();
