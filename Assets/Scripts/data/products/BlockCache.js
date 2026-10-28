@@ -134,6 +134,12 @@ class BlockCache {
     this.series.clear();
   }
 
+  // Drops every series whose name starts with `prefix` (e.g. 'BEGU|', all of
+  // one buoy's variables), so it is asked for again
+  forget(prefix) {
+    [...this.series.keys()].filter(series => series.startsWith(prefix)).forEach(series => this.series.delete(series));
+  }
+
 }
 
 export default BlockCache;

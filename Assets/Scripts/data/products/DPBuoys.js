@@ -10,6 +10,13 @@ import buoys from '../../../../Data/buoys/buoys.js'
 // arrive hours after the fact and cause the totals to be regenerated.
 const REREQUEST_HOUR_WINDOW_FROM_NOW = 1;
 
+// How long loadBuoys() waits for the buoy sources before merging the ones that
+// have answered. A server that is down takes FetchManager's whole timeout (30 s)
+// to fail, and every buoy - even one another source serves in under a second -
+// would wait for it. A source that answers later joins in then (see
+// watchSources).
+const SOURCE_WAIT_MS = 4000;
+
 // Fields that are merged one for one across sources - everything else on a
 // buoy (its id, its sensors, its dates) is merged by rules of its own below.
 const BUOY_FIELDS = ['name', 'latitude', 'longitude', 'institution', 'acknowledgement', 'license', 'distanceToCoast', 'depth',
@@ -155,14 +162,52 @@ class DPBuoys extends DP {
     return buoys;
   }
 
+  // Each buoy source's load, followed once: 'pending', 'loaded' or 'failed'.
+  // A source that loads after the first merge (see SOURCE_WAIT_MS) is a
+  // change: the buoys it knows were planned without it, so their cached blocks
+  // go (an empty block from another source must not stay frozen over data this
+  // one has) and the views are told, to ask again. One that fails late is a
+  // change too - with every source settled, a buoy still without a date is
+  // offline rather than loading (see allSourcesSettled).
+  watchSources() {
+    if (this.sourceStates) return;
+    this.sourceStates = new Map();
+    this.sources.filter(s => s instanceof SourceBuoys).forEach(source => {
+      this.sourceStates.set(source, 'pending');
+      source.loadingPromise.then(() => {
+        this.sourceStates.set(source, 'loaded');
+        if (!this.merged) return;
+        const ids = source.buoys.map(buoy => buoy.id);
+        ids.forEach(id => this.cache.forget(`${id}|`));
+        this.changed({ buoys: ids, sources: [source.label ?? source.src] });
+      }, error => {
+        this.sourceStates.set(source, 'failed');
+        console.error('Error loading buoys source:', error);
+        if (this.merged) this.changed({ buoys: [], sources: [source.label ?? source.src] });
+      });
+    });
+  }
+
+  // Whether every buoy source has loaded or failed - until then, a buoy no
+  // source has dated yet may still get a date
+  get allSourcesSettled() {
+    return Boolean(this.sourceStates) && [...this.sourceStates.values()].every(state => state !== 'pending');
+  }
+
   // Get start-end dates per buoy
   // Maybe later will be updateBuoys?
   async loadBuoys() {
-    // Iterate sources and wait until they are all loaded
-    const sources = this.sources.filter(s => s instanceof SourceBuoys);
-    await Promise.all(sources.map(s => s.loadingPromise.catch(error => {
-      console.error('Error loading buoys source:', error);
-    })));
+    // Wait for the sources - but not past SOURCE_WAIT_MS from the first call;
+    // whatever hasn't answered by then is left out until it does
+    this.watchSources();
+    const all = this.sources.filter(s => s instanceof SourceBuoys);
+    this.sourcesWaited ??= Promise.race([
+      Promise.allSettled(all.map(s => s.loadingPromise)),
+      new Promise(resolve => setTimeout(resolve, SOURCE_WAIT_MS)),
+    ]);
+    await this.sourcesWaited;
+    this.merged = true;
+    const sources = all.filter(source => this.sourceStates.get(source) !== 'pending');
 
     // Then merge datasets into one - the same buoy is usually covered by
     // several sources, each knowing a different part of it: the ERDDAP servers

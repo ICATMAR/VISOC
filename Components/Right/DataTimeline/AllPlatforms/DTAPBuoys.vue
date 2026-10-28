@@ -67,7 +67,7 @@ export default {
   // Fresh values when the buoys have new readings (DPBuoys.refresh, every few
   // minutes) - the product looks, once for every view, instead of this
   // timeline polling on its own
-  mixins: [window.dataProductMixin({ buoys: 'refreshVariableData' })],
+  mixins: [window.dataProductMixin({ buoys: 'onBuoysChanged' })],
   // Row list comes from the real buoy catalogue - static first (synchronous,
   // so there's something to show immediately), refined once the live sources
   // resolve and can add buoys the static file doesn't know about, the same
@@ -89,6 +89,7 @@ export default {
       values: {},         // { buoyId: { code: { '<ISO>': value } } }, as measured
       isFetching: false,  // a request is out; see isLoading for what that means per row
       detailToken: 0,     // guards against a slow detail request landing after a newer click
+      selectedWithoutData: false, // the selected cell was picked before its row's data arrived
       intervalOptions: INTERVAL_OPTIONS,
     }
   },
@@ -120,6 +121,16 @@ export default {
           knowsSensors: (buoy.sensors?.length ?? 0) > 0,
         }))
         .sort((a, b) => (b.latitude ?? -Infinity) - (a.latitude ?? -Infinity));
+      // A buoy selected before its row existed (a link, External just turned on)
+      if (!this.$gui.selectedPlatform?.date) this.selectCellAtHandle();
+    },
+    // New readings or a source that answered late: the rows again (what each
+    // buoy measures may be known now) and their data
+    onBuoysChanged() {
+      this.$dataService.buoys.loadBuoys()
+        .then(buoys => this.buildRows(buoys))
+        .catch(error => console.error('Error reloading buoys for the timeline:', error));
+      this.refreshVariableData();
     },
     // Whether this buoy reports the variable on screen at all. Unknown counts
     // as "might" - only a buoy whose sensors we actually know, and which
@@ -205,6 +216,9 @@ export default {
     // values is what stops this row spinning - see isLoading.
     applyResult(result) {
       this.values = { ...this.values, [result.buoyId]: this.byCode(result.data) };
+      // The selected buoy's row has its data now: its cell, with its readings
+      const platform = this.$gui.selectedPlatform;
+      if (platform?.stationId === result.buoyId && (!platform.date || this.selectedWithoutData)) this.selectCellAtHandle({ again: true });
     },
 
     // One variable's cells for one buoy: the mean of the magnitudes that fell
@@ -375,7 +389,7 @@ export default {
     // holds goes on the object NOW, synchronously, so the panel opens filled
     // in; the variables the timeline never fetches (salinity, gusts, maximum
     // waves, currents) are requested afterwards and merged in when they land.
-    buoyClicked(buoy, index, cell) {
+    buoyClicked(buoy, index, cell, { moveTime = true } = {}) {
       // `from` is kept as a map beside the values rather than flattened in with
       // them: a reading is a number, and which instrument took it is a
       // different kind of fact about it. The panel's tooltips read it back.
@@ -388,10 +402,33 @@ export default {
         Object.assign(platform.raw, bin?.raw);
       });
 
+      // The time handle on the clicked cell, so a shared link (t) opens it
+      // again - not when the handle is what picked the cell (see
+      // selectCellAtHandle): a wide cell would pull the handle to its start
+      if (moveTime) this.$gui.selectedTime = new Date(cell);
+      this.selectedWithoutData = this.values[buoy.id] == undefined;
       this.$gui.selectedPlatform = platform;
       this.selectedCell = { buoyId: buoy.id, index };
       this.$gui.isPlatformDetailOpen = true;
       this.fetchDetailVariables(buoy, cell);
+    },
+    // The selected buoy's cell at the time handle: for a buoy selected without
+    // one (a link, the map, its name) and whenever the handle moves - the
+    // HFR views keep their bars and the handle in step the same way. Nothing
+    // when the handle is outside the timeline's window. `again`: re-read the
+    // same cell (its row's data has just arrived).
+    selectCellAtHandle({ again = false } = {}) {
+      const platform = this.$gui.selectedPlatform;
+      if (!this.$gui.isPlatformDetailOpen || !platform?.stationId) return;
+      // Even on a row greyed out for the variable on screen: the detail shows
+      // the buoy's other readings
+      const buoy = this.buoys.find(b => b.id === platform.stationId);
+      if (!buoy) return;
+      const stepMs = this.$gui.timelineEffectiveIntervalMinutes * 60 * 1000;
+      const index = Math.floor((new Date(this.$gui.selectedTime).getTime() - this.$gui.timelineStartDate.getTime()) / stepMs);
+      if (index < 0 || index >= this.cells.length) return;
+      if (!again && platform.date && this.isCellSelected(buoy.id, index)) return;
+      this.buoyClicked(buoy, index, this.cells[index], { moveTime: false });
     },
 
     // The variables only the detail panel shows, fetched for ONE buoy over the
@@ -486,15 +523,15 @@ export default {
     '$gui.timelineEffectiveIntervalMinutes'() {
       this.selectedCell = null;
     },
-    // A map icon click sets only the station id, which would leave the detail
-    // panel without values. Keep the column that was already selected and
-    // re-emit it for whichever buoy was clicked - a cell click carries its own
-    // values already and is left alone.
+    // A buoy selected without a cell (a link, a map icon, its name) would
+    // leave the detail panel without values: the cell at the time handle - a
+    // cell click carries its own values already and is left alone
     '$gui.selectedPlatform'(platform) {
-      if (!this.selectedCell || platform?.date) return;
-      const buoy = this.buoys.find(b => b.id === platform?.stationId);
-      const cell = this.cells[this.selectedCell.index];
-      if (buoy && cell) this.buoyClicked(buoy, this.selectedCell.index, cell);
+      if (!platform?.date) this.selectCellAtHandle();
+    },
+    // The handle moved: the selected buoy's cell follows it
+    '$gui.selectedTime'() {
+      if (this.$gui.selectedPlatform?.date) this.selectCellAtHandle();
     },
   },
   components: {

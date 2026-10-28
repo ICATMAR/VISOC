@@ -391,6 +391,16 @@
   max-width: 180px;
 }
 
+/* The sources (every detail's strip): 380px at most, on as many lines as
+   they need, scrolling vertically past three */
+.pd-compact .pd-source {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 380px;
+  max-height: calc(3 * 1.35em);
+  overflow-y: auto;
+}
+
 .pd-compact .pd-values-wrapper {
   flex: 1 1 auto;
   flex-shrink: 1;

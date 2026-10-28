@@ -57,8 +57,8 @@ export default {
       iconURL: './Assets/Icons/buoy.svg',
       icatmarLogoURL: './Assets/Icons/icatmar-mini.png',
       buoys: [],
-      // Until the live fetch answers, a buoy with no dates is still loading,
-      // not offline
+      // Until every live source has answered (or failed), a buoy with no
+      // dates is still loading, not offline
       isLiveLoaded: false,
       // HFR dashboard: buoy id -> { speed, direction, time } at the selected hour
       currents: {},
@@ -78,7 +78,7 @@ export default {
       try {
         await this.updateDates();
       } finally {
-        this.isLiveLoaded = true;
+        this.isLiveLoaded = this.$dataService.buoys.allSourcesSettled;
       }
     },
     // The live sources' dates, onto the same buoy objects (see loadBuoys)
@@ -97,6 +97,7 @@ export default {
     // currents shown at the hour, if any
     async onBuoysChanged() {
       await this.updateDates().catch(error => console.error('Could not refresh the buoys:', error));
+      this.isLiveLoaded = this.$dataService.buoys.allSourcesSettled; // a late source answered
       this.buoys = [...this.buoys]; // the dates were written in place - the status re-reads them
       if (this.currentsHour) this.loadCurrents(new Date(this.currentsHour), { keep: true });
     },

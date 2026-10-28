@@ -150,9 +150,17 @@ async function apply(gui, dataService, hash, { boot = false, openedHour } = {}) 
   const [kindOrNetwork, code] = (params.st ?? '').includes(':') ? params.st.split(':') : [undefined, params.st];
   const name = point && `${Math.abs(point.lat).toFixed(3)}º${point.lat >= 0 ? 'N' : 'S'} ${Math.abs(point.lon).toFixed(3)}º${point.lon >= 0 ? 'E' : 'W'}`;
   const view = params.view;
+  // From the static catalogue, which is there at once - the live list waits
+  // for every buoy source, a server that is down included
   const buoyPlace = async id => {
-    const buoy = (await dataService.buoys.loadBuoys().catch(() => [])).find(b => b.id === id);
+    const buoy = dataService.buoys.getBuoys().find(b => b.id === id)
+      ?? (await dataService.buoys.loadBuoys().catch(() => [])).find(b => b.id === id);
     return buoy && { lon: buoy.longitude, lat: buoy.latitude, buoy };
+  };
+  // Another institution's platform is only on the map and in the timeline
+  // with External platforms on
+  const showExternal = institution => {
+    if (!gui.isPlatformShown(institution)) gui.platformsShowExternal = true;
   };
   let place; // where to centre the map
 
@@ -184,16 +192,20 @@ async function apply(gui, dataService, hash, { boot = false, openedHour } = {}) 
     } else if (dashboard === 'platforms' && view && view !== 'hfr') {
       if (code) {
         if (view === 'buoys') place = await buoyPlace(code);
+        if (place) showExternal(place.buoy.institution);
         gui.selectPlatform(view, code);
       } else {
         gui.timelineDashboardId = view;
         gui.isDataTimelineOpen = true;
       }
     } else if ((dashboard === 'hfr' || dashboard === 'platforms') && kindOrNetwork && code) {
-      place = await stationPlace(dataService, `HFR-${kindOrNetwork}`, code);
+      // Another network's station is external on All platforms
+      if (dashboard === 'platforms' && kindOrNetwork !== 'ICATMAR') gui.platformsShowExternal = true;
       gui.selectPlatform('hfr', code, { network: `HFR-${kindOrNetwork}` });
+      place = await stationPlace(dataService, `HFR-${kindOrNetwork}`, code);
     } else if ((dashboard === 'buoys' || dashboard === 'drifters') && code) {
       if (dashboard === 'buoys') place = await buoyPlace(code);
+      if (place) showExternal(place.buoy.institution);
       gui.selectPlatform(dashboard, code);
     }
   } catch (error) {
