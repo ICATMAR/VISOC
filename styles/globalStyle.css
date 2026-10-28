@@ -62,7 +62,7 @@ button {
    title ("Not available yet") still shows; its click handler must also
    refuse it (or do nothing), as a click on its own padding still lands. */
 .is-unavailable {
-  opacity: 0.4;
+  opacity: 0.65;
   filter: grayscale(1);
   pointer-events: none;
 }
