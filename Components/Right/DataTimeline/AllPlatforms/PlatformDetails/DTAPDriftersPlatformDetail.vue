@@ -71,7 +71,7 @@
         :note="$t('Simulated trajectories: the drifters timeline does not read the drifter sources yet.')"></PDSourceLine>
 
       <!-- Switch to Drifters dashboard -->
-      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'drifters'" @click="$gui.selectedDashboard = 'drifters'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'drifters' && $gui.isDashboardAvailable('drifters')" @click="$gui.selectedDashboard = 'drifters'">
         <div class="pd-switch-btn-circle">
           <img :src="driftersDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>

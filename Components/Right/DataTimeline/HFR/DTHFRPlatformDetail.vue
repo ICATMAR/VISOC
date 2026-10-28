@@ -61,7 +61,7 @@
       <PDSourceLine :origins="origins" :sources="sources" :note="sourceNote"></PDSourceLine>
 
       <!-- Switch to the platform's own dashboard, on the same day -->
-      <button class="pd-switch-btn clickable" v-if="point.kind === 'buoy'" @click="switchToDashboard">
+      <button class="pd-switch-btn clickable" v-if="point.kind === 'buoy' && $gui.isDashboardAvailable('buoys')" @click="switchToDashboard">
         <div class="pd-switch-btn-circle">
           <img :src="buoysDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>

@@ -57,7 +57,9 @@
       <OnOffButtonWithText ref="toggleShowBuoys" :checked="$gui.hfrShowBuoys" :text="$t('buoys')" :inSize="'8px'"
         :loading="$gui.hfrShowBuoys && $gui.hfrBuoysLoading"
         @toggle="$gui.hfrShowBuoys = $event"></OnOffButtonWithText>
+      <!-- Drifters: not available yet (their data is still simulated) -->
       <OnOffButtonWithText ref="toggleShowDrifters" :checked="$gui.hfrShowDrifters" :text="$t('drifters')" :inSize="'8px'"
+        :disabled="!$gui.driftersAvailable" :disabledTitle="$t('Not available yet')"
         @toggle="$gui.hfrShowDrifters = $event"></OnOffButtonWithText>
     </div>
   </div>

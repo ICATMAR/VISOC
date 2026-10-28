@@ -36,6 +36,11 @@ class GUIManager {
   hfrDefaultHour = undefined;
   // The dashboard a hash like #/<dashboard>?... points to, or 'platforms'
   // when it names nothing that can be shown (see urlState.js)
+  // Whether a dashboard can be opened (the Buoys and Drifters dashboards
+  // aren't yet: their "Switch to dashboard" buttons are hidden meanwhile)
+  isDashboardAvailable(id) {
+    return !!this.dashboards.find(d => d.id === id)?.isAvailable;
+  }
   dashboardFromHash(hash) {
     const id = /^#\/([^/?&]+)/.exec(hash)?.[1];
     const dashboard = this.dashboards.find(d => d.id === id && d.isAvailable);
@@ -45,8 +50,8 @@ class GUIManager {
     { name: 'All platforms', id: 'platforms', icon: './Assets/Icons/allPlatforms.png', image: './Assets/Images/dashboardIcons/allPlatforms.png', isAvailable: true },
 
     { name: 'HFR currents', type: 'platform', id: 'hfr', icon: './Assets/Icons/radar.svg', image: './Assets/Images/dashboardIcons/hfrCurrents.png', isAvailable: true, latestDaysRange: 4 },
-    { name: 'Buoys', type: 'platform', id: 'buoys', icon: './Assets/Icons/buoy.svg', image: './Assets/Images/dashboardIcons/buoys.png', isAvailable: true, latestDaysRange: 7 },
-    { name: 'Drifters', type: 'platform', id: 'drifters', icon: './Assets/Icons/drifter.svg', image: './Assets/Images/dashboardIcons/drifters.png', isAvailable: true, latestDaysRange: 15 },
+    { name: 'Buoys', type: 'platform', id: 'buoys', icon: './Assets/Icons/buoy.svg', image: './Assets/Images/dashboardIcons/buoys.png', isAvailable: false, latestDaysRange: 7 },
+    { name: 'Drifters', type: 'platform', id: 'drifters', icon: './Assets/Icons/drifter.svg', image: './Assets/Images/dashboardIcons/drifters.png', isAvailable: false, latestDaysRange: 15 },
     { name: 'Argos', type: 'platform', id: 'argos', icon: './Assets/Icons/argo.svg', image: './Assets/Images/dashboardIcons/example.jpg', isAvailable: false, latestDaysRange: 30 },
     { name: 'Remote sensing', type: 'platform', id: 'remoteSensing', icon: './Assets/Icons/smos.svg', image: './Assets/Images/dashboardIcons/example.jpg', isAvailable: false },
 
@@ -82,7 +87,7 @@ class GUIManager {
   hfrSource = 'ICATMAR';
   // Buoys can be overlaid on the HFR dashboard (bottom-right toggle), and
   // their currents are loading while this is true
-  hfrShowBuoys = false;
+  hfrShowBuoys = true;
   hfrBuoysLoading = false;
   // What the currents layer draws (bottom-right toggles): moving particles,
   // and/or the totals' grid points - where the measurements are
@@ -229,6 +234,10 @@ class GUIManager {
   hfrCursor = null;
   // Drifters can be overlaid on the HFR dashboard (bottom-right toggle)
   hfrShowDrifters = false;
+  // Drifters aren't available yet (their data is still simulated): All
+  // platforms' Drifters view, the HFR drifters toggle and the drifter markers'
+  // clicks are off while this is false
+  driftersAvailable = false;
 
   // Opening a platform, from its map marker or the menu's platform list.
   // Inside the platform's own dashboard (hfr, buoys) it stays there and opens

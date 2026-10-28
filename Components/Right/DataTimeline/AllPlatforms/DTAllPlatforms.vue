@@ -6,9 +6,11 @@
   <!-- Bottom options. Wraps, which is what lets the variable picker open a
        second row underneath without a container of its own. -->
   <div class="horizontal wrap button-group bottom-bar">
-    <button v-for="view in views" :key="view.label" class="clickable"
-      :class="{ 'selectedOption': selectedView === view }"
-      @click="selectView(view)"><span>{{ $t(view.label) }}</span></button>
+    <!-- A view not available yet is greyed out and can't be picked -->
+    <button v-for="view in views" :key="view.label"
+      :class="{ 'selectedOption': selectedView === view, 'clickable': isAvailable(view), 'view-unavailable': !isAvailable(view) }"
+      :title="isAvailable(view) ? undefined : $t('Not available yet')"
+      @click="isAvailable(view) && selectView(view)"><span>{{ $t(view.label) }}</span></button>
 
     <!-- Buoys-only: which variable the rows are drawn from, and its unit.
          Sits on this row; opening it adds a row of variables below. Doesn't
@@ -31,7 +33,7 @@ export default {
     // If timelineDashboardId was pre-set (e.g. from a map icon click), jump to that view
     if (this.$gui.timelineDashboardId) {
       const preSelected = this.views.find(v => v.dashboardId === this.$gui.timelineDashboardId);
-      if (preSelected) this.selectedView = preSelected;
+      if (preSelected && this.isAvailable(preSelected)) this.selectedView = preSelected;
     }
     this.$gui.timelineDashboardId = this.selectedView.dashboardId;
     this.$gui.timelineIntervalMinutes = this.selectedView.defaultInterval;
@@ -61,6 +63,10 @@ export default {
       } catch (error) {
         console.error('Error loading the HF radar networks:', error);
       }
+    },
+    // Drifters: not until GUIManager.driftersAvailable
+    isAvailable(view) {
+      return view.dashboardId !== 'drifters' || this.$gui.driftersAvailable;
     },
     selectView(view) {
       this.selectedView = view;
@@ -96,6 +102,7 @@ export default {
     },
     '$gui.timelineDashboardId'(newId) {
       if (!newId) return;
+      if (!this.isAvailable({ dashboardId: newId })) { this.$gui.timelineDashboardId = this.selectedView.dashboardId; return; }
       const view = this.views.find(v => v.dashboardId === newId);
       if (view && view !== this.selectedView) {
         this.selectedView = view;
@@ -125,4 +132,9 @@ export default {
   font-size: small;
 }
 
+/* A view not available yet (see isAvailable) */
+.bottom-bar > button.view-unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 </style>

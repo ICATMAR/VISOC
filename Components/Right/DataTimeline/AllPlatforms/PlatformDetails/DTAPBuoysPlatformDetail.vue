@@ -141,7 +141,7 @@
         :note="$t('For each variable the first source with data for the hour is used; sources can process the same measurements differently.')"></PDSourceLine>
 
       <!-- Switch to Buoys dashboard -->
-      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'buoys'" @click="$gui.selectedDashboard = 'buoys'">
+      <button class="pd-switch-btn clickable" v-if="$gui.selectedDashboard !== 'buoys' && $gui.isDashboardAvailable('buoys')" @click="$gui.selectedDashboard = 'buoys'">
         <div class="pd-switch-btn-circle">
           <img :src="buoysDashboard.icon" class="pd-switch-btn-icon" alt="">
         </div>
