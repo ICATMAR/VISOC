@@ -1,6 +1,7 @@
 import DP from './DataProduct.js';
 import SourceErddapEUHFR from '../sources/SourceErddapEUHFR.js';
 import SourceErddapHFRadars from '../sources/SourceErddapHFRadars.js';
+import SourceGithubHFR from '../sources/SourceGithubHFR.js';
 
 // The same quantity under ICATMAR's ERDDAP's name (u, v...) for the EU HFR
 // Node's (EWCT, NSCT... - also the names GitHub's and the static .tuv files
@@ -18,6 +19,17 @@ const PROVIDERS = ['ICATMAR', 'EU'];
 const REPROCESS_WINDOW_DAYS = 7;
 
 class DPHFRTotals extends DP {
+
+  constructor(...args) {
+    super(...args);
+    // A newer GitHub manifest, read by any product: refresh now, so the map
+    // learns its hours with the timeline (past the gap between refreshes -
+    // a new manifest is rare and always worth it)
+    SourceGithubHFR.manifestEvents.addEventListener('change', () => {
+      this.refreshedAt = undefined;
+      this.requestRefresh();
+    });
+  }
 
   // REFRESH. What the views were told: the newest map per provider
   // ({ ICATMAR: ms, EU: ms }), taken when the refresh starts (the views load

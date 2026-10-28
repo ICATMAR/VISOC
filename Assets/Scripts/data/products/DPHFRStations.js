@@ -17,6 +17,11 @@ class DPHFRStations extends DP {
     // a station loading whenever any view asks for its data
     this.loadingCounts = new Map();
     this.loadingEvents = new EventTarget();
+    // A newer GitHub manifest, read by any product: refresh now (see DPHFRTotals)
+    SourceGithubHFR.manifestEvents.addEventListener('change', () => {
+      this.refreshedAt = undefined;
+      this.requestRefresh();
+    });
   }
 
   loadingKey(network, stationId) {
