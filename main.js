@@ -218,6 +218,9 @@ const loadingScreen = document.getElementById('loading-screen');
 loadingScreen?.remove();
 app.mount(document.body);
 if (loadingScreen) document.body.appendChild(loadingScreen);
+// The app's clock (GUIManager.nowMinute / nowHour): what depends on "now" -
+// the timelines' ends, "x min ago" - moves on as time passes
+scheduler.every('clock', 30000, () => window.GUIManager.tickClock());
 startUrlState(window.GUIManager, window.DataService);
 
 // Faded out once the map has drawn its first frame, but never before

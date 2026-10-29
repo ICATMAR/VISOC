@@ -131,17 +131,17 @@ export default {
       date.setHours(0);
       return date;
     },
+    // The end of the current hour - on the app's clock, so it moves on as time
+    // passes (a computed reading new Date() would keep the page's opening hour)
     endDate() {
-      const date = new Date();
+      const date = new Date(this.$gui.nowHour);
       date.setHours(date.getHours() + 1);
-      date.setMinutes(0);
-      date.setSeconds(0);
-      date.setMilliseconds(0);
       return date;
     },
     rangeOfDays() {
       const selectedDashboard = this.$gui.dashboards.find(d => d.id === this.$gui.selectedDashboard);
-      return selectedDashboard ? selectedDashboard.latestDaysRange : this.$gui.defaultTimelineDays;
+      // A dashboard without its own range (All platforms) takes the default
+      return selectedDashboard?.latestDaysRange ?? this.$gui.defaultTimelineDays;
     },
     hoursInTimeline() {
       return Math.round((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 3600));
