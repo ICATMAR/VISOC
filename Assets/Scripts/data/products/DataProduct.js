@@ -16,6 +16,8 @@ class DataProduct {
       source.institution = src.institution;
       // How the app names the source to the user (a source may set its own)
       source.label ??= src.label;
+      // What it is for, where several share a server (service status panel)
+      source.role = src.role;
       // Standardizing raw names/units into standard codes is the product's
       // job, not the source's (see Source.js), so the catalogue's mapping is
       // carried here rather than inside the source.
