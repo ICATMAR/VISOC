@@ -114,6 +114,25 @@ class SourceErddap extends Source {
     }
   }
 
+  // How far the dataset reaches now (see DataProduct's default refresh):
+  // from the server's shared list, or - where the list doesn't say (NOAA's
+  // OSMC) - the recent-data query again. Whether the end moved.
+  async refresh() {
+    await this.loadingPromise?.catch(() => {});
+    if (this.isMissing || !this.dataset) return false;
+    const row = (await ErddapServer.for(this.fetchManager, this.baseUrl).datasets()).get(this.dataset);
+    if (!row) return false;
+    const before = this.endDate?.getTime();
+    if (row['minTime'] && row['maxTime']) {
+      this.startDate = new Date(row['minTime']);
+      this.endDate = new Date(row['maxTime']);
+    } else {
+      const end = await this.getEndTimestamp();
+      if (end) this.endDate = end;
+    }
+    return this.endDate?.getTime() !== before;
+  }
+
   // Midnight UTC, `recentWindowDays` days ago. Rounded to the day (instead of
   // Date.now()) so the value - and therefore the query URL below - stays
   // constant all day and only changes once every hour, instead of on every call.

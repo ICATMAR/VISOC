@@ -174,18 +174,33 @@ class DPBuoys extends DP {
     this.sourceStates = new Map();
     this.sources.filter(s => s instanceof SourceBuoys).forEach(source => {
       this.sourceStates.set(source, 'pending');
-      source.loadingPromise.then(() => {
-        this.sourceStates.set(source, 'loaded');
-        if (!this.merged) return;
-        const ids = source.buoys.map(buoy => buoy.id);
-        ids.forEach(id => this.cache.forget(`${id}|`));
-        this.changed({ buoys: ids, sources: [source.label ?? source.src] });
-      }, error => {
-        this.sourceStates.set(source, 'failed');
-        console.error('Error loading buoys source:', error);
-        if (this.merged) this.changed({ buoys: [], sources: [source.label ?? source.src] });
-      });
+      this.followSource(source, source.loadingPromise);
     });
+  }
+
+  followSource(source, promise) {
+    promise.then(() => {
+      if (source.loadingPromise !== promise) return;
+      this.sourceStates.set(source, 'loaded');
+      if (!this.merged) return;
+      const ids = source.buoys.map(buoy => buoy.id);
+      ids.forEach(id => this.cache.forget(`${id}|`));
+      this.changed({ buoys: ids, sources: [source.label ?? source.src] });
+    }, error => {
+      if (source.loadingPromise !== promise) return;
+      const wasPending = this.sourceStates.get(source) === 'pending';
+      this.sourceStates.set(source, 'failed');
+      if (wasPending) console.error('Error loading buoys source:', error);
+      if (this.merged && wasPending) this.changed({ buoys: [], sources: [source.label ?? source.src] });
+    });
+  }
+
+  // A source that was down loaded again (see DataProduct.retryFailedLoads):
+  // it stays 'failed' meanwhile (a buoy only it knows stays offline rather
+  // than going back to loading every few minutes), and joins in as a late
+  // source when it answers
+  sourceReloading(source, promise) {
+    if (this.sourceStates?.has(source)) this.followSource(source, promise);
   }
 
   // Whether every buoy source has loaded or failed - until then, a buoy no
