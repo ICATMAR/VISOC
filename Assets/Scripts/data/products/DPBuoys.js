@@ -111,7 +111,39 @@ class DPBuoys extends DP {
   // and at every change since.
   startRefresh(minutes) {
     super.startRefresh(minutes);
-    this.announcedEnds ??= this.loadBuoys().then(() => this.buoyEnds());
+    this.announcedEnds ??= this.loadBuoys().then(() => {
+      this.knownSourceEnds = this.sourceEndsByBuoy();
+      return this.buoyEnds();
+    });
+  }
+
+  // How far each source reaches for each buoy (ms), keyed '<source>|<buoy>'
+  sourceEndsByBuoy() {
+    const ends = new Map();
+    this.providers.forEach((sources, id) => sources.forEach(source => {
+      const end = source.getBuoy?.(id)?.endDate;
+      if (end) ends.set(`${source.label ?? source.src}|${id}`, { id, end: new Date(end).getTime() });
+    }));
+    return ends;
+  }
+
+  // A source that reaches further for a buoy than it did: what it answered
+  // for the time after its old end was answered with less than it has now -
+  // a server catching up after an outage publishes days at once, and an
+  // empty answer from before ("no rows") would otherwise stay frozen in the
+  // cache (see BlockCache). Those blocks go; the buoys they were for.
+  forgetBackfilled() {
+    const now = this.sourceEndsByBuoy();
+    const before = this.knownSourceEnds ?? now;
+    const ids = new Set();
+    now.forEach(({ id, end }, key) => {
+      const old = before.get(key)?.end;
+      if (old == undefined || end <= old) return;
+      this.cache.forgetAfter(`${id}|`, old);
+      ids.add(id);
+    });
+    this.knownSourceEnds = now;
+    return [...ids];
   }
 
   // Each buoy's newest reading, from the sources that can tell (id -> ms):
@@ -144,7 +176,10 @@ class DPBuoys extends DP {
     this.announcedEnds = Promise.resolve(now);
     const moved = [...now].filter(([id, end]) => before?.has(id) && before.get(id) !== end).map(([id]) => id);
     const unknown = [...this.providers].filter(([, sources]) => sources.some(s => s.coverageUnknown)).map(([id]) => id);
-    const buoys = [...new Set([...moved, ...unknown])];
+    // A source reaching further for a buoy whose overall end didn't move
+    // (another source was ahead): still a change, its views ask again
+    const backfilled = this.forgetBackfilled();
+    const buoys = [...new Set([...moved, ...unknown, ...backfilled])];
     if (buoys.length) this.changed({ buoys });
   }
 

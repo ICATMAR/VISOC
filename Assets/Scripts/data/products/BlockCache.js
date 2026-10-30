@@ -140,6 +140,15 @@ class BlockCache {
     [...this.series.keys()].filter(series => series.startsWith(prefix)).forEach(series => this.series.delete(series));
   }
 
+  // Drops, in those series, the blocks that end after `time` (ms) - what was
+  // answered for a period a server has since filled in
+  forgetAfter(prefix, time) {
+    this.series.forEach((blocks, series) => {
+      if (!series.startsWith(prefix)) return;
+      [...blocks.keys()].filter(key => this.blockEndOf(key).getTime() > time).forEach(key => blocks.delete(key));
+    });
+  }
+
 }
 
 export default BlockCache;
