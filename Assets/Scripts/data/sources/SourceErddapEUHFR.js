@@ -151,8 +151,24 @@ class SourceErddapEUHFR extends Source {
       if (entry.metadata) entry.metadata['time_coverage_end'] = end.toISOString().replace('.000Z', 'Z');
       moved = true;
     });
+    // The network's Total too: its counts stop at its end (see
+    // fetchValidPointsCount), and they are counted on its _table
+    if (this.total) {
+      const end = ends.get(`${this.total.dataset}_table`) ?? ends.get(this.total.dataset);
+      if (end && (!this.total.endDate || end > this.total.endDate)) {
+        this.total.endDate = end;
+        moved = true;
+      }
+    }
     if (moved) Object.assign(this, this.dateRange());
     return moved;
+  }
+
+  // Any product's refresh (see DataProduct): the dates move on - every data
+  // product holding this source, not only the stations' (which calls
+  // refreshEnds itself)
+  refresh() {
+    return this.refreshEnds();
   }
 
   // Earliest start and latest end across all stations - each one may have

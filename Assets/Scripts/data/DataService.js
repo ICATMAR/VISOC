@@ -8,6 +8,8 @@ const HFR_REFRESH_MINUTES = 5;
 const BUOYS_REFRESH_MINUTES = 5;
 // How often the forecasts look for a new run - published once or twice a day
 const FORECAST_REFRESH_MINUTES = 30;
+// Drifters report hourly at most
+const DRIFTERS_REFRESH_MINUTES = 10;
 
 class DataService {
 
@@ -17,6 +19,8 @@ class DataService {
 
     const drifters = Catalogue.find(p => p.name === 'Drifters');
     this.drifters = new drifters.Class(drifters, FetchManager);
+    // Their sources' ends, re-checked (DataProduct's default refresh)
+    this.drifters.startRefresh(DRIFTERS_REFRESH_MINUTES);
 
     const hfrnetwork = Catalogue.find(p => p.name === 'High-frequency radar network');
     this.hfrnetwork = new hfrnetwork.Class(hfrnetwork, FetchManager);

@@ -232,11 +232,22 @@ export default {
     allVariables() {
       return [this.totals, ...this.stations];
     },
+    // When the timeline starts (ms) - moves on with the app's clock
+    windowStart() {
+      return this.$gui.timelineStartDate.getTime();
+    },
     networkCode() {
       return this.$dataService.hfrnetwork.networkCode(this.network);
     },
   },
   watch: {
+    // The window moved on with time (a new day at its start): the bars are
+    // laid out from its start, so they are loaded again, and the selection
+    // is the selected time's bar again
+    windowStart() {
+      this.loadStations();
+      this.selectBarAtSelectedTime();
+    },
     // Another network: its own rows, from scratch
     networkCode() {
       this.selectedBar = null;

@@ -68,7 +68,9 @@ import TimelineHandle from './TimelineHandle.vue';
 export default {
   name: "FullTimeline",
   created() {
-
+    // Ending at the end of the current hour, like its limit - so it follows
+    // the limit as time passes (see the watcher)
+    this.endDate = new Date(this.limitEndDate.getTime());
   },
   mounted() {
     this.timelinePixelWidth = this.$refs.timeline.offsetWidth;
@@ -85,6 +87,15 @@ export default {
       ghostX: -1000,
       timelinePixelWidth: 2000,
     }
+  },
+  watch: {
+    // Time passed: a view that reached the end (now) keeps reaching it
+    'limitEndDate'(limit, previous) {
+      if (!previous || this.endDate.getTime() < previous.getTime()) return;
+      const shift = limit.getTime() - previous.getTime();
+      this.startDate = new Date(this.startDate.getTime() + shift);
+      this.endDate = new Date(limit.getTime());
+    },
   },
   methods: {
     windowIsResizing() {
@@ -247,12 +258,10 @@ export default {
     limitStartDate() {
       return new Date(2023, 1, 1);
     },
+    // The end of the current hour, on the app's clock (see ShortTimeline)
     limitEndDate() {
-      const date = new Date();
+      const date = new Date(this.$gui.nowHour);
       date.setHours(date.getHours() + 1);
-      date.setMinutes(0);
-      date.setSeconds(0);
-      date.setMilliseconds(0);
       return date;
     },
     // Visible timeline range

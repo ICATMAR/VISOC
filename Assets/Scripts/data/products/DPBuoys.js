@@ -111,7 +111,39 @@ class DPBuoys extends DP {
   // and at every change since.
   startRefresh(minutes) {
     super.startRefresh(minutes);
-    this.announcedEnds ??= this.loadBuoys().then(() => this.buoyEnds());
+    this.announcedEnds ??= this.loadBuoys().then(() => {
+      this.knownSourceEnds = this.sourceEndsByBuoy();
+      return this.buoyEnds();
+    });
+  }
+
+  // How far each source reaches for each buoy (ms), keyed '<source>|<buoy>'
+  sourceEndsByBuoy() {
+    const ends = new Map();
+    this.providers.forEach((sources, id) => sources.forEach(source => {
+      const end = source.getBuoy?.(id)?.endDate;
+      if (end) ends.set(`${source.label ?? source.src}|${id}`, { id, end: new Date(end).getTime() });
+    }));
+    return ends;
+  }
+
+  // A source that reaches further for a buoy than it did: what it answered
+  // for the time after its old end was answered with less than it has now -
+  // a server catching up after an outage publishes days at once, and an
+  // empty answer from before ("no rows") would otherwise stay frozen in the
+  // cache (see BlockCache). Those blocks go; the buoys they were for.
+  forgetBackfilled() {
+    const now = this.sourceEndsByBuoy();
+    const before = this.knownSourceEnds ?? now;
+    const ids = new Set();
+    now.forEach(({ id, end }, key) => {
+      const old = before.get(key)?.end;
+      if (old == undefined || end <= old) return;
+      this.cache.forgetAfter(`${id}|`, old);
+      ids.add(id);
+    });
+    this.knownSourceEnds = now;
+    return [...ids];
   }
 
   // Each buoy's newest reading, from the sources that can tell (id -> ms):
@@ -144,7 +176,10 @@ class DPBuoys extends DP {
     this.announcedEnds = Promise.resolve(now);
     const moved = [...now].filter(([id, end]) => before?.has(id) && before.get(id) !== end).map(([id]) => id);
     const unknown = [...this.providers].filter(([, sources]) => sources.some(s => s.coverageUnknown)).map(([id]) => id);
-    const buoys = [...new Set([...moved, ...unknown])];
+    // A source reaching further for a buoy whose overall end didn't move
+    // (another source was ahead): still a change, its views ask again
+    const backfilled = this.forgetBackfilled();
+    const buoys = [...new Set([...moved, ...unknown, ...backfilled])];
     if (buoys.length) this.changed({ buoys });
   }
 
@@ -174,18 +209,33 @@ class DPBuoys extends DP {
     this.sourceStates = new Map();
     this.sources.filter(s => s instanceof SourceBuoys).forEach(source => {
       this.sourceStates.set(source, 'pending');
-      source.loadingPromise.then(() => {
-        this.sourceStates.set(source, 'loaded');
-        if (!this.merged) return;
-        const ids = source.buoys.map(buoy => buoy.id);
-        ids.forEach(id => this.cache.forget(`${id}|`));
-        this.changed({ buoys: ids, sources: [source.label ?? source.src] });
-      }, error => {
-        this.sourceStates.set(source, 'failed');
-        console.error('Error loading buoys source:', error);
-        if (this.merged) this.changed({ buoys: [], sources: [source.label ?? source.src] });
-      });
+      this.followSource(source, source.loadingPromise);
     });
+  }
+
+  followSource(source, promise) {
+    promise.then(() => {
+      if (source.loadingPromise !== promise) return;
+      this.sourceStates.set(source, 'loaded');
+      if (!this.merged) return;
+      const ids = source.buoys.map(buoy => buoy.id);
+      ids.forEach(id => this.cache.forget(`${id}|`));
+      this.changed({ buoys: ids, sources: [source.label ?? source.src] });
+    }, error => {
+      if (source.loadingPromise !== promise) return;
+      const wasPending = this.sourceStates.get(source) === 'pending';
+      this.sourceStates.set(source, 'failed');
+      if (wasPending) console.error('Error loading buoys source:', error);
+      if (this.merged && wasPending) this.changed({ buoys: [], sources: [source.label ?? source.src] });
+    });
+  }
+
+  // A source that was down loaded again (see DataProduct.retryFailedLoads):
+  // it stays 'failed' meanwhile (a buoy only it knows stays offline rather
+  // than going back to loading every few minutes), and joins in as a late
+  // source when it answers
+  sourceReloading(source, promise) {
+    if (this.sourceStates?.has(source)) this.followSource(source, promise);
   }
 
   // Whether every buoy source has loaded or failed - until then, a buoy no

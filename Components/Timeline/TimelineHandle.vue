@@ -125,24 +125,15 @@ export default {
     timecodeString() {
       return this.$gui.selectedTime.toLocaleString(this.$i18n.locale, { hour: 'numeric', minute: 'numeric', day: 'numeric', month: 'short' });
     },
+    // How far the selected time is from now: '16min', '2h 16min', '3d 5h' -
+    // nothing past a month. On the app's clock, so it keeps up as time passes.
     timeAgo() {
-      // Add time difference from now
-      let now = new Date();
-      let timeDiff = this.$gui.selectedTime.getTime() - now.getTime();
-      let hoursDiff = Math.floor(timeDiff/(60*60*1000));
-      let minDiff = 60 - Math.floor(timeDiff/(60*1000) - hoursDiff*60);
-
-      if (hoursDiff < -24 * 31){
-        return "";
-      }
-      else if (hoursDiff < -24){
-        let daysDiff = Math.floor(hoursDiff / 24);
-        hoursDiff = hoursDiff - daysDiff*24;
-        return daysDiff + "d " + Math.abs(hoursDiff+1) + "h";
-      } else if (hoursDiff < 0) {
-        return minDiff + "min"; 
-      } else
-        return (hoursDiff+1) + "h " + minDiff + "min";
+      const minutes = Math.abs(Math.round((this.$gui.selectedTime.getTime() - this.$gui.nowMinute) / 60000));
+      if (minutes > 31 * 24 * 60) return '';
+      const days = Math.floor(minutes / 1440), hours = Math.floor((minutes % 1440) / 60), mins = minutes % 60;
+      if (days) return `${days}d ${hours}h`;
+      if (hours) return `${hours}h ${mins}min`;
+      return `${mins}min`;
     },
     
 

@@ -14,8 +14,8 @@
         <div class="source-item" v-for="(source, i) in product.sources" :key="i">
           <div class="source-title-row">
             <div class="pd-status-dot" :class="source.status"></div>
-            <a v-if="source.url" class="source-label" :href="source.url" target="_blank" rel="noopener noreferrer">{{ source.label }}</a>
-            <span v-else class="source-label">{{ source.label }}</span>
+            <a v-if="source.url" class="source-label" :href="source.url" target="_blank" rel="noopener noreferrer" :title="source.datasets">{{ source.label }}</a>
+            <span v-else class="source-label" :title="source.datasets">{{ source.label }}</span>
           </div>
           <span class="source-range">
             <template v-if="source.startDate && source.endDate">{{ formatDate(source.startDate) }} - {{ formatRelative(source.endDate) }}</template>
@@ -39,6 +39,18 @@ export default {
   created() {
     this.load();
   },
+  // New data in any product while the panel is open: its dates again (as
+  // every view does - see dataProductMixin, here for every product at once)
+  mounted() {
+    this.productListeners = this.$dataService.dataProducts.map(({ product }) => {
+      const listener = () => this.load();
+      product.changes?.addEventListener('change', listener);
+      return { product, listener };
+    });
+  },
+  beforeUnmount() {
+    (this.productListeners ?? []).forEach(({ product, listener }) => product.changes?.removeEventListener('change', listener));
+  },
   data() {
     return {
       isLoading: true,
@@ -56,6 +68,8 @@ export default {
           }
           return {
             label: this.sourceTitle(source),
+            // Which dataset(s) it is, on hover
+            datasets: (source.dataset ? [source.dataset] : source.datasets ?? []).join('\n') || undefined,
             url: this.sourceUrl(source),
             status: this.sourceStatus(source, product.type),
             institution: source.institution,
@@ -75,6 +89,9 @@ export default {
     // station/sensor) aren't broken down per-dataset in the UI yet, just
     // shown as one ERDDAP entry - revisit once we build out that view.
     sourceTitle(source) {
+      // Several entries on one server (HF radar totals: ICATMAR's ERDDAP
+      // twice, the EU HFR Node three times): its name and what it is for
+      if (source.role) return `${source.label ?? source.institution} · ${this.$t(source.role)}`;
       if (source.dataset) return `ERDDAP - ${source.dataset}`;
       if (source.datasetCommonKey) return `ERDDAP - ${this.erddapServerLabel(source.baseUrl)}`;
       if (source.datasets) return `ERDDAP - ${source.institution}`;

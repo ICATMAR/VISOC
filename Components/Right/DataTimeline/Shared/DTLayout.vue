@@ -101,12 +101,6 @@ import DTInfoSection from './DTInfoSection.vue';
 // grid exists. Keep it in step with .dt-table td in DTTimelineGrid.vue.
 const CELL_WIDTH_PX = 38;
 
-// How often the now-line is moved. Deliberately not requestAnimationFrame:
-// at the finest zoom a column is an hour wide, so the line travels about
-// 0.6 px per MINUTE - repainting 60 times a second would burn battery to
-// animate something that cannot be seen to move. Half a minute is already
-// sub-pixel.
-const NOW_TICK_MS = 30000;
 
 export default {
   name: "DTLayout",
@@ -135,16 +129,11 @@ export default {
     // Rows shift when the pane is resized, and nothing else tells us
     this.onResize = () => { this.measureCell(); this.measureRows(); };
     window.addEventListener('resize', this.onResize);
-    // On the app's one clock (scheduler.js): right again on coming back to a
-    // hidden tab, whose own timers stall
-    this.nowTaskId = `DTLayout:now:${Math.random().toString(36).slice(2)}`;
-    window.scheduler.every(this.nowTaskId, NOW_TICK_MS, () => { this.now = Date.now(); });
   },
   // Clean up global listeners if component is destroyed
   beforeUnmount() {
     this.stopDragging();
     window.removeEventListener('resize', this.onResize);
-    window.scheduler.cancel(this.nowTaskId);
   },
   data() {
     return {
@@ -155,7 +144,6 @@ export default {
       scrollLeft: 0,
       scrollTop: 0,
       // Now-line
-      now: Date.now(),
       cellWidth: CELL_WIDTH_PX,
       rowTops: [], // middle of each row, in px - see measureRows
       visibleRowBand: [0, Infinity], // [top, bottom] rows can be seen in, same frame
@@ -313,6 +301,12 @@ export default {
     },
   },
   computed: {
+    // The now-line's time: the app's clock (GUIManager.nowMinute), right again
+    // at once on coming back to a hidden tab. A minute moves it about 0.6 px
+    // at the finest zoom, so nothing finer is worth repainting for.
+    now() {
+      return this.$gui.nowMinute;
+    },
     // Rows still waiting, each with the y it should be drawn at. Read off the
     // rows themselves (`loading`), so a view only has to say it once - HFR's
     // stations and totals already carry that flag, and DTAPBuoys sets its own.

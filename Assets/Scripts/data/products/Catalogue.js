@@ -136,6 +136,9 @@ const dataProducts = [
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         provider: 'ICATMAR',
         label: 'ICATMAR ERDDAP',
+        // What this entry is for, where several share a server (the service
+        // status panel says it after the label)
+        role: 'recent maps',
         datasets: ['HF_radar_L3B_recent'],
         // ICATMAR re-processes the recent hours it has published (see
         // SourceErddapHFRadars.getVersions); its historic datasets and the
@@ -155,6 +158,7 @@ const dataProducts = [
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         provider: 'ICATMAR',
         label: 'ICATMAR ERDDAP',
+        role: 'historic maps',
         datasetPattern: '^HF_Radar_L3B_Historic_v\\d+$',
         network: 'ICATMAR',
         eastward: 'u',
@@ -168,6 +172,8 @@ const dataProducts = [
         Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         institution: 'EU HFR Node',
+        label: 'EU HFR Node',
+        role: "ICATMAR's network, point counts",
         datasets: [
           'EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3_table',
         ],
@@ -178,6 +184,7 @@ const dataProducts = [
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         provider: 'ICATMAR',
         label: 'EU HFR Node',
+        role: "ICATMAR's network, maps",
         datasets: ['EUHFR_NRTcurrent_HFR-ICATMAR-Total_v3'],
         network: 'ICATMAR',
         useProxy: false,
@@ -189,6 +196,7 @@ const dataProducts = [
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         provider: 'EU',
         label: 'EU HFR Node',
+        role: 'every network, maps',
         // Every network's gridded totals; the group names the network
         datasetPattern: '^EUHFR_NRTcurrent_HFR-(.+)-Total_v3$',
         preferNetwork: 'ICATMAR',
@@ -241,11 +249,15 @@ const dataProducts = [
         src: 'https://erddap.icatmar.cat/erddap/index.html',
         dataset: 'HF_Radar_L2B_Historic',
         institution: 'ICATMAR',
+        label: 'ICATMAR ERDDAP',
+        role: 'historic radials',
       },
       {
         Class: SourceErddapEUHFR,
         src: 'https://erddap.hfrnode.eu/erddap/index.html',
         institution: 'EU HFR Node',
+        label: 'EU HFR Node',
+        role: "ICATMAR's stations, radials",
         datasets: [
           'EUHFR_NRTcurrent_HFR-ICATMAR-CNET_v3_table',
           'EUHFR_NRTcurrent_HFR-ICATMAR-CREU_v3_table',

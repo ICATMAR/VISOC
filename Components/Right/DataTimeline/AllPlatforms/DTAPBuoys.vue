@@ -475,6 +475,10 @@ export default {
     },
   },
   computed: {
+    // When the timeline starts (ms) - moves on with the app's clock
+    windowStart() {
+      return this.$gui.timelineStartDate.getTime();
+    },
     // The rows as DTLayout wants them: the buoy, plus whether it is still
     // waiting on its data - which is what puts a spinner next to its name in
     // the names column (see DTLayout), where it stays visible however the
@@ -512,6 +516,13 @@ export default {
     },
   },
   watch: {
+    // The window moved on with time (a new day at its start): its data, and
+    // the selected cell found again at the time handle - the columns now
+    // start elsewhere, so the same index is another time
+    windowStart() {
+      this.refreshVariableData();
+      if (this.selectedCell) this.selectCellAtHandle({ again: true });
+    },
     '$gui.platformsShowExternal'() {
       this.buildRows(this.catalogueBuoys);
     },

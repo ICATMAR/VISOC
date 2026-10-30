@@ -483,9 +483,22 @@ class GUIManager {
     return this.timelineRangeOfDays > 7 ? 1440 : 180;
   }
 
+  // THE CLOCK. "Now" for everything shown that depends on it - the
+  // timelines' ends, "x min ago" - as reactive values: a Vue computed that
+  // reads new Date() is worked out once and keeps the time the page opened.
+  // Ticked by the scheduler (main.js), so it is right again at once on coming
+  // back to a hidden tab. nowHour (the start of the local hour, ms) only
+  // changes once an hour, so what depends on it isn't redone every minute.
+  nowMinute = Math.floor(Date.now() / 60000) * 60000;
+  nowHour = new Date().setMinutes(0, 0, 0);
+  tickClock() {
+    const now = Date.now();
+    this.nowMinute = Math.floor(now / 60000) * 60000;
+    this.nowHour = new Date(now).setMinutes(0, 0, 0); // the same value is no change
+  }
+
   get timelineEndDate() {
-    let date = new Date();
-    date.setMinutes(0, 0, 0);
+    let date = new Date(this.nowHour);
     date.setHours(date.getHours() + 1);
     return date;
   }
